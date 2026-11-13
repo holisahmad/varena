@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className="h-full antialiased">
+    <html lang="id" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -39,7 +39,7 @@ export default function RootLayout({
         />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
-      <body className="min-h-full flex flex-col bg-varena-ivory text-varena-espresso pb-16 md:pb-0">
+      <body className="min-h-full flex flex-col bg-varena-ivory text-varena-espresso pb-16 md:pb-0" suppressHydrationWarning>
         <PwaInstallPrompt />
         <Navbar />
         <main className="flex-1 flex flex-col">{children}</main>
@@ -48,4 +48,3 @@ export default function RootLayout({
     </html>
   );
 }
-

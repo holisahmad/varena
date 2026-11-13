@@ -112,6 +112,7 @@ export default function LoginPage() {
           </div>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <button
+              type="button"
               onClick={() => handleLogin(undefined, 'mitra1@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
@@ -119,6 +120,7 @@ export default function LoginPage() {
               <div className="text-[9px] text-varena-taupe font-mono">VRN-0001</div>
             </button>
             <button
+              type="button"
               onClick={() => handleLogin(undefined, 'leader3@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
@@ -126,6 +128,7 @@ export default function LoginPage() {
               <div className="text-[9px] text-varena-taupe font-mono">VRN-LDR-03</div>
             </button>
             <button
+              type="button"
               onClick={() => handleLogin(undefined, 'admin1@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
@@ -133,6 +136,7 @@ export default function LoginPage() {
               <div className="text-[9px] text-varena-taupe font-mono">ADMIN_1</div>
             </button>
             <button
+              type="button"
               onClick={() => handleLogin(undefined, 'owner@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
@@ -152,4 +156,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

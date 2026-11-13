@@ -4,11 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
 
 export default function PwaInstallPrompt() {
+  const [mounted, setMounted] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isDismissed, setIsDismissed] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+
     // Check if app is already running as PWA / standalone
     if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
       setIsStandalone(true);
@@ -40,7 +43,7 @@ export default function PwaInstallPrompt() {
     }
   };
 
-  if (isStandalone || isDismissed) {
+  if (!mounted || isStandalone || isDismissed) {
     return null;
   }
 
@@ -60,6 +63,7 @@ export default function PwaInstallPrompt() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleInstallClick}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-varena-gold text-varena-espresso font-semibold text-xs hover:bg-varena-gold-hover transition shadow"
           >
@@ -67,6 +71,7 @@ export default function PwaInstallPrompt() {
             <span>Instal Aplikasi</span>
           </button>
           <button
+            type="button"
             onClick={() => setIsDismissed(true)}
             className="p-1 text-varena-taupe-light hover:text-varena-ivory"
             aria-label="Tutup Banner"
@@ -78,4 +83,3 @@ export default function PwaInstallPrompt() {
     </aside>
   );
 }
-
