@@ -57,7 +57,7 @@ export async function requestPayout(params: RequestPayoutParams) {
     });
 
     return withdrawal;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }
 
 /**
@@ -100,10 +100,7 @@ export async function approvePayout({
       },
     });
 
-    // 2. Post to Double-Entry Ledger:
-    // DEBIT: Member Wallet Account (`ACC-MBR-${memberCode}`) for gross amount (e.g. Rp100.000)
-    // CREDIT: Bank Clearing (`ACC-COMP-PAYOUT`) for net transfer (e.g. Rp95.000)
-    // CREDIT: Company Operations (`ACC-COMP-OPS`) for administrative fee (e.g. Rp5.000)
+    // 2. Post to Double-Entry Ledger using current transaction client
     await postLedgerTransaction({
       referenceType: 'WITHDRAWAL_PAID',
       referenceId: withdrawal.id,
@@ -129,7 +126,7 @@ export async function approvePayout({
           memo: `Disbursement administrative transfer fee`,
         }] : []),
       ],
-    });
+    }, tx);
 
     // 3. Audit trail
     await tx.auditLog.create({
@@ -144,5 +141,5 @@ export async function approvePayout({
     });
 
     return updated;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }

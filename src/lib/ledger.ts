@@ -19,9 +19,9 @@ export interface PostTransactionParams {
 /**
  * Double-Entry Transaction Poster
  * Strictly enforces Total DEBITS == Total CREDITS
- * ACID Transaction via Prisma
+ * ACID Transaction via Prisma (supports passing existing txClient to avoid deadlocks)
  */
-export async function postLedgerTransaction(params: PostTransactionParams) {
+export async function postLedgerTransaction(params: PostTransactionParams, txClient?: any) {
   const { referenceType, referenceId, transactionType = 'STANDARD', idempotencyKey, memo, entries } = params;
 
   // 1. Balance check: Sum(DEBIT) must equal Sum(CREDIT)
@@ -45,7 +45,7 @@ export async function postLedgerTransaction(params: PostTransactionParams) {
     throw new Error(`Ledger unbalanced: Total Debits (Rp${totalDebit}) != Total Credits (Rp${totalCredit}).`);
   }
 
-  return prisma.$transaction(async (tx) => {
+  const runOnTx = async (tx: any) => {
     // 2. Check Idempotency
     const existing = await tx.ledgerTransaction.findUnique({
       where: { idempotencyKey },
@@ -105,7 +105,13 @@ export async function postLedgerTransaction(params: PostTransactionParams) {
     }
 
     return transaction;
-  });
+  };
+
+  if (txClient) {
+    return runOnTx(txClient);
+  }
+
+  return prisma.$transaction(runOnTx, { maxWait: 15000, timeout: 30000 });
 }
 
 /**

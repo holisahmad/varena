@@ -211,8 +211,7 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
       });
     }
 
-    // 5. Post to Double-Entry Ledger
-    // Total Liability (Members) + Total Unallocated = Total Expense/Clearing
+    // 5. Post to Double-Entry Ledger (pass existing tx client to prevent nested transaction deadlock)
     const grandCommissionTotal = totalDistributed + unallocatedTotal;
     if (grandCommissionTotal > 0) {
       const ledgerEntries: Array<{
@@ -252,14 +251,14 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
         });
       }
 
-      // Post balanced transaction
+      // Post balanced transaction using current tx client
       await postLedgerTransaction({
         referenceType: 'COMMISSION_CREDIT',
         referenceId: commissionRun.id,
         idempotencyKey: `LEDGER-COMM-${commissionRun.id}`,
         memo: `Auto Commission Disbursement for Order ${order.orderNumber}`,
         entries: ledgerEntries,
-      });
+      }, tx);
     }
 
     return {
@@ -275,5 +274,5 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
         reason: i.reasonCode,
       })),
     };
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }

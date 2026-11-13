@@ -122,7 +122,7 @@ export async function createOrder(payload: CheckoutPayload) {
     });
 
     return order;
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 }
 
 /**
