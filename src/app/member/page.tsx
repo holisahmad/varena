@@ -39,10 +39,63 @@ export default function MemberDashboardPage() {
 
   const referralLink = user ? `${typeof window !== 'undefined' ? window.location.origin : ''}/r/${user.memberCode || 'VRN-0001'}` : '';
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(referralLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async (text: string) => {
+    // 1. Try modern Clipboard API if in Secure Context (HTTPS or localhost)
+    if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fallback to legacy execCommand
+      }
+    }
+
+    // 2. Fallback for non-secure contexts (e.g. testing via LAN IP over HTTP on mobile)
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (err) {
+      console.warn('Fallback copy failed:', err);
+      return false;
+    }
+  };
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(referralLink);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleShare = async () => {
+    // Web Share API (native mobile share sheet on Android/iOS)
+    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+      try {
+        await (navigator as any).share({
+          title: 'Kemitraan VARENA — Grow Together. Build Value.',
+          text: `Mari bergabung bersama VARENA melalui link referral saya (${user?.displayName}):`,
+          url: referralLink,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          await handleCopy();
+        }
+        return;
+      }
+    }
+    await handleCopy();
   };
 
   if (!user) return null;
@@ -81,21 +134,33 @@ export default function MemberDashboardPage() {
               <Share2 className="w-3.5 h-3.5" />
               <span>Tautan Referral Anda:</span>
             </span>
-            {copied && <span className="text-[10px] text-emerald-400 font-semibold">Tersalin!</span>}
+            {copied && <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Tersalin ke Clipboard!</span>}
           </div>
           <div className="flex items-center gap-2">
             <input
               type="text"
               readOnly
               value={referralLink}
-              className="bg-black/30 border border-[#5A4535] text-[11px] font-mono text-varena-ivory px-2.5 py-1.5 rounded flex-1 select-all outline-none"
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="bg-black/30 border border-[#5A4535] text-[11px] font-mono text-varena-ivory px-2.5 py-1.5 rounded flex-1 select-all outline-none cursor-pointer"
             />
             <button
+              type="button"
               onClick={handleCopy}
-              className="p-1.5 rounded bg-varena-gold text-varena-espresso hover:bg-varena-gold-hover transition"
-              title="Salin Link"
+              className="px-2.5 py-1.5 rounded bg-varena-gold text-varena-espresso hover:bg-varena-gold-hover transition shadow flex items-center gap-1 text-[11px] font-semibold"
+              title="Salin Tautan"
             >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Tersalin' : 'Salin'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="px-2.5 py-1.5 rounded bg-varena-espresso-light border border-varena-gold/50 text-varena-gold-light hover:bg-varena-gold hover:text-varena-espresso transition shadow flex items-center gap-1 text-[11px] font-semibold"
+              title="Bagikan ke WhatsApp/Aplikasi lain"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Bagikan</span>
             </button>
           </div>
         </div>
