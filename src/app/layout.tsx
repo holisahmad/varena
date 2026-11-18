@@ -3,6 +3,7 @@ import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import PwaInstallPrompt from '@/components/layout/PwaInstallPrompt';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 
 export const metadata: Metadata = {
   title: 'VARENA — Grow Together. Build Value.',
@@ -50,10 +51,12 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-varena-ivory text-varena-espresso pb-16 md:pb-0" suppressHydrationWarning>
-        <PwaInstallPrompt />
-        <Navbar />
-        <main className="flex-1 flex flex-col">{children}</main>
-        <MobileBottomNav />
+        <NotificationProvider>
+          <PwaInstallPrompt />
+          <Navbar />
+          <main className="flex-1 flex flex-col">{children}</main>
+          <MobileBottomNav />
+        </NotificationProvider>
       </body>
     </html>
   );

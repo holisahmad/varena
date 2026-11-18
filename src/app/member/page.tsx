@@ -32,9 +32,11 @@ import {
   BadgeCheck,
 } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 export default function MemberDashboardPage() {
   const router = useRouter();
+  const { ackOrders } = useNotifications();
   const [user, setUser] = useState<any>(null);
   const [wallet, setWallet] = useState<any>(null);
   const [commissionSummary, setCommissionSummary] = useState<any>(null);
@@ -123,7 +125,8 @@ export default function MemberDashboardPage() {
     const memberCode = parsed.memberCode || 'VRN-0001';
     const userId = parsed.userId || parsed.id;
     loadDashboard(memberCode, userId);
-  }, [router]);
+    ackOrders();
+  }, [router, ackOrders]);
 
   const loadDashboard = (memberCode: string, userId: string) => {
     setLoading(true);
@@ -447,7 +450,7 @@ export default function MemberDashboardPage() {
       )}
 
       {/* Section: Pesanan & Pengiriman Saya (Sinkronisasi Logistik) */}
-      <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+      <div id="pesanan" className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4 scroll-mt-20">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">

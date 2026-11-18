@@ -3,13 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import { ShoppingBag, Users, Wallet, Shield, Menu, X, LogIn, LogOut } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ShoppingBag, Menu, X, LogOut } from 'lucide-react';
+import { useNotifications } from '@/contexts/NotificationContext';
+import NotifBadge from '@/components/ui/NotifBadge';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { memberOrdersBadge, memberWalletBadge, ackOrders, ackWallet } = useNotifications();
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -24,6 +28,16 @@ export default function Navbar() {
     localStorage.removeItem('varena_user');
     setUser(null);
     window.location.href = '/';
+  };
+
+  const handlePortalClick = () => {
+    ackOrders();
+    router.push(memberOrdersBadge > 0 ? '/member#pesanan' : '/member');
+  };
+
+  const handleWalletClick = () => {
+    ackWallet();
+    router.push('/member/wallet');
   };
 
   return (
@@ -65,14 +79,21 @@ export default function Navbar() {
 
             {user && (
               <>
-                <Link
-                  href="/member"
-                  className={`transition hover:text-varena-gold-light ${
+                {/* Partner Portal with orders badge */}
+                <button
+                  onClick={handlePortalClick}
+                  className={`relative transition hover:text-varena-gold-light ${
                     pathname === '/member' ? 'text-varena-gold-light font-semibold' : 'text-varena-ivory/80'
                   }`}
                 >
                   Partner Portal
-                </Link>
+                  {memberOrdersBadge > 0 && (
+                    <span className="absolute -top-2 -right-3 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {memberOrdersBadge > 9 ? '9+' : memberOrdersBadge}
+                    </span>
+                  )}
+                </button>
+
                 <Link
                   href="/member/network"
                   className={`transition hover:text-varena-gold-light ${
@@ -81,14 +102,21 @@ export default function Navbar() {
                 >
                   Pohon Jaringan
                 </Link>
-                <Link
-                  href="/member/wallet"
-                  className={`transition hover:text-varena-gold-light ${
+
+                {/* Dompet & Komisi with wallet badge */}
+                <button
+                  onClick={handleWalletClick}
+                  className={`relative transition hover:text-varena-gold-light ${
                     pathname.startsWith('/member/wallet') ? 'text-varena-gold-light font-semibold' : 'text-varena-ivory/80'
                   }`}
                 >
-                  Dompet & Komisi
-                </Link>
+                  Dompet &amp; Komisi
+                  {memberWalletBadge > 0 && (
+                    <span className="absolute -top-2 -right-3 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {memberWalletBadge > 9 ? '9+' : memberWalletBadge}
+                    </span>
+                  )}
+                </button>
               </>
             )}
 
@@ -183,13 +211,17 @@ export default function Navbar() {
               <div className="pt-2 border-t border-varena-espresso-light">
                 <div className="text-xs text-varena-gold-light font-mono font-semibold">{user.displayName} ({user.memberCode})</div>
               </div>
-              <Link
-                href="/member"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
+              <button
+                onClick={() => { ackOrders(); setMobileMenuOpen(false); router.push(memberOrdersBadge > 0 ? '/member#pesanan' : '/member'); }}
+                className="flex items-center justify-between w-full py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
               >
-                Dashboard Mitra
-              </Link>
+                <span>Dashboard Mitra</span>
+                {memberOrdersBadge > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
+                    {memberOrdersBadge > 9 ? '9+' : memberOrdersBadge}
+                  </span>
+                )}
+              </button>
               <Link
                 href="/member/network"
                 onClick={() => setMobileMenuOpen(false)}
@@ -197,13 +229,17 @@ export default function Navbar() {
               >
                 Pohon Jaringan (Downline)
               </Link>
-              <Link
-                href="/member/wallet"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
+              <button
+                onClick={() => { ackWallet(); setMobileMenuOpen(false); router.push('/member/wallet'); }}
+                className="flex items-center justify-between w-full py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
               >
-                Dompet & Komisi
-              </Link>
+                <span>Dompet &amp; Komisi</span>
+                {memberWalletBadge > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
+                    {memberWalletBadge > 9 ? '9+' : memberWalletBadge}
+                  </span>
+                )}
+              </button>
               {user.roles.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'].includes(r)) && (
                 <Link
                   href="/admin"
@@ -214,10 +250,7 @@ export default function Navbar() {
                 </Link>
               )}
               <button
-                onClick={() => {
-                  handleLogout();
-                  setMobileMenuOpen(false);
-                }}
+                onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
                 className="w-full text-left py-2 text-sm text-red-400 hover:text-red-300"
               >
                 Keluar
@@ -246,4 +279,3 @@ export default function Navbar() {
     </header>
   );
 }
-

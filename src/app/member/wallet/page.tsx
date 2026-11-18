@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
+import { useNotifications } from '@/contexts/NotificationContext';
 import {
   Wallet,
   ArrowDownRight,
@@ -20,6 +21,7 @@ import {
 
 export default function MemberWalletPage() {
   const router = useRouter();
+  const { ackWallet } = useNotifications();
   const [user, setUser] = useState<any>(null);
   const [wallet, setWallet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +57,8 @@ export default function MemberWalletPage() {
     setUser(parsed);
     setBindAccountHolder(parsed.displayName || parsed.legalName || '');
     loadWallet(parsed.memberCode || 'VRN-0001');
-  }, [router]);
+    ackWallet();
+  }, [router, ackWallet]);
 
   const loadWallet = (code: string) => {
     setLoading(true);

@@ -1,13 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Home, ShoppingBag, GitFork, Wallet, User as UserIcon } from 'lucide-react';
+import { useNotifications } from '@/contexts/NotificationContext';
+import NotifBadge from '@/components/ui/NotifBadge';
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const { memberOrdersBadge, memberWalletBadge, ackOrders, ackWallet } = useNotifications();
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -18,23 +23,33 @@ export default function MobileBottomNav() {
     }
   }, [pathname]);
 
-  // Hide on admin routes to give full screen to executive console
-  if (pathname.startsWith('/admin')) {
-    return null;
-  }
+  // Hide on admin routes
+  if (pathname.startsWith('/admin')) return null;
 
-  const navItems = [
+  const handlePesanan = () => {
+    ackOrders();
+    router.push(user ? (memberOrdersBadge > 0 ? '/member#pesanan' : '/member') : '/login');
+  };
+
+  const handleDompet = () => {
+    ackWallet();
+    router.push(user ? '/member/wallet' : '/login');
+  };
+
+  const isOrdersActive = pathname === '/member';
+  const isWalletActive = pathname.startsWith('/member/wallet');
+
+  const staticItems = [
     { label: 'Beranda', href: '/', icon: Home, active: pathname === '/' },
     { label: 'Toko', href: '/products', icon: ShoppingBag, active: pathname.startsWith('/products') },
     { label: 'Jaringan', href: user ? '/member/network' : '/login', icon: GitFork, active: pathname.startsWith('/member/network') },
-    { label: 'Dompet', href: user ? '/member/wallet' : '/login', icon: Wallet, active: pathname.startsWith('/member/wallet') },
-    { label: user ? 'Profil' : 'Masuk', href: user ? '/member' : '/login', icon: UserIcon, active: pathname === '/member' || pathname === '/login' },
   ];
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-varena-espresso-dark/95 backdrop-blur-md border-t border-[#4A3B30] pb-[env(safe-area-inset-bottom)]">
       <div className="grid grid-cols-5 h-16">
-        {navItems.map((item) => {
+        {/* Static items */}
+        {staticItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
@@ -49,8 +64,35 @@ export default function MobileBottomNav() {
             </Link>
           );
         })}
+
+        {/* Dompet — with wallet badge */}
+        <button
+          onClick={handleDompet}
+          className={`flex flex-col items-center justify-center min-h-[44px] transition-colors relative ${
+            isWalletActive ? 'text-varena-gold-light font-semibold' : 'text-varena-taupe-light hover:text-varena-ivory'
+          }`}
+        >
+          <div className="relative">
+            <Wallet className={`w-5 h-5 mb-1 ${isWalletActive ? 'stroke-[2.2]' : 'stroke-[1.8]'}`} />
+            <NotifBadge count={memberWalletBadge} />
+          </div>
+          <span className="text-[11px] tracking-tight">Dompet</span>
+        </button>
+
+        {/* Profil / Pesanan — with orders badge */}
+        <button
+          onClick={handlePesanan}
+          className={`flex flex-col items-center justify-center min-h-[44px] transition-colors relative ${
+            isOrdersActive || pathname === '/login' ? 'text-varena-gold-light font-semibold' : 'text-varena-taupe-light hover:text-varena-ivory'
+          }`}
+        >
+          <div className="relative">
+            <UserIcon className={`w-5 h-5 mb-1 ${isOrdersActive ? 'stroke-[2.2]' : 'stroke-[1.8]'}`} />
+            <NotifBadge count={memberOrdersBadge} />
+          </div>
+          <span className="text-[11px] tracking-tight">{user ? 'Profil' : 'Masuk'}</span>
+        </button>
       </div>
     </nav>
   );
 }
-

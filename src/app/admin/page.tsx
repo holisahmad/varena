@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
+import { useNotifications } from '@/contexts/NotificationContext';
 import {
   Building2,
   CheckCircle2,
@@ -45,6 +46,7 @@ import {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { adminOrdersBadge, adminPayoutBadge, ackAdminOrders, ackAdminPayout } = useNotifications();
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
@@ -732,17 +734,19 @@ export default function AdminPage() {
       id: 'ORDERS',
       label: 'Pesanan & Logistik',
       icon: Package,
-      badge: ordersSummary?.paidReadyToShip > 0 ? ordersSummary.paidReadyToShip : null,
-      badgeColor: 'bg-amber-500',
+      badge: Math.max(ordersSummary?.paidReadyToShip ?? 0, adminOrdersBadge) > 0
+        ? Math.max(ordersSummary?.paidReadyToShip ?? 0, adminOrdersBadge)
+        : null,
+      badgeColor: 'bg-red-500',
     },
     {
       id: 'PAYOUTS',
       label: 'Pencairan Payout',
       icon: CreditCard,
-      badge: withdrawals.filter((w) => w.status === 'REQUESTED').length > 0
-        ? withdrawals.filter((w) => w.status === 'REQUESTED').length
+      badge: Math.max(withdrawals.filter((w) => w.status === 'REQUESTED').length, adminPayoutBadge) > 0
+        ? Math.max(withdrawals.filter((w) => w.status === 'REQUESTED').length, adminPayoutBadge)
         : null,
-      badgeColor: 'bg-rose-600',
+      badgeColor: 'bg-red-500',
     },
     {
       id: 'NETWORK',
@@ -840,6 +844,9 @@ export default function AdminPage() {
                   setActiveTab(item.id as any);
                   if (item.onSelect) item.onSelect();
                   setMobileSidebarOpen(false);
+                  // Ack notification badges when user opens relevant tab
+                  if (item.id === 'ORDERS') ackAdminOrders();
+                  if (item.id === 'PAYOUTS') ackAdminPayout();
                 }}
                 title={sidebarCollapsed ? item.label : undefined}
                 className={`w-full relative flex items-center rounded-xl transition-all duration-150 text-xs ${sidebarCollapsed ? 'justify-center p-3' : 'px-3.5 py-2.5 gap-3'
