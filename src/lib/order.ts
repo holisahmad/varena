@@ -2,6 +2,7 @@ import prisma from './prisma';
 import { calculateOrderCommissions } from './commission';
 import { postLedgerTransaction } from './ledger';
 import { withTransactionRetry } from './security';
+import { dispatchWaMessage, templateOrderInvoice, templateOrderShipped } from './whatsapp';
 
 export interface CheckoutItem {
   variantId: string;
@@ -226,6 +227,23 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     }
   }
 
+  // 5. Dispatch WhatsApp notification (Async/Non-blocking)
+  if (order.buyerPhone) {
+    const summary = order.items?.map((it) => `${it.quantity}x ${it.nameSnapshot}`).join(', ') || 'Paket VARENA';
+    dispatchWaMessage({
+      recipientPhone: order.buyerPhone,
+      recipientName: order.buyerName,
+      templateType: 'ORDER_INVOICE',
+      message: templateOrderInvoice({
+        orderNumber: order.orderNumber,
+        buyerName: order.buyerName,
+        total: order.total,
+        itemsSummary: summary,
+      }),
+      referenceId: order.id,
+    }).catch((err) => console.error('WA Order notification error:', err));
+  }
+
   return {
     status: 'PAYMENT_SETTLED',
     order: updatedOrder,
@@ -259,7 +277,7 @@ export async function shipOrder({
     throw new Error(`Pesanan dengan status ${order.orderStatus} tidak dapat diproses kirim.`);
   }
 
-  return withTransactionRetry(async (tx) => {
+  const result = await withTransactionRetry(async (tx) => {
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
@@ -288,6 +306,24 @@ export async function shipOrder({
 
     return updated;
   });
+
+  // Non-blocking WhatsApp shipping notification
+  if (order.buyerPhone) {
+    dispatchWaMessage({
+      recipientPhone: order.buyerPhone,
+      recipientName: order.buyerName,
+      templateType: 'ORDER_SHIPPED',
+      message: templateOrderShipped({
+        orderNumber: order.orderNumber,
+        buyerName: order.buyerName,
+        courierName: courierName.trim(),
+        trackingNumber: trackingNumber.trim(),
+      }),
+      referenceId: order.id,
+    }).catch((err) => console.error('WA Ship notification error:', err));
+  }
+
+  return result;
 }
 
 /**

@@ -78,6 +78,11 @@ model Member {
   bankAccountHolder    String?
   bankLockedAt         DateTime?
 
+  // Regional Stockist Hub Support
+  stockistType         String    @default("NONE") // NONE, MOBILE, MASTER
+  stockistCity         String?   // e.g. Surabaya, Medan, Makassar
+  stockistInventory    Int       @default(0)      // Current box quota in stockist custody
+
   joinedAt     DateTime  @default(now())
   activatedAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -213,6 +218,8 @@ model Order {
   paidAt                 DateTime?
   courierName            String?   // e.g. JNE, J&T, SiCepat, Pos Indonesia
   trackingNumber         String?   // e.g. JNE-88291024-ID
+  fulfillmentSource      String    @default("CENTRAL_WAREHOUSE") // CENTRAL_WAREHOUSE, REGIONAL_STOCKIST
+  stockistMemberId       String?   // null if central warehouse, or memberId of the stockist hub
   shippedAt              DateTime?
   completedAt            DateTime?
   createdAt              DateTime  @default(now())

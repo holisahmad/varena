@@ -1,4 +1,5 @@
 import prisma from './prisma';
+import { getFromCache, setIntoCache, invalidateCacheByPrefix } from './cache';
 
 export interface UplineNode {
   level: number;
@@ -10,9 +11,15 @@ export interface UplineNode {
 
 /**
  * Traverse placement upline up to maxLevels (default 10)
- * Uses iterative adjacency lookup with cycle protection
+ * Uses iterative adjacency lookup with cycle protection and in-memory cache
  */
 export async function getPlacementUplines(startMemberId: string, maxLevels = 10): Promise<UplineNode[]> {
+  const cacheKey = `uplines:${startMemberId}:${maxLevels}`;
+  const cached = getFromCache<UplineNode[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const uplines: UplineNode[] = [];
   const visited = new Set<string>([startMemberId]);
   let currentMemberId = startMemberId;
@@ -46,6 +53,9 @@ export async function getPlacementUplines(startMemberId: string, maxLevels = 10)
 
     currentMemberId = parentId;
   }
+
+  // Cache for 2 minutes
+  setIntoCache(cacheKey, uplines, 120000);
 
   return uplines;
 }
@@ -164,5 +174,10 @@ export async function transferPlacement({
 
     return updated;
   });
+
+  // Invalidate cache
+  invalidateCacheByPrefix('uplines:');
+
+  return res;
 }
 

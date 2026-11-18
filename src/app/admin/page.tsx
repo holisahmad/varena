@@ -29,13 +29,19 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Check,
+  Download,
+  CheckSquare,
+  Square,
+  MapPin,
+  QrCode,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const router = useRouter();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'LOGS'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
 
   // Authentication & RBAC Guard
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -67,11 +73,40 @@ export default function AdminPage() {
   const [courierName, setCourierName] = useState('JNE Express');
   const [trackingNumber, setTrackingNumber] = useState('');
 
+  // Bulk Shipping State
+  const [bulkShipModalOpen, setBulkShipModalOpen] = useState(false);
+  const [bulkShipInput, setBulkShipInput] = useState('');
+  const [bulkShipLoading, setBulkShipLoading] = useState(false);
+
   // Placement transfer form
   const [transferMemberCode, setTransferMemberCode] = useState('');
   const [transferNewParentCode, setTransferNewParentCode] = useState('');
   const [transferReason, setTransferReason] = useState('');
   const [transferStatus, setTransferStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Omni-Search State
+  const [omniQuery, setOmniQuery] = useState('');
+  const [omniResults, setOmniResults] = useState<any>(null);
+  const [omniLoading, setOmniLoading] = useState(false);
+  const [showOmniDropdown, setShowOmniDropdown] = useState(false);
+
+  // Batch Payout State
+  const [selectedPayouts, setSelectedPayouts] = useState<string[]>([]);
+  const [batchRef, setBatchRef] = useState('');
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchApproving, setBatchApproving] = useState(false);
+
+  // Regional Stockist Hubs State
+  const [stockists, setStockists] = useState<any[]>([]);
+  const [newStockistMemberCode, setNewStockistMemberCode] = useState('');
+  const [newStockistType, setNewStockistType] = useState('MASTER');
+  const [newStockistCity, setNewStockistCity] = useState('');
+  const [newStockistQuota, setNewStockistQuota] = useState(100);
+  const [stockistLoading, setStockistLoading] = useState(false);
+
+  // WhatsApp Outbox State
+  const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
+  const [waOutboxLoading, setWaOutboxLoading] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -340,6 +375,176 @@ export default function AdminPage() {
     }
   };
 
+  // Omni-Search Handler
+  const handleOmniSearch = async (query: string) => {
+    setOmniQuery(query);
+    if (query.trim().length < 2) {
+      setOmniResults(null);
+      setShowOmniDropdown(false);
+      return;
+    }
+    setOmniLoading(true);
+    setShowOmniDropdown(true);
+    try {
+      const res = await fetch(`/api/v1/admin/search?q=${encodeURIComponent(query.trim())}`);
+      const data = await res.json();
+      setOmniResults(data);
+    } catch (e) {
+      console.error('Omni search error:', e);
+    } finally {
+      setOmniLoading(false);
+    }
+  };
+
+  // Batch Payout Handlers
+  const handleSelectAllPayouts = () => {
+    const requested = withdrawals.filter((w) => w.status === 'REQUESTED').map((w) => w.id);
+    if (selectedPayouts.length === requested.length) {
+      setSelectedPayouts([]);
+    } else {
+      setSelectedPayouts(requested);
+    }
+  };
+
+  const handleTogglePayout = (id: string) => {
+    setSelectedPayouts((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchApprovePayouts = async () => {
+    if (selectedPayouts.length === 0) {
+      alert('Pilih minimal satu permohonan penarikan dana.');
+      return;
+    }
+    const uid = currentUser?.userId || currentUser?.id;
+    setBatchApproving(true);
+    try {
+      const res = await fetch('/api/v1/admin/payouts/batch-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify({
+          withdrawalIds: selectedPayouts,
+          batchReference: batchRef.trim() || undefined,
+          actorUserId: uid,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menyetujui massal.');
+      alert(data.message || 'Persetujuan massal berhasil dieksekusi!');
+      setBatchModalOpen(false);
+      setSelectedPayouts([]);
+      setBatchRef('');
+      loadDashboardData(uid);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setBatchApproving(false);
+    }
+  };
+
+  // Bulk Shipping Handler
+  const handleBulkShipSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkShipInput.trim()) {
+      alert('Masukkan daftar resi pengiriman.');
+      return;
+    }
+    const lines = bulkShipInput.split('\n').map((l) => l.trim()).filter(Boolean);
+    const shipments: Array<{ orderNumber: string; courierName: string; trackingNumber: string }> = [];
+    for (const line of lines) {
+      const parts = line.split(',').map((p) => p.trim());
+      if (parts.length >= 2) {
+        shipments.push({
+          orderNumber: parts[0],
+          courierName: parts.length >= 3 ? parts[1] : 'JNE Express',
+          trackingNumber: parts.length >= 3 ? parts[2] : parts[1],
+        });
+      }
+    }
+    if (shipments.length === 0) {
+      alert('Format input tidak valid. Gunakan format baris: NO_ORDER, KURIR, NO_RESI');
+      return;
+    }
+    setBulkShipLoading(true);
+    const uid = currentUser?.userId || currentUser?.id;
+    try {
+      const res = await fetch('/api/v1/admin/orders/bulk-ship', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify({ shipments, actorUserId: uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman massal.');
+      alert(data.message || 'Pengiriman massal berhasil diproses!');
+      setBulkShipModalOpen(false);
+      setBulkShipInput('');
+      loadDashboardData(uid);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setBulkShipLoading(false);
+    }
+  };
+
+  // Stockists Handlers
+  const loadStockists = async () => {
+    try {
+      const res = await fetch('/api/v1/stockists');
+      const data = await res.json();
+      if (data.stockists) setStockists(data.stockists);
+    } catch (e) {
+      console.error('Failed to load stockists:', e);
+    }
+  };
+
+  const handleSaveStockist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStockistMemberCode || !newStockistCity) {
+      alert('Lengkapi kode mitra dan kota wilayah stokis.');
+      return;
+    }
+    setStockistLoading(true);
+    const uid = currentUser?.userId || currentUser?.id;
+    try {
+      const res = await fetch('/api/v1/stockists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify({
+          memberCode: newStockistMemberCode.trim().toUpperCase(),
+          stockistType: newStockistType,
+          stockistCity: newStockistCity.trim(),
+          quotaDelta: Number(newStockistQuota) || 0,
+          actorUserId: uid,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui stokis.');
+      alert(data.message || 'Data stokis berhasil disimpan!');
+      setNewStockistMemberCode('');
+      setNewStockistCity('');
+      loadStockists();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setStockistLoading(false);
+    }
+  };
+
+  // WhatsApp Outbox Loader
+  const loadWaOutbox = async () => {
+    setWaOutboxLoading(true);
+    try {
+      const res = await fetch('/api/v1/admin/wa-outbox');
+      const data = await res.json();
+      if (data.messages) setWaOutboxMessages(data.messages);
+    } catch (e) {
+      console.error('Failed to load WA outbox:', e);
+    } finally {
+      setWaOutboxLoading(false);
+    }
+  };
+
   if (authChecking) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
@@ -415,6 +620,162 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Global Omni-Search Bar & Quick Filter */}
+      <div className="relative z-40">
+        <div className="relative">
+          <Search className="w-4 h-4 text-varena-taupe absolute left-3.5 top-3" />
+          <input
+            type="text"
+            value={omniQuery}
+            onChange={(e) => handleOmniSearch(e.target.value)}
+            onFocus={() => { if (omniQuery.length >= 2) setShowOmniDropdown(true); }}
+            placeholder="Omni-Search: Cari kode mitra (VRN-0001), nomor pesanan, resi kurir, rekening bank, atau mutasi ledger..."
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-varena-taupe/30 text-xs focus:outline-none focus:border-varena-gold bg-white shadow-sm font-medium"
+          />
+          {omniLoading && (
+            <RefreshCw className="w-4 h-4 text-varena-gold absolute right-3.5 top-3 animate-spin" />
+          )}
+        </div>
+
+        {/* Dropdown Hasil Omni-Search */}
+        {showOmniDropdown && omniResults && (
+          <div className="absolute top-12 left-0 right-0 bg-white rounded-2xl shadow-2xl border border-varena-gold/40 max-h-[480px] overflow-y-auto p-4 space-y-4">
+            <div className="flex items-center justify-between border-b pb-2">
+              <span className="text-xs font-semibold text-varena-espresso">
+                Hasil Pencarian: &ldquo;{omniQuery}&rdquo; ({omniResults.totalMatches || 0} kecocokan ditemukan)
+              </span>
+              <button
+                onClick={() => setShowOmniDropdown(false)}
+                className="text-xs text-varena-taupe hover:text-varena-espresso font-bold"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            {/* Grup 1: Mitra Jaringan */}
+            {omniResults.members?.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold text-varena-espresso uppercase flex items-center gap-1.5 mb-2">
+                  <Users className="w-3.5 h-3.5 text-varena-gold" />
+                  <span>Mitra Jaringan ({omniResults.members.length})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {omniResults.members.map((m: any) => (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        setActiveTab('NETWORK');
+                        setShowOmniDropdown(false);
+                      }}
+                      className="p-2.5 rounded-lg border border-varena-taupe/20 hover:border-varena-gold cursor-pointer bg-varena-ivory-light/30 transition flex justify-between items-center"
+                    >
+                      <div>
+                        <div className="font-bold text-varena-espresso">{m.displayName} <span className="font-mono text-[10px] text-varena-gold">({m.memberCode})</span></div>
+                        <div className="text-[10px] text-varena-taupe">{m.user?.phone || m.user?.email || '-'}</div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.memberStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {m.memberStatus}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Grup 2: Pesanan & Logistik */}
+            {omniResults.orders?.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold text-varena-espresso uppercase flex items-center gap-1.5 mb-2">
+                  <Package className="w-3.5 h-3.5 text-varena-gold" />
+                  <span>Pesanan & Logistik ({omniResults.orders.length})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {omniResults.orders.map((o: any) => (
+                    <div
+                      key={o.id}
+                      onClick={() => {
+                        setActiveTab('ORDERS');
+                        setOrderSearchQuery(o.orderNumber);
+                        setShowOmniDropdown(false);
+                      }}
+                      className="p-2.5 rounded-lg border border-varena-taupe/20 hover:border-varena-gold cursor-pointer bg-varena-ivory-light/30 transition flex justify-between items-center"
+                    >
+                      <div>
+                        <div className="font-mono font-bold text-varena-espresso">{o.orderNumber}</div>
+                        <div className="text-[10px] text-varena-taupe">{o.buyerName} · Rp{o.total?.toLocaleString('id-ID')}</div>
+                        {o.trackingNumber && (
+                          <div className="text-[10px] text-blue-700 font-mono">Resi: {o.trackingNumber} ({o.courierName})</div>
+                        )}
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-800">
+                        {o.orderStatus}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Grup 3: Permohonan Payout */}
+            {omniResults.payouts?.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold text-varena-espresso uppercase flex items-center gap-1.5 mb-2">
+                  <CreditCard className="w-3.5 h-3.5 text-varena-gold" />
+                  <span>Pencairan Dana Finance ({omniResults.payouts.length})</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  {omniResults.payouts.map((p: any) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setActiveTab('PAYOUTS');
+                        setShowOmniDropdown(false);
+                      }}
+                      className="p-2 rounded-lg border border-varena-taupe/20 hover:border-varena-gold cursor-pointer bg-white transition flex justify-between items-center"
+                    >
+                      <div>
+                        <span className="font-bold text-varena-espresso">{p.member?.displayName}</span> · <span className="font-mono text-emerald-800 font-bold">Rp{p.netAmount?.toLocaleString('id-ID')}</span>
+                        <div className="text-[10px] text-varena-taupe">{p.bankName} - {p.accountNumberMasked} (a.n {p.accountHolder})</div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
+                        {p.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Grup 4: Mutasi Buku Besar (Double-Entry Ledger) */}
+            {omniResults.ledger?.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold text-varena-espresso uppercase flex items-center gap-1.5 mb-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Mutasi Buku Besar ACID ({omniResults.ledger.length})</span>
+                </div>
+                <div className="space-y-1 text-[11px]">
+                  {omniResults.ledger.map((l: any) => (
+                    <div key={l.id} className="p-2 rounded bg-slate-50 border border-slate-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-mono font-bold text-varena-espresso">{l.referenceType}</span>
+                        <div className="text-[10px] text-varena-taupe">{l.memo}</div>
+                      </div>
+                      <span className="font-mono text-[10px] text-varena-taupe">{new Date(l.createdAt).toLocaleDateString('id-ID')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {omniResults.totalMatches === 0 && (
+              <div className="text-center py-6 text-xs text-varena-taupe">
+                Tidak ada data yang cocok dengan &ldquo;{omniQuery}&rdquo;.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Main Navigation Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-varena-taupe/20 pb-2 text-xs font-medium">
         <button
@@ -481,6 +842,21 @@ export default function AdminPage() {
         </button>
 
         <button
+          onClick={() => {
+            setActiveTab('STOCKIST');
+            loadStockists();
+          }}
+          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'STOCKIST'
+              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
+              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
+          }`}
+        >
+          <MapPin className="w-4 h-4" />
+          <span>Pusat Stokis Regional</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('LOGS')}
           className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
             activeTab === 'LOGS'
@@ -490,6 +866,21 @@ export default function AdminPage() {
         >
           <FileText className="w-4 h-4" />
           <span>Audit Log Sistem (60 Hari)</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('OUTBOX');
+            loadWaOutbox();
+          }}
+          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'OUTBOX'
+              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
+              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>WhatsApp Gateway</span>
         </button>
       </div>
 
@@ -800,6 +1191,13 @@ export default function AdminPage() {
             >
               Cari Pesanan
             </button>
+            <button
+              onClick={() => setBulkShipModalOpen(true)}
+              className="px-4 py-2 rounded-lg bg-varena-gold text-varena-espresso font-semibold text-xs hover:bg-varena-gold-hover transition shadow flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <Truck className="w-3.5 h-3.5" />
+              <span>Bulk Resi Pengiriman</span>
+            </button>
           </div>
 
           {/* Orders Table */}
@@ -1035,6 +1433,64 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* Modal Bulk Input Resi Pengiriman Massal */}
+          {bulkShipModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-varena-gold/40">
+                <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                  <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-varena-gold" />
+                    <span>Input Resi Pengiriman Massal (Bulk Shipping)</span>
+                  </h3>
+                  <button
+                    onClick={() => setBulkShipModalOpen(false)}
+                    className="text-varena-taupe hover:text-varena-espresso text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-xs text-varena-taupe leading-relaxed">
+                  Tempel data resi dari manifest ekspedisi logistik. Satu pesanan per baris dengan format CSV:<br />
+                  <code className="font-mono bg-varena-ivory px-1.5 py-0.5 rounded text-[11px] font-bold text-varena-espresso">NOMOR_PESANAN, NAMA_KURIR, NOMOR_RESI</code>
+                </p>
+
+                <form onSubmit={handleBulkShipSubmit} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">
+                      Data Resi Ekspedisi (Baris per Baris) *
+                    </label>
+                    <textarea
+                      rows={6}
+                      required
+                      value={bulkShipInput}
+                      onChange={(e) => setBulkShipInput(e.target.value)}
+                      placeholder={`VRN-ORD-202611-1001, JNE Express, JNE882019482ID\nVRN-ORD-202611-1002, SiCepat, SCP992100412ID\nVRN-ORD-202611-1003, J&T Express, JT100293884ID`}
+                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-xs focus:outline-none focus:border-varena-gold bg-slate-50"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkShipModalOpen(false)}
+                      className="flex-1 py-2 rounded-lg border border-varena-taupe/30 text-varena-taupe hover:bg-varena-ivory transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={bulkShipLoading}
+                      className="flex-1 py-2 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                    >
+                      {bulkShipLoading ? 'Memproses Resi...' : 'Proses Pengiriman Massal'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1059,11 +1515,63 @@ export default function AdminPage() {
               </span>
             </div>
 
+            {/* Batch Action Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-varena-ivory-light border border-varena-taupe/20">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllPayouts}
+                  className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 text-varena-espresso transition"
+                >
+                  {selectedPayouts.length > 0 && selectedPayouts.length === withdrawals.filter((w) => w.status === 'REQUESTED').length ? (
+                    <CheckSquare className="w-4 h-4 text-varena-gold" />
+                  ) : (
+                    <Square className="w-4 h-4 text-varena-taupe" />
+                  )}
+                  <span>Pilih Semua Menunggu ({withdrawals.filter((w) => w.status === 'REQUESTED').length})</span>
+                </button>
+                {selectedPayouts.length > 0 && (
+                  <span className="text-xs font-mono font-bold text-varena-espresso bg-varena-gold/20 px-2 py-1 rounded border border-varena-gold/40">
+                    {selectedPayouts.length} permohonan dipilih
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href="/api/v1/admin/payouts/batch-export?status=REQUESTED"
+                  download="varena_batch_payout_export.csv"
+                  className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 text-varena-espresso shadow-sm transition"
+                >
+                  <Download className="w-3.5 h-3.5 text-varena-gold" />
+                  <span>Export CSV Bank Transfer</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedPayouts.length === 0) {
+                      alert('Pilih minimal satu permohonan penarikan.');
+                      return;
+                    }
+                    setBatchRef(`BATCH-BCA-${Date.now().toString().slice(-6)}`);
+                    setBatchModalOpen(true);
+                  }}
+                  disabled={selectedPayouts.length === 0}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 disabled:opacity-50 transition shadow flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Approve Massal ({selectedPayouts.length})</span>
+                </button>
+              </div>
+            </div>
+
             {withdrawals.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
+                      <th className="py-2.5 px-3 w-8">#</th>
                       <th className="py-2.5 px-3">Tanggal</th>
                       <th className="py-2.5 px-3">Mitra Pemohon</th>
                       <th className="py-2.5 px-3">Nominal Diminta</th>
@@ -1077,6 +1585,18 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-varena-taupe/10">
                     {withdrawals.map((w: any) => (
                       <tr key={w.id} className="hover:bg-varena-ivory-light/40">
+                        <td className="py-2.5 px-3">
+                          {w.status === 'REQUESTED' ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedPayouts.includes(w.id)}
+                              onChange={() => handleTogglePayout(w.id)}
+                              className="rounded border-varena-taupe/40 cursor-pointer"
+                            />
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
                           {new Date(w.requestedAt).toLocaleDateString('id-ID', {
                             day: 'numeric',
@@ -1168,6 +1688,79 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+
+          {/* Modal Batch Payout Approval */}
+          {batchModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-varena-gold/40">
+                <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                  <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    <span>Persetujuan Pencairan Dana Massal</span>
+                  </h3>
+                  <button
+                    onClick={() => setBatchModalOpen(false)}
+                    className="text-varena-taupe hover:text-varena-espresso text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs space-y-1">
+                  <div className="flex justify-between font-semibold text-emerald-900">
+                    <span>Jumlah Permohonan:</span>
+                    <span>{selectedPayouts.length} Mitra</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-800">
+                    <span>Total Bersih Ditransfer:</span>
+                    <span className="font-mono font-bold">
+                      Rp{withdrawals
+                        .filter((w) => selectedPayouts.includes(w.id))
+                        .reduce((sum, w) => sum + w.netAmount, 0)
+                        .toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">
+                      Nomor Referensi Batch Bank / KlikBCA / Mandiri MCM *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={batchRef}
+                      onChange={(e) => setBatchRef(e.target.value)}
+                      placeholder="Contoh: BATCH-BCA-881920"
+                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono font-bold uppercase focus:outline-none focus:border-varena-gold"
+                    />
+                    <p className="text-[11px] text-varena-taupe mt-1">
+                      Nomor ini akan dicatat di buku besar ACID dan jejak audit 60 hari untuk seluruh permohonan yang disetujui.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchModalOpen(false)}
+                      className="flex-1 py-2 rounded-lg border border-varena-taupe/30 text-varena-taupe hover:bg-varena-ivory transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBatchApprovePayouts}
+                      disabled={batchApproving}
+                      className="flex-1 py-2 rounded-lg bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition shadow"
+                    >
+                      {batchApproving ? 'Memproses...' : 'Eksekusi Persetujuan Massal'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1535,6 +2128,282 @@ export default function AdminPage() {
             ) : (
               <div className="text-center py-12 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
                 Tidak ada riwayat audit log pada rentang waktu ini.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 6: REGIONAL STOCKIST HUBS (MASTER & MOBILE STOKIS) */}
+      {/* ==================================================================== */}
+      {activeTab === 'STOCKIST' && (
+        <div className="space-y-6">
+          {/* Stockist Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
+              <span className="text-varena-taupe">Master Stokis Wilayah</span>
+              <div className="font-serif text-2xl font-bold text-varena-gold-dark">
+                {stockists.filter((s) => s.type === 'MASTER').length} Hub Utama
+              </div>
+              <div className="text-[10px] text-varena-taupe">Pusat logistik pengadaan regional per provinsi/kota besar</div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
+              <span className="text-varena-taupe">Mobile Stokis Jaringan</span>
+              <div className="font-serif text-2xl font-bold text-blue-800">
+                {stockists.filter((s) => s.type === 'MOBILE').length} Titik Distribusi
+              </div>
+              <div className="text-[10px] text-varena-taupe">Distribusi cepat tingkat kabupaten/kota untuk supply mitra</div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
+              <span className="text-varena-taupe">Total Kuota Stok Wilayah</span>
+              <div className="font-serif text-2xl font-bold text-emerald-800">
+                {stockists.reduce((sum, s) => sum + (s.inventory || 0), 0)} Box
+              </div>
+              <div className="text-[10px] text-varena-taupe">Total inventori fisik yang teralokasi di seluruh hub stokis</div>
+            </div>
+          </div>
+
+          {/* Form Penunjukan & Penyesuaian Kuota Stokis */}
+          <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-varena-gold" />
+              <h3 className="font-serif text-base font-bold text-varena-espresso">
+                Penunjukan Otoritas & Alokasi Kuota Stokis Regional
+              </h3>
+            </div>
+            <p className="text-xs text-varena-taupe">
+              Tetapkan mitra yang memenuhi kualifikasi sebagai Master Stokis atau Mobile Stokis untuk mempercepat rantai pasok produk di wilayah tertentu.
+            </p>
+
+            <form onSubmit={handleSaveStockist} className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <label className="block font-semibold text-varena-espresso mb-1">Kode ID Mitra *</label>
+                <input
+                  type="text"
+                  required
+                  value={newStockistMemberCode}
+                  onChange={(e) => setNewStockistMemberCode(e.target.value)}
+                  placeholder="Contoh: VRN-0002"
+                  className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 uppercase font-mono focus:outline-none focus:border-varena-gold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-varena-espresso mb-1">Tingkatan Stokis *</label>
+                <select
+                  value={newStockistType}
+                  onChange={(e) => setNewStockistType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white focus:outline-none focus:border-varena-gold"
+                >
+                  <option value="MASTER">Master Stokis (Hub Utama)</option>
+                  <option value="MOBILE">Mobile Stokis (Sub-Hub)</option>
+                  <option value="NONE">Hapus Status Stokis</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-varena-espresso mb-1">Kota / Wilayah *</label>
+                <input
+                  type="text"
+                  required
+                  value={newStockistCity}
+                  onChange={(e) => setNewStockistCity(e.target.value)}
+                  placeholder="Contoh: Surabaya, Jawa Timur"
+                  className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-varena-espresso mb-1">Tambah/Set Kuota (Box) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={newStockistQuota}
+                  onChange={(e) => setNewStockistQuota(parseInt(e.target.value, 10) || 0)}
+                  className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono focus:outline-none focus:border-varena-gold"
+                />
+              </div>
+
+              <div className="sm:col-span-4 pt-1">
+                <button
+                  type="submit"
+                  disabled={stockistLoading}
+                  className="py-2.5 px-6 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                >
+                  {stockistLoading ? 'Menyimpan...' : 'Simpan Otoritas Stokis'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Tabel Daftar Stokis Regional */}
+          <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
+              <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-varena-gold" />
+                <span>Daftar Hub Master & Mobile Stokis Aktif</span>
+              </h3>
+              <button
+                onClick={loadStockists}
+                className="text-xs text-varena-taupe hover:text-varena-espresso font-semibold flex items-center gap-1"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Segarkan</span>
+              </button>
+            </div>
+
+            {stockists.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                    <tr>
+                      <th className="py-2.5 px-3">Kode Mitra</th>
+                      <th className="py-2.5 px-3">Nama Stokis</th>
+                      <th className="py-2.5 px-3">Tingkatan Hub</th>
+                      <th className="py-2.5 px-3">Wilayah / Kota</th>
+                      <th className="py-2.5 px-3">Stok Box Tersedia</th>
+                      <th className="py-2.5 px-3">Kontak Terdaftar</th>
+                      <th className="py-2.5 px-3 text-right">Aksi Cepat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-varena-taupe/10">
+                    {stockists.map((s: any) => (
+                      <tr key={s.id} className="hover:bg-varena-ivory-light/40">
+                        <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{s.memberCode}</td>
+                        <td className="py-2.5 px-3 font-semibold text-varena-espresso">{s.name}</td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                              s.type === 'MASTER'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-blue-100 text-blue-900 border border-blue-300'
+                            }`}
+                          >
+                            {s.type === 'MASTER' ? '⭐ MASTER STOKIS' : '📦 MOBILE STOKIS'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-medium text-slate-700">{s.city}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">{s.inventory} Box</td>
+                        <td className="py-2.5 px-3 font-mono text-varena-taupe">{s.phone || '-'}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          {s.phone && (
+                            <a
+                              href={`https://wa.me/${s.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
+                                `Halo ${s.name} (${s.memberCode}), salam dari Manajemen Pusat VARENA terkait pengelolaan stok wilayah ${s.city}.`
+                              )}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>Hubungi WA</span>
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-xs text-varena-taupe">
+                Belum ada mitra yang ditunjuk sebagai Master atau Mobile Stokis.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 7: WHATSAPP GATEWAY OUTBOX MONITOR */}
+      {/* ==================================================================== */}
+      {activeTab === 'OUTBOX' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-emerald-700" />
+                  <span>WhatsApp Gateway & Automated Dispatch Outbox</span>
+                </h2>
+                <p className="text-xs text-varena-taupe mt-0.5">
+                  Log pengiriman pesan otomatis (Invoice Pesanan, Resi Pengiriman Logistik, Notifikasi Komisi Masuk, Konfirmasi Payout).
+                </p>
+              </div>
+
+              <button
+                onClick={loadWaOutbox}
+                disabled={waOutboxLoading}
+                className="px-3.5 py-2 rounded-lg border border-varena-taupe/30 text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 shadow-sm bg-white"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${waOutboxLoading ? 'animate-spin' : ''}`} />
+                <span>Segarkan Outbox</span>
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+              <div>
+                <strong>Status Gateway:</strong> Aktif Terintegrasi (Webhook Outbox Engine)
+              </div>
+              <span className="font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-emerald-300 font-semibold">
+                {waOutboxMessages.length} Pesan Disimpan
+              </span>
+            </div>
+
+            {waOutboxMessages.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                    <tr>
+                      <th className="py-2.5 px-3">Waktu Dispatch</th>
+                      <th className="py-2.5 px-3">Penerima Pesan</th>
+                      <th className="py-2.5 px-3">Tipe Template</th>
+                      <th className="py-2.5 px-3">Cuplikan Isi Pesan</th>
+                      <th className="py-2.5 px-3">Status Pengiriman</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-varena-taupe/10">
+                    {waOutboxMessages.map((msg: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-varena-ivory-light/40">
+                        <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
+                          {new Date(msg.sentAt).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-varena-espresso">{msg.recipientName}</div>
+                          <div className="text-[10px] text-varena-taupe font-mono">{msg.recipientPhone}</div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30">
+                            {msg.templateType}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 max-w-[320px] font-mono text-[11px]">
+                          <div className="p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+                            {msg.message}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            {msg.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
+                Belum ada pesan yang dikirim melalui gateway WhatsApp pada sesi ini.
               </div>
             )}
           </div>

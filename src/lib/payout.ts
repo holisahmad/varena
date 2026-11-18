@@ -1,6 +1,7 @@
 import prisma from './prisma';
 import { getMemberWallet, postLedgerTransaction } from './ledger';
 import { withTransactionRetry } from './security';
+import { dispatchWaMessage, templatePayoutDisbursed } from './whatsapp';
 
 export interface RequestPayoutParams {
   memberId: string;
@@ -99,7 +100,7 @@ export async function approvePayout({
 
   const memberCode = withdrawal.member.memberCode;
 
-  return withTransactionRetry(async (tx) => {
+  const result = await withTransactionRetry(async (tx) => {
     // 1. Update withdrawal status to PAID
     const updated = await tx.withdrawalRequest.update({
       where: { id: withdrawalId },
@@ -154,4 +155,23 @@ export async function approvePayout({
 
     return updated;
   });
+
+  // 4. Dispatch WhatsApp notification (Async/Non-blocking)
+  if (withdrawal.member?.phone) {
+    dispatchWaMessage({
+      recipientPhone: withdrawal.member.phone,
+      recipientName: withdrawal.member.displayName,
+      templateType: 'PAYOUT_DISBURSED',
+      message: templatePayoutDisbursed({
+        memberName: withdrawal.member.displayName,
+        netAmount: withdrawal.netAmount,
+        bankName: withdrawal.bankName,
+        accountNumberMasked: withdrawal.accountNumberMasked,
+        refNumber: providerReference,
+      }),
+      referenceId: withdrawal.id,
+    }).catch((err) => console.error('WA Payout notification error:', err));
+  }
+
+  return result;
 }

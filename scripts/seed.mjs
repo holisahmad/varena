@@ -301,6 +301,9 @@ async function main() {
         bankAccountNumber: m.code === 'VRN-0001' ? '1234567890' : m.code === 'VRN-0002' ? '9876543210' : null,
         bankAccountHolder: m.code === 'VRN-0001' ? 'Ahmad Fauzi' : m.code === 'VRN-0002' ? 'Siti Nurhaliza' : null,
         bankLockedAt: m.code === 'VRN-0001' || m.code === 'VRN-0002' ? new Date() : null,
+        stockistType: m.code === 'VRN-0002' ? 'MASTER' : m.code === 'VRN-0003' ? 'MOBILE' : 'NONE',
+        stockistCity: m.code === 'VRN-0002' ? 'Surabaya, Jawa Timur' : m.code === 'VRN-0003' ? 'Bandung, Jawa Barat' : null,
+        stockistInventory: m.code === 'VRN-0002' ? 200 : m.code === 'VRN-0003' ? 50 : 0,
         activatedAt: new Date(),
       },
     });
