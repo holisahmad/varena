@@ -191,17 +191,9 @@ async function run() {
     .toBuffer();
   fs.writeFileSync(path.join(PUBLIC_DIR, 'apple-touch-icon.png'), appleTouchIcon);
   fs.writeFileSync(path.join(PUBLIC_ICONS_DIR, 'apple-touch-icon.png'), appleTouchIcon);
-  fs.writeFileSync(path.join(APP_DIR, 'apple-icon.png'), appleTouchIcon);
   console.log('✓ Generated Apple Touch Icons');
 
-  // 8. Next.js App Router icon.png (32x32 and 64x64)
-  const appIcon = await sharp(squarePng)
-    .resize(64, 64)
-    .png()
-    .toBuffer();
-  fs.writeFileSync(path.join(APP_DIR, 'icon.png'), appIcon);
-
-  // 9. Favicons (16x16, 32x32, 48x48) & ICO
+  // 8. Favicons (16x16, 32x32, 48x48) & ICO
   const fav16 = await sharp(squarePng).resize(16, 16).png().toBuffer();
   const fav32 = await sharp(squarePng).resize(32, 32).png().toBuffer();
   const fav48 = await sharp(squarePng).resize(48, 48).png().toBuffer();
@@ -211,10 +203,8 @@ async function run() {
   fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.png'), fav32);
 
   const icoBuffer = createIcoFromPngs([fav16, fav32, fav48]);
-  // Next.js App Router serves /favicon.ico from src/app/favicon.ico
-  // Writing to both public/ and src/app/ causes a 500 conflicting-public-file-page in Next.js
-  fs.writeFileSync(path.join(APP_DIR, 'favicon.ico'), icoBuffer);
-  console.log('✓ Generated src/app/favicon.ico (Multi-size 16/32/48 ICO for App Router)');
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.ico'), icoBuffer);
+  console.log('✓ Generated public/favicon.ico (Multi-size 16/32/48 ICO static file)');
 
   console.log('=== All assets successfully updated! ===');
 }
