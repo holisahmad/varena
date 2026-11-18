@@ -1198,21 +1198,21 @@ export default function MemberDashboardPage() {
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-col sm:flex-row gap-2 justify-between items-center flex-shrink-0">
+            <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-row flex-wrap gap-2 justify-between items-center flex-shrink-0">
               <Link
                 href={`/checkout?orderNumber=${selectedOrder.orderNumber}`}
-                className="w-full sm:w-auto text-center py-2 px-3 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium text-xs"
+                className="text-center py-2 px-3 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium text-xs"
               >
                 Halaman Invoice Lengkap →
               </Link>
 
-              <div className="flex gap-2 w-full sm:w-auto">
+              <div className="flex gap-2">
                 {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
                   <button
                     type="button"
                     onClick={handleModalSimulatePayment}
                     disabled={modalSettling}
-                    className="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
+                    className="py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
                     title="Simulasikan pembayaran lunas di mode development"
                   >
                     {modalSettling ? 'Memproses...' : 'Simulasi Lunas'}
@@ -1224,20 +1224,12 @@ export default function MemberDashboardPage() {
                     type="button"
                     onClick={() => handleConfirmReceived(selectedOrder.id)}
                     disabled={actionLoadingId === selectedOrder.id}
-                    className="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition flex items-center justify-center gap-1 shadow"
+                    className="py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition flex items-center justify-center gap-1 shadow"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>{actionLoadingId === selectedOrder.id ? 'Memproses...' : 'Konfirmasi Barang Diterima'}</span>
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrder(null)}
-                  className="py-2 px-4 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition"
-                >
-                  Tutup
-                </button>
               </div>
             </div>
           </div>
