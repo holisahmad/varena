@@ -15,21 +15,37 @@ export async function GET(req: Request) {
       );
     }
 
-    const list = await prisma.withdrawalRequest.findMany({
-      include: {
-        member: {
-          select: {
-            memberCode: true,
-            displayName: true,
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, parseInt(searchParams.get('limit') || '15', 10));
+    const skip = (page - 1) * limit;
+
+    const [list, total] = await Promise.all([
+      prisma.withdrawalRequest.findMany({
+        include: {
+          member: {
+            select: {
+              memberCode: true,
+              displayName: true,
+            },
           },
         },
-      },
-      orderBy: { requestedAt: 'desc' },
-    });
+        orderBy: { requestedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.withdrawalRequest.count(),
+    ]);
 
     return NextResponse.json({
       success: true,
       withdrawals: list,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

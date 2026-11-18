@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import Pagination from '@/components/ui/Pagination';
 import {
   Wallet,
   GitFork,
@@ -35,6 +36,11 @@ export default function MemberDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [memberProfile, setMemberProfile] = useState<any>(null);
+
+  // Pagination states for order tables
+  const [personalOrdersPage, setPersonalOrdersPage] = useState(1);
+  const [referralOrdersPage, setReferralOrdersPage] = useState(1);
+  const ORDERS_PER_PAGE = 5;
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -154,6 +160,18 @@ export default function MemberDashboardPage() {
   };
 
   if (!user) return null;
+
+  const paginatedPersonalOrders = personalOrders.slice(
+    (personalOrdersPage - 1) * ORDERS_PER_PAGE,
+    personalOrdersPage * ORDERS_PER_PAGE
+  );
+  const personalTotalPages = Math.ceil(personalOrders.length / ORDERS_PER_PAGE) || 1;
+
+  const paginatedReferralOrders = referralOrders.slice(
+    (referralOrdersPage - 1) * ORDERS_PER_PAGE,
+    referralOrdersPage * ORDERS_PER_PAGE
+  );
+  const referralTotalPages = Math.ceil(referralOrders.length / ORDERS_PER_PAGE) || 1;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
@@ -378,7 +396,8 @@ export default function MemberDashboardPage() {
         </div>
 
         {personalOrders.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+            <div className="overflow-x-auto">
             <table className="w-full text-xs text-left min-w-[600px]">
               <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                 <tr>
@@ -391,7 +410,7 @@ export default function MemberDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-varena-taupe/10">
-                {personalOrders.map((po) => (
+                {paginatedPersonalOrders.map((po) => (
                   <tr key={po.id} className="hover:bg-varena-ivory-light/40">
                     <td className="py-2.5 px-3">
                       <div className="font-mono font-bold text-varena-espresso">{po.orderNumber}</div>
@@ -492,6 +511,16 @@ export default function MemberDashboardPage() {
               </tbody>
             </table>
           </div>
+
+            <div className="pt-2">
+              <Pagination
+                currentPage={personalOrdersPage}
+                totalPages={personalTotalPages}
+                totalItems={personalOrders.length}
+                onPageChange={(p) => setPersonalOrdersPage(p)}
+              />
+            </div>
+          </>
         ) : (
           <div className="text-center py-8 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
             Anda belum memiliki riwayat pesanan pribadi. Klik <strong>Belanja Lagi</strong> untuk memesan produk VARENA Kopi Sehat.
@@ -530,7 +559,7 @@ export default function MemberDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-varena-taupe/10">
-                {referralOrders.map((ro) => (
+                {paginatedReferralOrders.map((ro) => (
                   <tr key={ro.id} className="hover:bg-varena-ivory-light/40">
                     <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{ro.orderNumber}</td>
                     <td className="py-2.5 px-3 font-medium text-varena-espresso">{ro.buyerName}</td>
@@ -558,6 +587,15 @@ export default function MemberDashboardPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="pt-2">
+            <Pagination
+              currentPage={referralOrdersPage}
+              totalPages={referralTotalPages}
+              totalItems={referralOrders.length}
+              onPageChange={(p) => setReferralOrdersPage(p)}
+            />
           </div>
         </div>
       )}

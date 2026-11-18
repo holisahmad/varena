@@ -18,7 +18,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'ALL';
     const q = searchParams.get('q')?.trim() || '';
-    const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, parseInt(searchParams.get('limit') || '15', 10));
+    const skip = (page - 1) * limit;
 
     const whereClause: any = {};
 
@@ -35,7 +37,7 @@ export async function GET(req: Request) {
       ];
     }
 
-    const [orders, pendingPaymentCount, paidCount, shippedCount, completedCount, totalCount] = await Promise.all([
+    const [orders, filteredCount, pendingPaymentCount, paidCount, shippedCount, completedCount, totalCount] = await Promise.all([
       prisma.order.findMany({
         where: whereClause,
         include: {
@@ -60,8 +62,10 @@ export async function GET(req: Request) {
           },
         },
         orderBy: { createdAt: 'desc' },
+        skip,
         take: limit,
       }),
+      prisma.order.count({ where: whereClause }),
       prisma.order.count({ where: { orderStatus: 'PENDING_PAYMENT' } }),
       prisma.order.count({ where: { orderStatus: 'PAID' } }),
       prisma.order.count({ where: { orderStatus: 'SHIPPED' } }),
@@ -72,6 +76,12 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       orders,
+      pagination: {
+        page,
+        limit,
+        total: filteredCount,
+        totalPages: Math.ceil(filteredCount / limit) || 1,
+      },
       summary: {
         totalOrders: totalCount,
         pendingPayment: pendingPaymentCount,

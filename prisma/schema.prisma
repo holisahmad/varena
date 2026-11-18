@@ -263,6 +263,8 @@ model Order {
 
   @@index([orderStatus, paidAt])
   @@index([referralMemberId])
+  @@index([createdAt])
+  @@index([buyerUserId, createdAt])
   @@map("orders")
 }
 
@@ -445,6 +447,7 @@ model WithdrawalRequest {
 
   @@index([status, requestedAt])
   @@index([memberId, status])
+  @@index([requestedAt])
   @@map("withdrawal_requests")
 }
 

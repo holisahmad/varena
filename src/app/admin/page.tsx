@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Pagination from '@/components/ui/Pagination';
 import {
   Building2,
   CheckCircle2,
@@ -92,6 +93,19 @@ export default function AdminPage() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
+
+  // Pagination States
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderTotalPages, setOrderTotalPages] = useState(1);
+  const [orderTotal, setOrderTotal] = useState(0);
+
+  const [payoutPage, setPayoutPage] = useState(1);
+  const [payoutTotalPages, setPayoutTotalPages] = useState(1);
+  const [payoutTotal, setPayoutTotal] = useState(0);
+
+  const [logPage, setLogPage] = useState(1);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+  const [logTotal, setLogTotal] = useState(0);
 
   // Filters
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
@@ -216,33 +230,44 @@ export default function AdminPage() {
 
     Promise.all([
       fetch('/api/v1/admin/stats', { headers: authHeaders }).then(checkRes),
-      fetch('/api/v1/payout/admin', { headers: authHeaders }).then(checkRes),
-      fetch('/api/v1/admin/orders', { headers: authHeaders }).then(checkRes),
-      fetch(`/api/v1/admin/audit-logs?days=${logDays}`, { headers: authHeaders }).then(checkRes),
+      fetch('/api/v1/payout/admin?page=1&limit=15', { headers: authHeaders }).then(checkRes),
+      fetch('/api/v1/admin/orders?page=1&limit=15', { headers: authHeaders }).then(checkRes),
+      fetch(`/api/v1/admin/audit-logs?days=${logDays}&page=1&limit=20`, { headers: authHeaders }).then(checkRes),
     ])
       .then(([sData, wData, oData, lData]) => {
         if (sData?.stats) setStats(sData.stats);
-        if (wData?.withdrawals) setWithdrawals(wData.withdrawals);
+        if (wData?.withdrawals) {
+          setWithdrawals(wData.withdrawals);
+          setPayoutPage(wData.pagination?.page || 1);
+          setPayoutTotalPages(wData.pagination?.totalPages || 1);
+          setPayoutTotal(wData.pagination?.total || wData.withdrawals.length);
+        }
         if (oData?.orders) {
           setOrders(oData.orders);
           setOrdersSummary(oData.summary);
           setPaymentProofOrders(oData.orders.filter((o: any) => o.paymentConfirmationStatus === 'SUBMITTED'));
+          setOrderPage(oData.pagination?.page || 1);
+          setOrderTotalPages(oData.pagination?.totalPages || 1);
+          setOrderTotal(oData.pagination?.total || oData.orders.length);
         }
         if (lData?.logs) {
           setAuditLogs(lData.logs);
           setAuditTotal(lData.totalCount);
+          setLogPage(lData.pagination?.page || 1);
+          setLogTotalPages(lData.pagination?.totalPages || 1);
+          setLogTotal(lData.pagination?.total || lData.totalCount);
         }
       })
       .catch((e) => console.error('Admin data fetch error:', e))
       .finally(() => setLoading(false));
   };
 
-  // Filter Orders
-  const loadFilteredOrders = (status = orderStatusFilter, query = orderSearchQuery) => {
+  // Filter Orders with Pagination
+  const loadFilteredOrders = (status = orderStatusFilter, query = orderSearchQuery, page = 1) => {
     const authHeaders = getAdminHeaders();
     if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
-    fetch(`/api/v1/admin/orders?status=${status}&q=${encodeURIComponent(query)}`, {
+    fetch(`/api/v1/admin/orders?status=${status}&q=${encodeURIComponent(query)}&page=${page}&limit=15`, {
       headers: authHeaders,
     })
       .then((r) => r.json())
@@ -251,16 +276,38 @@ export default function AdminPage() {
           setOrders(data.orders);
           setOrdersSummary(data.summary);
           setPaymentProofOrders(data.orders.filter((o: any) => o.paymentConfirmationStatus === 'SUBMITTED'));
+          setOrderPage(data.pagination?.page || 1);
+          setOrderTotalPages(data.pagination?.totalPages || 1);
+          setOrderTotal(data.pagination?.total || data.orders.length);
         }
       });
   };
 
-  // Filter Audit Logs
-  const loadFilteredLogs = (days = logDays, entity = logEntityFilter) => {
+  // Payouts Pagination
+  const loadPayouts = (page = 1) => {
     const authHeaders = getAdminHeaders();
     if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
-    fetch(`/api/v1/admin/audit-logs?days=${days}&entityType=${entity}`, {
+    fetch(`/api/v1/payout/admin?page=${page}&limit=15`, {
+      headers: authHeaders,
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.withdrawals) {
+          setWithdrawals(data.withdrawals);
+          setPayoutPage(data.pagination?.page || 1);
+          setPayoutTotalPages(data.pagination?.totalPages || 1);
+          setPayoutTotal(data.pagination?.total || data.withdrawals.length);
+        }
+      });
+  };
+
+  // Filter Audit Logs with Pagination
+  const loadFilteredLogs = (days = logDays, entity = logEntityFilter, page = 1) => {
+    const authHeaders = getAdminHeaders();
+    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
+
+    fetch(`/api/v1/admin/audit-logs?days=${days}&entityType=${entity}&page=${page}&limit=20`, {
       headers: authHeaders,
     })
       .then((r) => r.json())
@@ -268,6 +315,9 @@ export default function AdminPage() {
         if (data.logs) {
           setAuditLogs(data.logs);
           setAuditTotal(data.totalCount);
+          setLogPage(data.pagination?.page || 1);
+          setLogTotalPages(data.pagination?.totalPages || 1);
+          setLogTotal(data.pagination?.total || data.totalCount);
         }
       });
   };
@@ -1466,7 +1516,8 @@ export default function AdminPage() {
                 </div>
 
                 {orders.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left min-w-[900px]">
                       <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                         <tr>
@@ -1598,6 +1649,16 @@ export default function AdminPage() {
                       </tbody>
                     </table>
                   </div>
+
+                    <div className="p-3 border-t border-varena-taupe/15">
+                      <Pagination
+                        currentPage={orderPage}
+                        totalPages={orderTotalPages}
+                        totalItems={orderTotal}
+                        onPageChange={(p) => loadFilteredOrders(orderStatusFilter, orderSearchQuery, p)}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center py-12 text-xs text-varena-taupe">
                     Tidak ada pesanan yang sesuai dengan filter pencarian saat ini.
@@ -1819,7 +1880,8 @@ export default function AdminPage() {
                 </div>
 
                 {withdrawals.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left min-w-[950px]">
                       <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                         <tr>
@@ -1933,6 +1995,16 @@ export default function AdminPage() {
                       </tbody>
                     </table>
                   </div>
+
+                    <div className="p-3 border-t border-varena-taupe/15">
+                      <Pagination
+                        currentPage={payoutPage}
+                        totalPages={payoutTotalPages}
+                        totalItems={payoutTotal}
+                        onPageChange={(p) => loadPayouts(p)}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
                     Tidak ada permohonan penarikan dana saat ini.
@@ -2321,7 +2393,8 @@ export default function AdminPage() {
                 </div>
 
                 {auditLogs.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left min-w-[600px]">
                       <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                         <tr>
@@ -2375,6 +2448,16 @@ export default function AdminPage() {
                       </tbody>
                     </table>
                   </div>
+
+                    <div className="p-3 border-t border-varena-taupe/15">
+                      <Pagination
+                        currentPage={logPage}
+                        totalPages={logTotalPages}
+                        totalItems={logTotal}
+                        onPageChange={(p) => loadFilteredLogs(logDays, logEntityFilter, p)}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center py-12 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
                     Tidak ada riwayat audit log pada rentang waktu ini.

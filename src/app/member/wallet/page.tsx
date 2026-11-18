@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Pagination from '@/components/ui/Pagination';
 import {
   Wallet,
   ArrowDownRight,
@@ -37,6 +38,12 @@ export default function MemberWalletPage() {
   const [uniqueCodeBalance, setUniqueCodeBalance] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Pagination states
+  const [withdrawalPage, setWithdrawalPage] = useState(1);
+  const [statementPage, setStatementPage] = useState(1);
+  const WITHDRAWALS_PER_PAGE = 5;
+  const STATEMENTS_PER_PAGE = 10;
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -146,6 +153,18 @@ export default function MemberWalletPage() {
   const enteredAmount = parseInt(amount, 10) || 0;
   const adminFee = 6500;
   const netEstimated = enteredAmount > adminFee ? enteredAmount - adminFee : 0;
+
+  const paginatedWithdrawals = (wallet?.withdrawals || []).slice(
+    (withdrawalPage - 1) * WITHDRAWALS_PER_PAGE,
+    withdrawalPage * WITHDRAWALS_PER_PAGE
+  );
+  const withdrawalTotalPages = Math.ceil((wallet?.withdrawals?.length || 0) / WITHDRAWALS_PER_PAGE) || 1;
+
+  const paginatedStatements = (wallet?.statement || []).slice(
+    (statementPage - 1) * STATEMENTS_PER_PAGE,
+    statementPage * STATEMENTS_PER_PAGE
+  );
+  const statementTotalPages = Math.ceil((wallet?.statement?.length || 0) / STATEMENTS_PER_PAGE) || 1;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
@@ -532,7 +551,7 @@ export default function MemberWalletPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-varena-taupe/10">
-                    {wallet.withdrawals.map((w: any) => (
+                    {paginatedWithdrawals.map((w: any) => (
                       <tr key={w.id} className="hover:bg-varena-ivory-light/40">
                         <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
                           {new Date(w.requestedAt).toLocaleDateString('id-ID', {
@@ -577,6 +596,15 @@ export default function MemberWalletPage() {
                   </tbody>
                 </table>
               </div>
+
+              <div className="pt-2">
+                <Pagination
+                  currentPage={withdrawalPage}
+                  totalPages={withdrawalTotalPages}
+                  totalItems={wallet.withdrawals.length}
+                  onPageChange={(p) => setWithdrawalPage(p)}
+                />
+              </div>
             </div>
           )}
 
@@ -593,7 +621,8 @@ export default function MemberWalletPage() {
             {loading ? (
               <div className="text-center py-16 text-xs text-varena-taupe">Memuat buku besar...</div>
             ) : wallet?.statement && wallet.statement.length > 0 ? (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left min-w-[480px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
@@ -604,7 +633,7 @@ export default function MemberWalletPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-varena-taupe/10">
-                    {wallet.statement.map((s: any) => {
+                    {paginatedStatements.map((s: any) => {
                       const isCredit = s.direction === 'CREDIT';
                       return (
                         <tr key={s.id} className="hover:bg-varena-ivory-light/40">
@@ -644,6 +673,16 @@ export default function MemberWalletPage() {
                   </tbody>
                 </table>
               </div>
+
+                <div className="pt-2">
+                  <Pagination
+                    currentPage={statementPage}
+                    totalPages={statementTotalPages}
+                    totalItems={wallet.statement.length}
+                    onPageChange={(p) => setStatementPage(p)}
+                  />
+                </div>
+              </>
             ) : (
               <div className="text-center py-16 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
                 Belum ada mutasi buku besar pada akun ini. Lakukan penjualan retail atau daftarkan mitra baru untuk menghasilkan komisi.

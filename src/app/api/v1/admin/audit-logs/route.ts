@@ -17,7 +17,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get('days') || '60', 10);
     const entityType = searchParams.get('entityType');
-    const limit = Math.min(200, parseInt(searchParams.get('limit') || '100', 10));
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, parseInt(searchParams.get('limit') || '20', 10));
+    const skip = (page - 1) * limit;
 
     // Calculate cutoff date (default 60 days retention window)
     const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
           },
         },
         orderBy: { createdAt: 'desc' },
+        skip,
         take: limit,
       }),
       prisma.auditLog.count({ where: whereClause }),
@@ -55,6 +58,12 @@ export async function GET(req: Request) {
       success: true,
       days,
       totalCount,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+      },
       logs: logs.map((log) => ({
         id: log.id,
         action: log.action,
