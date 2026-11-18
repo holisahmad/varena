@@ -59,6 +59,18 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
+  // Lock body scroll when mobile drawer is open to prevent page scrolling behind sidebar
+  useEffect(() => {
+    if (mobileSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileSidebarOpen]);
+
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
@@ -679,22 +691,22 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row w-full bg-slate-50/70">
-      {/* Mobile Slide-Over Backdrop */}
+      {/* Mobile Slide-Over Backdrop (menempel persis di bawah header top-16) */}
       {mobileSidebarOpen && (
         <div
           onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
+          className="fixed top-16 inset-x-0 bottom-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
         />
       )}
 
-      {/* LEFT SIDEBAR (Desktop Sticky & Mobile Slide-Over Drawer) */}
+      {/* LEFT SIDEBAR (Desktop Sticky top-16 & Mobile Drawer menempel langsung di bawah header top-16) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 bg-varena-espresso text-varena-ivory-light flex flex-col border-r border-[#4A3B30] shadow-2xl transition-all duration-300 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:z-20 ${
+        className={`fixed top-16 bottom-0 left-0 h-[calc(100dvh-4rem)] z-[45] bg-varena-espresso text-varena-ivory-light flex flex-col border-r border-[#4A3B30] shadow-2xl transition-all duration-300 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:z-20 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[260px]'} w-[280px]`}
       >
         {/* Sidebar Header Brand / Title */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-[#4A3B30]">
+        <div className="h-14 lg:h-16 flex items-center justify-between px-4 border-b border-[#4A3B30] bg-[#2A1D16] lg:bg-transparent flex-shrink-0">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-lg bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center flex-shrink-0 text-varena-gold shadow-sm">
@@ -720,10 +732,11 @@ export default function AdminPage() {
           {/* Mobile Close Button */}
           <button
             onClick={() => setMobileSidebarOpen(false)}
-            className="p-1.5 rounded-lg text-varena-taupe-light hover:text-white hover:bg-white/10 lg:hidden"
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-varena-ivory-light hover:text-white bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5 lg:hidden shadow-sm border border-white/10"
             aria-label="Tutup Menu"
           >
-            <X className="w-5 h-5" />
+            <X className="w-3.5 h-3.5" />
+            <span>Tutup</span>
           </button>
         </div>
 
