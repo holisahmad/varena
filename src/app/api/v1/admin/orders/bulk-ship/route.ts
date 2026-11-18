@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCorporateUser } from '@/lib/auth';
 import { withTransactionRetry } from '@/lib/security';
 import { dispatchWaMessage, templateOrderShipped } from '@/lib/whatsapp';
 
@@ -9,8 +10,18 @@ import { dispatchWaMessage, templateOrderShipped } from '@/lib/whatsapp';
  */
 export async function POST(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const userEmail = req.headers.get('x-user-email');
     const body = await req.json();
     const { shipments, actorUserId } = body;
+
+    const authUser = await getCorporateUser(userId || actorUserId, userEmail);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak memproses pengiriman massal.' },
+        { status: 403 }
+      );
+    }
 
     if (!shipments || !Array.isArray(shipments) || shipments.length === 0) {
       return NextResponse.json(
@@ -46,7 +57,7 @@ export async function POST(req: Request) {
 
         await tx.auditLog.create({
           data: {
-            actorUserId: actorUserId || null,
+            actorUserId: authUser.id,
             action: 'ORDER_BULK_SHIPPED',
             entityType: 'ORDER',
             entityId: order.id,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyCorporateAdmin } from '@/lib/auth';
+import { getCorporateUser } from '@/lib/auth';
 
 /**
  * GET /api/v1/stockists
@@ -48,8 +48,18 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const userEmail = req.headers.get('x-user-email');
     const body = await req.json();
     const { memberCode, stockistType, stockistCity, quotaDelta, actorUserId } = body;
+
+    const authUser = await getCorporateUser(userId || actorUserId, userEmail);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengatur status stokis.' },
+        { status: 403 }
+      );
+    }
 
     if (!memberCode || !stockistType || !stockistCity) {
       return NextResponse.json(
@@ -84,7 +94,7 @@ export async function POST(req: Request) {
 
     await prisma.auditLog.create({
       data: {
-        actorUserId: actorUserId || null,
+        actorUserId: authUser.id,
         action: 'STOCKIST_APPOINTED',
         entityType: 'MEMBER',
         entityId: member.id,

@@ -130,14 +130,14 @@ async function main() {
 
   // 3. Corporate Hierarchy Users (L1 to L8)
   const corporateUsers = [
-    { email: 'owner@varena.id', name: 'Hendrawan (Owner)', role: 'OWNER', memberCode: 'VRN-CORP-L1' },
-    { email: 'koperasi@varena.id', name: 'Koperasi Mandiri VARENA', role: 'KOPERASI', memberCode: 'VRN-CORP-L2' },
-    { email: 'operasional@varena.id', name: 'Divisi Operasional', role: 'OPERATIONS', memberCode: 'VRN-CORP-L3' },
-    { email: 'admin1@varena.id', name: 'Admin Katalog & Stok', role: 'ADMIN_1', memberCode: 'VRN-CORP-L4' },
-    { email: 'admin2@varena.id', name: 'Admin Verifikasi & Support', role: 'ADMIN_2', memberCode: 'VRN-CORP-L5' },
-    { email: 'leader1@varena.id', name: 'Bambang Pratama (Leader 1)', role: 'LEADER_1', memberCode: 'VRN-LDR-01' },
-    { email: 'leader2@varena.id', name: 'Dewi Kartika (Leader 2)', role: 'LEADER_2', memberCode: 'VRN-LDR-02' },
-    { email: 'leader3@varena.id', name: 'Raden Wijaya (Leader 3 Root)', role: 'LEADER_3', memberCode: 'VRN-LDR-03' },
+    { id: 'usr-corp-owner-001', memberId: 'mbr-corp-owner-001', email: 'owner@varena.id', name: 'Hendrawan (Owner)', role: 'OWNER', memberCode: 'VRN-CORP-L1' },
+    { id: 'usr-corp-kop-002', memberId: 'mbr-corp-kop-002', email: 'koperasi@varena.id', name: 'Koperasi Mandiri VARENA', role: 'KOPERASI', memberCode: 'VRN-CORP-L2' },
+    { id: 'usr-corp-ops-003', memberId: 'mbr-corp-ops-003', email: 'operasional@varena.id', name: 'Divisi Operasional', role: 'OPERATIONS', memberCode: 'VRN-CORP-L3' },
+    { id: 'usr-corp-adm1-004', memberId: 'mbr-corp-adm1-004', email: 'admin1@varena.id', name: 'Admin Katalog & Stok', role: 'ADMIN_1', memberCode: 'VRN-CORP-L4' },
+    { id: 'usr-corp-adm2-005', memberId: 'mbr-corp-adm2-005', email: 'admin2@varena.id', name: 'Admin Verifikasi & Support', role: 'ADMIN_2', memberCode: 'VRN-CORP-L5' },
+    { id: 'usr-corp-ldr1-006', memberId: 'mbr-corp-ldr1-006', email: 'leader1@varena.id', name: 'Bambang Pratama (Leader 1)', role: 'LEADER_1', memberCode: 'VRN-LDR-01' },
+    { id: 'usr-corp-ldr2-007', memberId: 'mbr-corp-ldr2-007', email: 'leader2@varena.id', name: 'Dewi Kartika (Leader 2)', role: 'LEADER_2', memberCode: 'VRN-LDR-02' },
+    { id: 'usr-corp-ldr3-008', memberId: 'mbr-corp-ldr3-008', email: 'leader3@varena.id', name: 'Raden Wijaya (Leader 3 Root)', role: 'LEADER_3', memberCode: 'VRN-LDR-03' },
   ];
 
   const createdMembers = {};
@@ -145,6 +145,7 @@ async function main() {
   for (const u of corporateUsers) {
     const user = await prisma.user.create({
       data: {
+        id: u.id,
         email: u.email,
         displayName: u.name,
         passwordHash: defaultPassword,
@@ -159,6 +160,7 @@ async function main() {
 
     const member = await prisma.member.create({
       data: {
+        id: u.memberId,
         userId: user.id,
         memberCode: u.memberCode,
         displayName: u.name,

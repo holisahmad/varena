@@ -8,6 +8,15 @@ import { verifyCorporateAdmin } from '@/lib/auth';
  */
 export async function GET(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const userEmail = req.headers.get('x-user-email');
+    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak melakukan pencarian sistem.' },
+        { status: 403 }
+      );
+    }
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q')?.trim();
 

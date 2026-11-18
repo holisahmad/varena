@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { approvePayout } from '@/lib/payout';
-import { verifyCorporateAdmin } from '@/lib/auth';
+import { verifyCorporateAdmin, getCorporateUser } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
     const userId = req.headers.get('x-user-id');
-    const isAuthorized = await verifyCorporateAdmin(userId);
+    const userEmail = req.headers.get('x-user-email');
+    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
     if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak melihat antrean pencairan dana.' },
@@ -47,8 +48,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const isAuthorized = await verifyCorporateAdmin(actorUserId);
-    if (!isAuthorized) {
+    const userId = req.headers.get('x-user-id') || actorUserId;
+    const userEmail = req.headers.get('x-user-email');
+    const authUser = await getCorporateUser(userId, userEmail);
+    if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: User ID otorisator tidak memiliki peran korporasi untuk menyetujui pencairan.' },
         { status: 403 }
@@ -57,7 +60,7 @@ export async function POST(req: Request) {
 
     const updated = await approvePayout({
       withdrawalId,
-      actorUserId: actorUserId || 'ADMIN_FINANCE',
+      actorUserId: authUser.id,
       providerReference,
     });
 

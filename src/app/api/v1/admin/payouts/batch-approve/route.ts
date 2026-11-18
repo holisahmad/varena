@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCorporateUser } from '@/lib/auth';
 import { postLedgerTransaction } from '@/lib/ledger';
 import { withTransactionRetry } from '@/lib/security';
 import { dispatchWaMessage, templatePayoutDisbursed } from '@/lib/whatsapp';
@@ -10,8 +11,18 @@ import { dispatchWaMessage, templatePayoutDisbursed } from '@/lib/whatsapp';
  */
 export async function POST(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const userEmail = req.headers.get('x-user-email');
     const body = await req.json();
     const { withdrawalIds, batchReference, actorUserId } = body;
+
+    const authUser = await getCorporateUser(userId || actorUserId, userEmail);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak menyetujui penarikan massal.' },
+        { status: 403 }
+      );
+    }
 
     if (!withdrawalIds || !Array.isArray(withdrawalIds) || withdrawalIds.length === 0) {
       return NextResponse.json(
@@ -98,7 +109,7 @@ export async function POST(req: Request) {
         // 3. Audit trail
         await tx.auditLog.create({
           data: {
-            actorUserId: actorUserId || null,
+            actorUserId: authUser.id,
             action: 'PAYOUT_BATCH_APPROVED',
             entityType: 'WITHDRAWAL',
             entityId: w.id,

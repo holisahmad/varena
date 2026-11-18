@@ -56,14 +56,37 @@ export const CORPORATE_ADMIN_ROLES = [
   'AUDITOR',
 ];
 
-export async function verifyCorporateAdmin(userId?: string | null): Promise<boolean> {
-  if (!userId) return false;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+export async function getCorporateUser(
+  userId?: string | null,
+  userEmail?: string | null
+) {
+  const conditions: Array<{ id?: string; email?: string }> = [];
+  if (userId) {
+    conditions.push({ id: userId });
+    conditions.push({ email: userId });
+  }
+  if (userEmail) {
+    conditions.push({ email: userEmail });
+    conditions.push({ id: userEmail });
+  }
+  if (conditions.length === 0) return null;
+
+  const user = await prisma.user.findFirst({
+    where: { OR: conditions },
     include: { userRoles: { include: { role: true } } },
   });
-  if (!user || user.status !== 'ACTIVE') return false;
-  return user.userRoles.some((ur) => CORPORATE_ADMIN_ROLES.includes(ur.role.code));
+  if (!user || user.status !== 'ACTIVE') return null;
+  const isCorporate = user.userRoles.some((ur) => CORPORATE_ADMIN_ROLES.includes(ur.role.code));
+  if (!isCorporate) return null;
+  return user;
+}
+
+export async function verifyCorporateAdmin(
+  userId?: string | null,
+  userEmail?: string | null
+): Promise<boolean> {
+  const user = await getCorporateUser(userId, userEmail);
+  return Boolean(user);
 }
 
 export async function getMemberByUserId(userId: string) {

@@ -173,32 +173,62 @@ export default function AdminPage() {
 
       setCurrentUser(parsed);
       setAuthChecking(false);
-      loadDashboardData(activeUserId);
+      loadDashboardData(parsed);
     } catch {
       router.push('/login?redirect=/admin');
     }
   }, [router]);
 
-  const loadDashboardData = (userId?: string) => {
-    const uid = userId || currentUser?.userId || currentUser?.id;
-    if (!uid) return;
+  const getAdminHeaders = (customUser?: any): Record<string, string> => {
+    const user = customUser || currentUser;
+    let uid = typeof customUser === 'string' ? customUser : (user?.userId || user?.id || '');
+    let email = typeof customUser === 'object' ? customUser?.email : (user?.email || '');
+
+    if (!uid || !email) {
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('varena_user') : null;
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (!uid) uid = u.userId || u.id || '';
+          if (!email) email = u.email || '';
+        }
+      } catch {}
+    }
+
+    return {
+      'x-user-id': uid || '',
+      'x-user-email': email || '',
+    };
+  };
+
+  const loadDashboardData = (customUser?: any) => {
+    const authHeaders = getAdminHeaders(customUser);
+    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
     setLoading(true);
 
+    const checkRes = async (res: Response) => {
+      if (res.status === 403 || res.status === 401) {
+        setAccessDenied(true);
+        return {};
+      }
+      return res.json();
+    };
+
     Promise.all([
-      fetch('/api/v1/admin/stats', { headers: { 'x-user-id': uid } }).then((r) => r.json()),
-      fetch('/api/v1/payout/admin', { headers: { 'x-user-id': uid } }).then((r) => r.json()),
-      fetch('/api/v1/admin/orders', { headers: { 'x-user-id': uid } }).then((r) => r.json()),
-      fetch(`/api/v1/admin/audit-logs?days=${logDays}`, { headers: { 'x-user-id': uid } }).then((r) => r.json()),
+      fetch('/api/v1/admin/stats', { headers: authHeaders }).then(checkRes),
+      fetch('/api/v1/payout/admin', { headers: authHeaders }).then(checkRes),
+      fetch('/api/v1/admin/orders', { headers: authHeaders }).then(checkRes),
+      fetch(`/api/v1/admin/audit-logs?days=${logDays}`, { headers: authHeaders }).then(checkRes),
     ])
       .then(([sData, wData, oData, lData]) => {
-        if (sData.stats) setStats(sData.stats);
-        if (wData.withdrawals) setWithdrawals(wData.withdrawals);
-        if (oData.orders) {
+        if (sData?.stats) setStats(sData.stats);
+        if (wData?.withdrawals) setWithdrawals(wData.withdrawals);
+        if (oData?.orders) {
           setOrders(oData.orders);
           setOrdersSummary(oData.summary);
           setPaymentProofOrders(oData.orders.filter((o: any) => o.paymentConfirmationStatus === 'SUBMITTED'));
         }
-        if (lData.logs) {
+        if (lData?.logs) {
           setAuditLogs(lData.logs);
           setAuditTotal(lData.totalCount);
         }
@@ -209,11 +239,11 @@ export default function AdminPage() {
 
   // Filter Orders
   const loadFilteredOrders = (status = orderStatusFilter, query = orderSearchQuery) => {
-    const uid = currentUser?.userId || currentUser?.id;
-    if (!uid) return;
+    const authHeaders = getAdminHeaders();
+    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
     fetch(`/api/v1/admin/orders?status=${status}&q=${encodeURIComponent(query)}`, {
-      headers: { 'x-user-id': uid },
+      headers: authHeaders,
     })
       .then((r) => r.json())
       .then((data) => {
@@ -227,11 +257,11 @@ export default function AdminPage() {
 
   // Filter Audit Logs
   const loadFilteredLogs = (days = logDays, entity = logEntityFilter) => {
-    const uid = currentUser?.userId || currentUser?.id;
-    if (!uid) return;
+    const authHeaders = getAdminHeaders();
+    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
     fetch(`/api/v1/admin/audit-logs?days=${days}&entityType=${entity}`, {
-      headers: { 'x-user-id': uid },
+      headers: authHeaders,
     })
       .then((r) => r.json())
       .then((data) => {
@@ -249,18 +279,18 @@ export default function AdminPage() {
       return;
     }
     setActionLoading(true);
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     try {
       const res = await fetch('/api/v1/payout/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': uid,
+          ...authHeaders,
         },
         body: JSON.stringify({
           withdrawalId,
           providerReference: transferRef,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
 
@@ -270,7 +300,7 @@ export default function AdminPage() {
       alert('Payout berhasil disetujui dan mutasi buku besar telah diposting!');
       setApprovingId(null);
       setTransferRef('');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -283,20 +313,20 @@ export default function AdminPage() {
     if (!confirm('Konfirmasi bahwa pembayaran pesanan ini telah diterima di rekening perusahaan? Komisi jaringan akan otomatis dialokasikan ke buku besar.')) {
       return;
     }
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     setActionLoading(true);
     try {
       const res = await fetch('/api/v1/admin/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': uid,
+          ...authHeaders,
         },
         body: JSON.stringify({
           action: 'CONFIRM_PAYMENT',
           orderId,
           providerReference: `MANUAL-BCA-${Date.now().toString().slice(-6)}`,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
 
@@ -304,7 +334,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(data.error || 'Gagal konfirmasi pembayaran.');
 
       alert('Pembayaran pesanan berhasil dikonfirmasi! Komisi jaringan dan buku besar telah diposting.');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -319,21 +349,21 @@ export default function AdminPage() {
       alert('Mohon isi nomor resi pengiriman.');
       return;
     }
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     setActionLoading(true);
     try {
       const res = await fetch('/api/v1/admin/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': uid,
+          ...authHeaders,
         },
         body: JSON.stringify({
           action: 'SHIP_ORDER',
           orderId: shippingModalOrder.id,
           courierName,
           trackingNumber: trackingNumber.trim(),
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
 
@@ -343,7 +373,7 @@ export default function AdminPage() {
       alert(`Pesanan ${shippingModalOrder.orderNumber} berhasil diperbarui menjadi TERKIRIM (${courierName} - ${trackingNumber}).`);
       setShippingModalOrder(null);
       setTrackingNumber('');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -356,19 +386,19 @@ export default function AdminPage() {
     if (!confirm('Tandai pesanan ini telah selesai dan paket telah sampai di tangan pembeli?')) {
       return;
     }
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     setActionLoading(true);
     try {
       const res = await fetch('/api/v1/admin/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': uid,
+          ...authHeaders,
         },
         body: JSON.stringify({
           action: 'COMPLETE_ORDER',
           orderId,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
 
@@ -376,7 +406,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error(data.error || 'Gagal menyelesaikan pesanan.');
 
       alert('Pesanan telah ditandai SELESAI.');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -388,19 +418,19 @@ export default function AdminPage() {
   const handleExecutePlacementTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     setTransferStatus(null);
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     try {
       const res = await fetch('/api/v1/network/transfer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': uid,
+          ...authHeaders,
         },
         body: JSON.stringify({
           memberCode: transferMemberCode.trim().toUpperCase(),
           newParentCode: transferNewParentCode.trim().toUpperCase(),
           reason: transferReason,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
 
@@ -411,7 +441,7 @@ export default function AdminPage() {
       setTransferMemberCode('');
       setTransferNewParentCode('');
       setTransferReason('');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       setTransferStatus({ type: 'error', message: err.message });
     }
@@ -428,7 +458,9 @@ export default function AdminPage() {
     setOmniLoading(true);
     setShowOmniDropdown(true);
     try {
-      const res = await fetch(`/api/v1/admin/search?q=${encodeURIComponent(query.trim())}`);
+      const res = await fetch(`/api/v1/admin/search?q=${encodeURIComponent(query.trim())}`, {
+        headers: getAdminHeaders(),
+      });
       const data = await res.json();
       setOmniResults(data);
     } catch (e) {
@@ -459,16 +491,16 @@ export default function AdminPage() {
       alert('Pilih minimal satu permohonan penarikan dana.');
       return;
     }
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     setBatchApproving(true);
     try {
       const res = await fetch('/api/v1/admin/payouts/batch-approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           withdrawalIds: selectedPayouts,
           batchReference: batchRef.trim() || undefined,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
       const data = await res.json();
@@ -477,7 +509,7 @@ export default function AdminPage() {
       setBatchModalOpen(false);
       setSelectedPayouts([]);
       setBatchRef('');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -509,19 +541,19 @@ export default function AdminPage() {
       return;
     }
     setBulkShipLoading(true);
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     try {
       const res = await fetch('/api/v1/admin/orders/bulk-ship', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
-        body: JSON.stringify({ shipments, actorUserId: uid }),
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ shipments, actorUserId: authHeaders['x-user-id'] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman massal.');
       alert(data.message || 'Pengiriman massal berhasil diproses!');
       setBulkShipModalOpen(false);
       setBulkShipInput('');
-      loadDashboardData(uid);
+      loadDashboardData();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -532,7 +564,9 @@ export default function AdminPage() {
   // Stockists Handlers
   const loadStockists = async () => {
     try {
-      const res = await fetch('/api/v1/stockists');
+      const res = await fetch('/api/v1/stockists', {
+        headers: getAdminHeaders(),
+      });
       const data = await res.json();
       if (data.stockists) setStockists(data.stockists);
     } catch (e) {
@@ -547,17 +581,17 @@ export default function AdminPage() {
       return;
     }
     setStockistLoading(true);
-    const uid = currentUser?.userId || currentUser?.id;
+    const authHeaders = getAdminHeaders();
     try {
       const res = await fetch('/api/v1/stockists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           memberCode: newStockistMemberCode.trim().toUpperCase(),
           stockistType: newStockistType,
           stockistCity: newStockistCity.trim(),
           quotaDelta: Number(newStockistQuota) || 0,
-          actorUserId: uid,
+          actorUserId: authHeaders['x-user-id'],
         }),
       });
       const data = await res.json();
@@ -1380,10 +1414,11 @@ export default function AdminPage() {
                             if (!confirm(`Verifikasi & tandai lunas pesanan ${o.orderNumber}?`)) return;
                             setActionLoading(true);
                             try {
+                              const authHeaders = getAdminHeaders();
                               const res = await fetch('/api/v1/admin/orders', {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.userId || currentUser?.id || '' },
-                                body: JSON.stringify({ action: 'CONFIRM_PAYMENT', orderId: o.id, actorUserId: currentUser?.userId || currentUser?.id }),
+                                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                                body: JSON.stringify({ action: 'CONFIRM_PAYMENT', orderId: o.id, actorUserId: authHeaders['x-user-id'] }),
                               });
                               const d = await res.json();
                               if (!res.ok) throw new Error(d.error);

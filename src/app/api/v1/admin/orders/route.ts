@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyCorporateAdmin } from '@/lib/auth';
+import { verifyCorporateAdmin, getCorporateUser } from '@/lib/auth';
 import { settleOrderPayment, shipOrder, completeOrder } from '@/lib/order';
 
 export async function GET(req: Request) {
   try {
     const userId = req.headers.get('x-user-id');
-    const isAuthorized = await verifyCorporateAdmin(userId);
+    const userEmail = req.headers.get('x-user-email');
+    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
     if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses data penjualan.' },
@@ -87,8 +88,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const userId = req.headers.get('x-user-id');
-    const isAuthorized = await verifyCorporateAdmin(userId);
-    if (!isAuthorized) {
+    const userEmail = req.headers.get('x-user-email');
+    const authUser = await getCorporateUser(userId, userEmail);
+    if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak memproses pesanan.' },
         { status: 403 }
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, orderId, providerReference, courierName, trackingNumber, actorUserId } = body;
 
-    const actor = actorUserId || userId;
+    const actor = authUser.id;
 
     if (!orderId || !action) {
       return NextResponse.json({ error: 'orderId dan action wajib diisi.' }, { status: 400 });

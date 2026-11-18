@@ -5,7 +5,8 @@ import { verifyCorporateAdmin } from '@/lib/auth';
 export async function GET(req: Request) {
   try {
     const userId = req.headers.get('x-user-id');
-    const isAuthorized = await verifyCorporateAdmin(userId);
+    const userEmail = req.headers.get('x-user-email');
+    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
     if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses data statistik keuangan dan jaringan.' },

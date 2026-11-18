@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { verifyCorporateAdmin } from '@/lib/auth';
 
 /**
  * GET /api/v1/admin/payouts/batch-export
@@ -7,6 +8,15 @@ import prisma from '@/lib/prisma';
  */
 export async function GET(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const userEmail = req.headers.get('x-user-email');
+    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengunduh file batch transfer bank.' },
+        { status: 403 }
+      );
+    }
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'REQUESTED';
 
