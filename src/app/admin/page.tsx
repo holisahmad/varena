@@ -24,6 +24,9 @@ import {
   PhoneCall,
   ExternalLink,
   ChevronRight,
+  ChevronLeft,
+  Menu,
+  X,
   ShieldCheck,
   Layers,
   ArrowUpRight,
@@ -42,6 +45,27 @@ export default function AdminPage() {
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
+
+  // Sidebar State (Expanded vs Collapsed & Mobile Drawer)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('varena_admin_sidebar_collapsed');
+      if (saved !== null) {
+        setSidebarCollapsed(saved === 'true');
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem('varena_admin_sidebar_collapsed', String(next));
+    } catch {}
+  };
 
   // Authentication & RBAC Guard
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -595,42 +619,230 @@ export default function AdminPage() {
     );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-varena-taupe/20">
-        <div>
-          <div className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-espresso border border-varena-gold/40 mb-1">
-            VARENA Executive & Operations Console
-          </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-varena-espresso">
-            Pusat Komando Manajemen Bisnis
-          </h1>
-          <p className="text-xs text-varena-taupe-dark mt-0.5">
-            Pengawasan real-time arus kas, logistik pesanan, maker-checker pencairan, pohon jaringan, dan audit trail 60 hari.
-          </p>
-        </div>
+  const menuItems = [
+    {
+      id: 'OVERVIEW',
+      label: 'Arus Kas & Keuangan',
+      icon: TrendingUp,
+      badge: null,
+      badgeColor: '',
+    },
+    {
+      id: 'ORDERS',
+      label: 'Pesanan & Logistik',
+      icon: Package,
+      badge: ordersSummary?.paidReadyToShip > 0 ? ordersSummary.paidReadyToShip : null,
+      badgeColor: 'bg-amber-500',
+    },
+    {
+      id: 'PAYOUTS',
+      label: 'Pencairan Payout',
+      icon: CreditCard,
+      badge: withdrawals.filter((w) => w.status === 'REQUESTED').length > 0
+        ? withdrawals.filter((w) => w.status === 'REQUESTED').length
+        : null,
+      badgeColor: 'bg-rose-600',
+    },
+    {
+      id: 'NETWORK',
+      label: 'User & Jaringan',
+      icon: Users,
+      badge: stats?.inactiveMembersCount > 0 ? `${stats.inactiveMembersCount}` : null,
+      badgeColor: 'bg-amber-600',
+    },
+    {
+      id: 'STOCKIST',
+      label: 'Pusat Stokis Hub',
+      icon: MapPin,
+      badge: null,
+      badgeColor: '',
+      onSelect: () => loadStockists(),
+    },
+    {
+      id: 'LOGS',
+      label: 'Audit Log 60 Hari',
+      icon: FileText,
+      badge: null,
+      badgeColor: '',
+    },
+    {
+      id: 'OUTBOX',
+      label: 'WhatsApp Gateway',
+      icon: MessageSquare,
+      badge: null,
+      badgeColor: '',
+      onSelect: () => loadWaOutbox(),
+    },
+  ];
 
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <div className="text-xs font-semibold text-varena-espresso">{currentUser?.displayName}</div>
-            <div className="text-[10px] text-varena-gold font-mono uppercase">{currentUser?.roles?.join(', ')}</div>
-          </div>
+  const currentTabInfo = menuItems.find((m) => m.id === activeTab) || menuItems[0];
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col lg:flex-row w-full bg-slate-50/70">
+      {/* Mobile Slide-Over Backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
+        />
+      )}
+
+      {/* LEFT SIDEBAR (Desktop Sticky & Mobile Slide-Over Drawer) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 bg-varena-espresso text-varena-ivory-light flex flex-col border-r border-[#4A3B30] shadow-2xl transition-all duration-300 ease-in-out lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:z-20 ${
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${sidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[260px]'} w-[280px]`}
+      >
+        {/* Sidebar Header Brand / Title */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-[#4A3B30]">
+          {!sidebarCollapsed ? (
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-lg bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center flex-shrink-0 text-varena-gold shadow-sm">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div className="truncate">
+                <div className="font-serif font-bold text-sm tracking-wide text-varena-gold-light uppercase truncate">
+                  VARENA Console
+                </div>
+                <div className="text-[10px] text-varena-taupe-light font-mono truncate">
+                  Pusat Kendali Bisnis
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full flex justify-center">
+              <div className="w-9 h-9 rounded-lg bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center text-varena-gold shadow-sm" title="VARENA Console">
+                <Building2 className="w-4 h-4" />
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Close Button */}
           <button
-            onClick={() => loadDashboardData()}
-            className="px-3.5 py-2 rounded-lg border border-varena-taupe/30 text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 shadow-sm bg-white"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="p-1.5 rounded-lg text-varena-taupe-light hover:text-white hover:bg-white/10 lg:hidden"
+            aria-label="Tutup Menu"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Segarkan</span>
+            <X className="w-5 h-5" />
           </button>
         </div>
-      </div>
 
-      {/* Global Omni-Search Bar & Quick Filter */}
-      <div className="relative z-40">
-        <div className="relative">
-          <Search className="w-4 h-4 text-varena-taupe absolute left-3.5 top-3" />
-          <input
+        {/* Navigation Items List */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  if (item.onSelect) item.onSelect();
+                  setMobileSidebarOpen(false);
+                }}
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`w-full relative flex items-center rounded-xl transition-all duration-150 text-xs ${
+                  sidebarCollapsed ? 'justify-center p-3' : 'px-3.5 py-2.5 gap-3'
+                } ${
+                  isActive
+                    ? 'bg-varena-gold text-varena-espresso font-bold shadow-md shadow-black/20'
+                    : 'text-varena-ivory/80 hover:text-white hover:bg-white/10 font-medium'
+                }`}
+              >
+                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-varena-espresso' : 'text-varena-gold-light'}`} />
+                {!sidebarCollapsed && (
+                  <div className="flex-1 flex items-center justify-between text-left truncate">
+                    <span className="truncate">{item.label}</span>
+                    {item.badge && (
+                      <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white ${item.badgeColor || 'bg-amber-500'}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {sidebarCollapsed && item.badge && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-varena-espresso" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer with Collapse Toggle & Current User Info */}
+        <div className="p-3 border-t border-[#4A3B30] space-y-2">
+          {!sidebarCollapsed && currentUser && (
+            <div className="p-2.5 rounded-xl bg-black/25 border border-[#524134] text-xs">
+              <div className="font-semibold text-varena-ivory truncate">{currentUser.displayName}</div>
+              <div className="text-[10px] text-varena-gold font-mono uppercase truncate mt-0.5">
+                {currentUser.roles?.join(', ')}
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Expand / Collapse Button */}
+          <button
+            onClick={toggleSidebar}
+            className="hidden lg:flex w-full items-center justify-center p-2 rounded-lg text-varena-taupe-light hover:text-white hover:bg-white/10 transition text-xs gap-2"
+            title={sidebarCollapsed ? 'Perbesar Menu' : 'Perkecil Menu'}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="w-4 h-4 text-varena-gold-light" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4 text-varena-gold-light" />
+                <span className="text-[11px] font-medium">Perkecil Panel</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+
+      {/* RIGHT WORKSPACE (FLEX-1) */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Sticky Topbar inside Workspace (z-30 under navbar z-50) */}
+        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border-b border-varena-taupe/20 px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Hamburger Button (Mobile Only) */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition flex-shrink-0"
+              aria-label="Buka Menu Navigasi Admin"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase font-mono font-bold text-varena-gold tracking-wider">
+                Panel Modul
+              </div>
+              <h1 className="font-serif text-base sm:text-xl font-bold text-varena-espresso truncate">
+                {currentTabInfo.label}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="text-right hidden md:block">
+              <div className="text-xs font-semibold text-varena-espresso">{currentUser?.displayName}</div>
+              <div className="text-[10px] text-varena-gold font-mono uppercase">{currentUser?.roles?.join(', ')}</div>
+            </div>
+            {/* Quick Refresh Button */}
+            <button
+              onClick={() => loadDashboardData()}
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg border border-varena-taupe/30 text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 shadow-sm bg-white text-varena-espresso transition"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Segarkan</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Global Omni-Search Bar & Quick Filter (Clean z-20 so it scrolls smoothly under sticky header) */}
+        <div className="px-4 sm:px-6 lg:px-8 pt-4">
+          <div className="relative z-20">
+            <div className="relative">
+              <Search className="w-4 h-4 text-varena-taupe absolute left-3.5 top-3" />
+              <input
             type="text"
             value={omniQuery}
             onChange={(e) => handleOmniSearch(e.target.value)}
@@ -782,113 +994,10 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Main Navigation Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-varena-taupe/20 pb-2 text-xs font-medium">
-        <button
-          onClick={() => setActiveTab('OVERVIEW')}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'OVERVIEW'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          <span>Arus Kas & Keuangan</span>
-        </button>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('ORDERS')}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 relative ${
-            activeTab === 'ORDERS'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <Package className="w-4 h-4" />
-          <span>Pesanan & Pengiriman</span>
-          {ordersSummary?.paidReadyToShip > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white font-mono">
-              {ordersSummary.paidReadyToShip}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('PAYOUTS')}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 relative ${
-            activeTab === 'PAYOUTS'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Pencairan Dana (Maker-Checker)</span>
-          {withdrawals.filter((w) => w.status === 'REQUESTED').length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-red-600 text-white font-mono">
-              {withdrawals.filter((w) => w.status === 'REQUESTED').length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('NETWORK')}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'NETWORK'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Manajemen User & Jaringan</span>
-          {stats?.inactiveMembersCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-600 text-white font-mono">
-              {stats.inactiveMembersCount} Inaktif
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('STOCKIST');
-            loadStockists();
-          }}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'STOCKIST'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <MapPin className="w-4 h-4" />
-          <span>Pusat Stokis Regional</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('LOGS')}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'LOGS'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Audit Log Sistem (60 Hari)</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('OUTBOX');
-            loadWaOutbox();
-          }}
-          className={`px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'OUTBOX'
-              ? 'bg-varena-espresso text-varena-gold-light font-semibold shadow'
-              : 'text-varena-taupe hover:text-varena-espresso hover:bg-varena-ivory'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>WhatsApp Gateway</span>
-        </button>
-      </div>
+        {/* Module Content Workspace */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
       {/* ==================================================================== */}
       {/* TAB 1: EXECUTIVE FINANCIAL OVERVIEW */}
@@ -2513,6 +2622,8 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+        </main>
+      </div>
     </div>
   );
 }

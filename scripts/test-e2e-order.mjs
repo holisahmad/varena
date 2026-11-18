@@ -119,7 +119,7 @@ async function testAll() {
   // Bank fee: Rp6.500
   // Net transferred: Rp62.000 - Rp6.500 = Rp55.500
   console.log('\n8. Testing Payout with User Scenario (50.000 bonus + 12.800 unique code -> withdraw 62.000, fee 6.500):');
-  
+
   const { PrismaClient } = await import('@prisma/client');
   const prismaClient = new PrismaClient();
 

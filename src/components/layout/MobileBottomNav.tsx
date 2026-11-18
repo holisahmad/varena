@@ -18,6 +18,11 @@ export default function MobileBottomNav() {
     }
   }, [pathname]);
 
+  // Hide on admin routes to give full screen to executive console
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
+
   const navItems = [
     { label: 'Beranda', href: '/', icon: Home, active: pathname === '/' },
     { label: 'Toko', href: '/products', icon: ShoppingBag, active: pathname.startsWith('/products') },
