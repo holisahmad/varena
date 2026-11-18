@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { approvePayout } from '@/lib/payout';
+import { verifyCorporateAdmin } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const isAuthorized = await verifyCorporateAdmin(userId);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak melihat antrean pencairan dana.' },
+        { status: 403 }
+      );
+    }
+
     const list = await prisma.withdrawalRequest.findMany({
       include: {
         member: {
@@ -34,6 +44,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Withdrawal ID dan nomor referensi transfer bank wajib diisi.' },
         { status: 400 }
+      );
+    }
+
+    const isAuthorized = await verifyCorporateAdmin(actorUserId);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: User ID otorisator tidak memiliki peran korporasi untuk menyetujui pencairan.' },
+        { status: 403 }
       );
     }
 

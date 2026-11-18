@@ -10,6 +10,11 @@ export default function AdminPage() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Authentication & RBAC Guard
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
+
   // Maker-checker approval state
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [transferRef, setTransferRef] = useState<string>('');
@@ -22,14 +27,43 @@ export default function AdminPage() {
   const [transferStatus, setTransferStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
-    loadAllData();
-  }, []);
+    const stored = localStorage.getItem('varena_user');
+    if (!stored) {
+      router.push('/login?redirect=/admin');
+      return;
+    }
 
-  const loadAllData = () => {
+    try {
+      const parsed = JSON.parse(stored);
+      const corporateRoles = ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'];
+      const hasAccess = parsed.roles && parsed.roles.some((r: string) => corporateRoles.includes(r));
+
+      if (!hasAccess) {
+        setAccessDenied(true);
+        setCurrentUser(parsed);
+        setAuthChecking(false);
+        return;
+      }
+
+      setCurrentUser(parsed);
+      setAuthChecking(false);
+      loadAllData(parsed.id);
+    } catch {
+      router.push('/login?redirect=/admin');
+    }
+  }, [router]);
+
+  const loadAllData = (userId?: string) => {
+    const uid = userId || currentUser?.id;
+    if (!uid) return;
     setLoading(true);
     Promise.all([
-      fetch('/api/v1/admin/stats').then((r) => r.json()),
-      fetch('/api/v1/payout/admin').then((r) => r.json()),
+      fetch('/api/v1/admin/stats', {
+        headers: { 'x-user-id': uid },
+      }).then((r) => r.json()),
+      fetch('/api/v1/payout/admin', {
+        headers: { 'x-user-id': uid },
+      }).then((r) => r.json()),
     ])
       .then(([sData, wData]) => {
         if (sData.stats) setStats(sData.stats);
@@ -48,11 +82,14 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/v1/payout/admin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id,
+        },
         body: JSON.stringify({
           withdrawalId,
           providerReference: transferRef,
-          actorUserId: 'ADMIN_FINANCE',
+          actorUserId: currentUser?.id,
         }),
       });
 
@@ -64,7 +101,7 @@ export default function AdminPage() {
       alert('Payout berhasil disetujui dan mutasi buku besar telah diposting!');
       setApprovingId(null);
       setTransferRef('');
-      loadAllData();
+      loadAllData(currentUser?.id);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -78,12 +115,15 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/v1/network/transfer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id,
+        },
         body: JSON.stringify({
           memberCode: transferMemberCode.trim().toUpperCase(),
           newParentCode: transferNewParentCode.trim().toUpperCase(),
           reason: transferReason,
-          actorUserId: 'ADMIN_OPERATIONS',
+          actorUserId: currentUser?.id,
         }),
       });
 
@@ -101,6 +141,50 @@ export default function AdminPage() {
     }
   };
 
+  if (authChecking) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-10 h-10 rounded-full border-2 border-varena-gold border-t-transparent animate-spin mb-4" />
+        <h2 className="font-serif text-lg font-bold text-varena-espresso">Memverifikasi Otoritas Akses Eksekutif...</h2>
+        <p className="text-xs text-varena-taupe mt-1">Sistem memeriksa kredensial korporasi dan otorisasi RBAC.</p>
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-white border border-red-200 rounded-2xl shadow-sm text-center">
+        <div className="w-14 h-14 mx-auto rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="font-serif text-xl font-bold text-varena-espresso">Akses Terbatas: Khusus Pengelola Perusahaan</h2>
+        <p className="text-xs text-varena-taupe mt-2 leading-relaxed">
+          Akun Anda (<strong>{currentUser?.displayName}</strong> · Role: <span className="font-mono text-varena-gold font-semibold">{currentUser?.roles?.join(', ')}</span>) tidak memiliki hak akses administratif ke VARENA Business.
+        </p>
+        <p className="text-[11px] text-varena-taupe-light mt-2 leading-relaxed">
+          Sesuai kepatuhan hukum Permendag RI No. 70/2019, panel manajemen kas, audit buku besar, dan persetujuan pencairan hanya dapat diakses oleh direksi (Owner) dan administrator resmi perusahaan.
+        </p>
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            onClick={() => router.push('/member')}
+            className="w-full py-2.5 px-4 rounded-lg bg-varena-gold text-varena-espresso font-semibold text-xs hover:bg-varena-gold-hover transition shadow"
+          >
+            Kembali ke Portal Kemitraan Saya
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('varena_user');
+              router.push('/login?redirect=/admin');
+            }}
+            className="w-full py-2.5 px-4 rounded-lg border border-varena-taupe/30 text-varena-espresso font-medium text-xs hover:bg-varena-ivory transition"
+          >
+            Masuk Menggunakan Akun Admin
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
       {/* Admin Header */}
@@ -115,10 +199,17 @@ export default function AdminPage() {
           <p className="text-xs text-varena-taupe-dark">
             Pemantauan penjualan, margin HPP, liabilitas komisi, maker-checker pencairan, dan struktur penempatan.
           </p>
+          <div className="flex items-center gap-2 mt-2 text-[11px] text-varena-taupe">
+            <span className="font-semibold text-varena-espresso">Otorisator Aktif:</span>
+            <span className="font-medium text-varena-espresso">{currentUser?.displayName}</span>
+            <span className="px-1.5 py-0.5 rounded bg-varena-gold/20 text-varena-espresso font-mono text-[10px]">
+              {currentUser?.roles?.join(', ')}
+            </span>
+          </div>
         </div>
 
         <button
-          onClick={loadAllData}
+          onClick={() => loadAllData(currentUser?.id)}
           className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />

@@ -137,7 +137,7 @@ export default function HomePage() {
                 </p>
               </div>
               <Link href="/admin" className="mt-6 text-xs font-semibold text-varena-gold hover:text-varena-gold-hover inline-flex items-center gap-1">
-                <span>Panel Admin</span>
+                <span>Portal Eksekutif (Login Admin)</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>

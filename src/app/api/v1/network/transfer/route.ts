@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { transferPlacement } from '@/lib/network';
+import { verifyCorporateAdmin } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { memberCode, newParentCode, actorUserId, reason } = body;
+
+    const isAuthorized = await verifyCorporateAdmin(actorUserId);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya manajemen korporasi yang berhak memindahkan node penempatan jaringan.' },
+        { status: 403 }
+      );
+    }
 
     if (!memberCode || !newParentCode || !reason) {
       return NextResponse.json(

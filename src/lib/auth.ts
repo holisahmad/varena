@@ -47,8 +47,23 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
   };
 }
 
-export function hasRole(session: AuthSession, allowedRoles: string[]): boolean {
-  return session.roles.some((r) => allowedRoles.includes(r));
+export const CORPORATE_ADMIN_ROLES = [
+  'OWNER',
+  'OPERATIONS',
+  'ADMIN_1',
+  'ADMIN_2',
+  'KOPERASI',
+  'AUDITOR',
+];
+
+export async function verifyCorporateAdmin(userId?: string | null): Promise<boolean> {
+  if (!userId) return false;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { userRoles: { include: { role: true } } },
+  });
+  if (!user || user.status !== 'ACTIVE') return false;
+  return user.userRoles.some((ur) => CORPORATE_ADMIN_ROLES.includes(ur.role.code));
 }
 
 export async function getMemberByUserId(userId: string) {

@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { verifyCorporateAdmin } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const userId = req.headers.get('x-user-id');
+    const isAuthorized = await verifyCorporateAdmin(userId);
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses data statistik keuangan.' },
+        { status: 403 }
+      );
+    }
     const totalOrders = await prisma.order.count();
     const paidOrders = await prisma.order.findMany({
       where: { orderStatus: 'PAID' },

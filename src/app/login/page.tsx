@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { LogIn, Key, Users, Shield, ArrowRight } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,9 +37,15 @@ export default function LoginPage() {
       }
 
       localStorage.setItem('varena_user', JSON.stringify(data.user));
-      
-      // Redirect based on role
-      if (data.user.roles.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2'].includes(r))) {
+
+      const isCorporate = data.user.roles.some((r: string) =>
+        ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'].includes(r)
+      );
+
+      // Handle redirect
+      if (redirectParam) {
+        router.push(redirectParam);
+      } else if (isCorporate) {
         router.push('/admin');
       } else {
         router.push('/member');
@@ -118,23 +127,23 @@ export default function LoginPage() {
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
               <div className="font-semibold">Mitra 1 (Ahmad)</div>
-              <div className="text-[9px] text-varena-taupe font-mono">VRN-0001</div>
+              <div className="text-[9px] text-varena-taupe font-mono">VRN-0001 (Role Mitra)</div>
             </button>
             <button
               type="button"
               onClick={() => handleLogin(undefined, 'leader3@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
-              <div className="font-semibold">Leader 3 (Root)</div>
-              <div className="text-[9px] text-varena-taupe font-mono">VRN-LDR-03</div>
+              <div className="font-semibold">Leader 3 (L8)</div>
+              <div className="text-[9px] text-varena-taupe font-mono">VRN-LDR-03 (Role Leader)</div>
             </button>
             <button
               type="button"
-              onClick={() => handleLogin(undefined, 'admin1@varena.id')}
+              onClick={() => handleLogin(undefined, 'operasional@varena.id')}
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
               <div className="font-semibold">Admin Operasional</div>
-              <div className="text-[9px] text-varena-taupe font-mono">ADMIN_1</div>
+              <div className="text-[9px] text-varena-taupe font-mono">OPERATIONS (Admin)</div>
             </button>
             <button
               type="button"
@@ -142,7 +151,7 @@ export default function LoginPage() {
               className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
             >
               <div className="font-semibold">Owner / Direksi</div>
-              <div className="text-[9px] text-varena-taupe font-mono">Level 1</div>
+              <div className="text-[9px] text-varena-taupe font-mono">OWNER (Level 1)</div>
             </button>
           </div>
         </div>
@@ -155,5 +164,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-20 text-sm text-varena-taupe">Memuat formulir masuk...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
