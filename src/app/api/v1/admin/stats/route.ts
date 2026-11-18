@@ -100,22 +100,22 @@ export async function GET(req: Request) {
     // 6. Identify Inactive Members (Members who haven't completed a PAID First Pack order)
     const paidBuyerUserIds = new Set(paidOrders.map((o) => o.buyerUserId).filter(Boolean));
     const paidReferralMemberIds = new Set(paidOrders.map((o) => o.referralMemberId).filter(Boolean));
-
-    // Exclude Corporate L1-L5 accounts from inactive list
-    const corporateCodes = ['VRN-CORP-L1', 'VRN-CORP-L2', 'VRN-CORP-L3', 'VRN-CORP-L4', 'VRN-CORP-L5'];
     
     const inactiveMembers: any[] = [];
     const activeMembers: any[] = [];
 
     for (const m of allMembers) {
-      if (corporateCodes.includes(m.memberCode)) {
-        activeMembers.push(m);
-        continue;
-      }
+      // Exclude Corporate and Leadership accounts (L1 - L8)
+      const isCorporateOrLeader = m.memberCode.startsWith('VRN-CORP-') || m.memberCode.startsWith('VRN-LDR-');
+      
+      // Considered active if corporate, or marked activated, or purchased first pack, or generated referral order
+      const isActuallyActive =
+        isCorporateOrLeader ||
+        m.activatedAt !== null ||
+        paidBuyerUserIds.has(m.userId) ||
+        paidReferralMemberIds.has(m.id);
 
-      // Considered active if their user ID placed an order or they generated at least 1 paid order
-      const hasPurchased = paidBuyerUserIds.has(m.userId) || paidReferralMemberIds.has(m.id);
-      if (hasPurchased) {
+      if (isActuallyActive) {
         activeMembers.push(m);
       } else {
         inactiveMembers.push({

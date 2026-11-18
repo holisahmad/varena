@@ -165,6 +165,7 @@ async function main() {
         legalName: u.name,
         memberStatus: 'ACTIVE',
         kycStatus: 'VERIFIED',
+        activatedAt: new Date(),
       },
     });
 
@@ -296,6 +297,7 @@ async function main() {
         legalName: m.name,
         memberStatus: 'ACTIVE',
         kycStatus: 'VERIFIED',
+        activatedAt: new Date(),
       },
     });
 
@@ -690,9 +692,19 @@ async function main() {
   }
 
   // --------------------------------------------------------------------------
-  // 7. Execute 5 Simulated Orders Across the Network
+  // 7. Execute 6 Simulated Orders Across the Network
   // --------------------------------------------------------------------------
-  console.log('--- Memproses 5 Skenario Transaksi Penjualan Riil ---');
+  console.log('--- Memproses Skenario Transaksi Penjualan Riil Terpadu ---');
+
+  // Order 0: Ahmad Fauzi (VRN-0001) beli Paket Perdana Box (Rp500.000)
+  // Sponsor: VRN-LDR-03 (Raden Wijaya)
+  await processSimulationOrder({
+    orderNumber: 'VRN-ORD-2026-0000',
+    buyerMember: createdMembers['VRN-0001'],
+    referralMember: createdMembers['VRN-0001'],
+    items: [{ variant: boxVariant, quantity: 1 }],
+  });
+  console.log('✓ Order 0: Pembelian Box Perdana oleh Ahmad Fauzi (VRN-0001) -> Komisi ke Leader 3 (VRN-LDR-03) & Korporasi');
 
   // Order 1: Siti Nurhaliza (VRN-0002) beli Paket Perdana Box (Rp500.000)
   // Sponsor: VRN-0001 (Ahmad Fauzi)
@@ -834,6 +846,18 @@ async function main() {
   // --------------------------------------------------------------------------
   console.log('--- Mensimulasikan Siklus Pengiriman & Logistik Pesanan ---');
 
+  // Order 0: Pembelian Perdana Ahmad Fauzi Sudah SELESAI (COMPLETED) via JNE
+  await prisma.order.update({
+    where: { orderNumber: 'VRN-ORD-2026-0000' },
+    data: {
+      orderStatus: 'COMPLETED',
+      courierName: 'JNE Express (YES)',
+      trackingNumber: 'JNE-88190281-ID',
+      shippedAt: new Date(Date.now() - 3600000 * 72), // 3 hari lalu
+      completedAt: new Date(Date.now() - 3600000 * 24), // 1 hari lalu
+    },
+  });
+
   // Order 1: Sudah SELESAI (COMPLETED) via JNE
   await prisma.order.update({
     where: { orderNumber: 'VRN-ORD-2026-0001' },
@@ -948,8 +972,9 @@ async function main() {
         memberCode: im.code,
         displayName: im.name,
         legalName: im.name,
-        memberStatus: 'ACTIVE',
+        memberStatus: 'PENDING',
         kycStatus: 'VERIFIED',
+        activatedAt: null,
         joinedAt: new Date(Date.now() - 3600000 * 24 * im.joinedDaysAgo),
       },
     });

@@ -92,7 +92,7 @@ export default function Navbar() {
               </>
             )}
 
-            {user?.roles?.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2'].includes(r)) && (
+            {user?.roles?.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'].includes(r)) && (
               <Link
                 href="/admin"
                 className={`transition px-2.5 py-1 rounded text-xs tracking-wider uppercase font-semibold ${
@@ -204,7 +204,7 @@ export default function Navbar() {
               >
                 Dompet & Komisi
               </Link>
-              {user.roles.some((r: string) => ['OWNER', 'ADMIN_1', 'ADMIN_2'].includes(r)) && (
+              {user.roles.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'].includes(r)) && (
                 <Link
                   href="/admin"
                   onClick={() => setMobileMenuOpen(false)}

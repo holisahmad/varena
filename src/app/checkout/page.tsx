@@ -50,6 +50,17 @@ function CheckoutContent() {
     const initialRef = (paramRef || storedRef || 'VRN-0001').toUpperCase();
     setReferralCode(initialRef);
     validateReferral(initialRef);
+
+    // 3. Prepopulate buyer info if logged in
+    const storedUser = localStorage.getItem('varena_user');
+    if (storedUser) {
+      try {
+        const u = JSON.parse(storedUser);
+        if (u.displayName) setBuyerName((prev) => prev || u.displayName);
+        if (u.email) setBuyerEmail((prev) => prev || u.email);
+        if (u.phone) setBuyerPhone((prev) => prev || u.phone);
+      } catch (e) {}
+    }
   }, [searchParams]);
 
   const validateReferral = async (code: string) => {
@@ -82,10 +93,20 @@ function CheckoutContent() {
     setSettleResult(null);
 
     try {
+      const storedUser = localStorage.getItem('varena_user');
+      let buyerUserId: string | undefined = undefined;
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          buyerUserId = u.userId || u.id;
+        } catch (e) {}
+      }
+
       const res = await fetch('/api/v1/orders/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          buyerUserId,
           buyerName,
           buyerPhone,
           buyerEmail,

@@ -187,6 +187,44 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
   // 3. Trigger Deterministic Commission Calculation & Ledger Posting
   const commissionResult = await calculateOrderCommissions(order.id);
 
+  // 4. Activate Member if this was their qualifying First Pack purchase
+  if (order.orderType === 'FIRST_PACK') {
+    let buyerMember = null;
+    if (order.buyerUserId) {
+      buyerMember = await prisma.member.findUnique({
+        where: { userId: order.buyerUserId },
+      });
+    } else if (order.buyerEmail) {
+      const u = await prisma.user.findUnique({
+        where: { email: order.buyerEmail },
+        include: { member: true },
+      });
+      buyerMember = u?.member;
+    }
+
+    if (buyerMember && !buyerMember.activatedAt) {
+      await prisma.member.update({
+        where: { id: buyerMember.id },
+        data: {
+          activatedAt: new Date(),
+          memberStatus: 'ACTIVE',
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          actorUserId: null,
+          action: 'MEMBER_ACTIVATED',
+          entityType: 'MEMBER',
+          entityId: buyerMember.id,
+          beforeJson: JSON.stringify({ memberStatus: buyerMember.memberStatus, activatedAt: null }),
+          afterJson: JSON.stringify({ memberStatus: 'ACTIVE', activatedAt: new Date(), qualifyingOrderId: order.id }),
+          reason: `Aktivasi kemitraan otomatis setelah pembelanjaan paket perdana (${order.orderNumber})`,
+        },
+      });
+    }
+  }
+
   return {
     status: 'PAYMENT_SETTLED',
     order: updatedOrder,
