@@ -204,6 +204,10 @@ model Order {
   currency               String    @default("IDR")
   marketingPlanVersionId String?
   paidAt                 DateTime?
+  courierName            String?   // e.g. JNE, J&T, SiCepat, Pos Indonesia
+  trackingNumber         String?   // e.g. JNE-88291024-ID
+  shippedAt              DateTime?
+  completedAt            DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 

@@ -792,9 +792,11 @@ async function main() {
       ],
     });
 
+    // Penarikan 1: Rp50.000 oleh Ahmad Fauzi
+    const opUser = await prisma.user.findUnique({ where: { email: 'operasional@varena.id' } });
     await tx.auditLog.create({
       data: {
-        actorUserId: null,
+        actorUserId: opUser ? opUser.id : null,
         action: 'PAYOUT_APPROVED',
         entityType: 'WITHDRAWAL',
         entityId: withdrawal1.id,
@@ -804,6 +806,8 @@ async function main() {
           bankRef: 'TRF-BCA-20261118-001',
           approvedBy: 'operasional@varena.id',
         }),
+        reason: 'Verifikasi slip pencairan dana bank BCA transfer',
+        createdAt: new Date(Date.now() - 3600000 * 2),
       },
     });
   });
@@ -824,6 +828,244 @@ async function main() {
     },
   });
   console.log('✓ Penarikan 2: Rp50.000 oleh Ahmad Fauzi Diajukan (Status: REQUESTED / Menunggu Maker-Checker di Panel Admin)');
+
+  // --------------------------------------------------------------------------
+  // 9. Update Shipping Lifecycle for Orders (Buat -> Bayar -> Kirim -> Selesai)
+  // --------------------------------------------------------------------------
+  console.log('--- Mensimulasikan Siklus Pengiriman & Logistik Pesanan ---');
+
+  // Order 1: Sudah SELESAI (COMPLETED) via JNE
+  await prisma.order.update({
+    where: { orderNumber: 'VRN-ORD-2026-0001' },
+    data: {
+      orderStatus: 'COMPLETED',
+      courierName: 'JNE Express (REG)',
+      trackingNumber: 'JNE-882019482-ID',
+      shippedAt: new Date(Date.now() - 3600000 * 48), // 2 hari lalu
+      completedAt: new Date(Date.now() - 3600000 * 12), // 12 jam lalu
+    },
+  });
+
+  // Order 2: Sedang DALAM PENGIRIMAN (SHIPPED) via SiCepat
+  await prisma.order.update({
+    where: { orderNumber: 'VRN-ORD-2026-0002' },
+    data: {
+      orderStatus: 'SHIPPED',
+      courierName: 'SiCepat Ekspres (GOKIL)',
+      trackingNumber: 'SCP-992104819-ID',
+      shippedAt: new Date(Date.now() - 3600000 * 18), // 18 jam lalu
+    },
+  });
+
+  // Order 6: Pesanan BELUM BAYAR (PENDING_PAYMENT) senilai Rp500.000
+  // Calon Pembeli: Hendra Gunawan via Referral Budi Santoso (VRN-0003)
+  const pendingOrder = await prisma.order.create({
+    data: {
+      orderNumber: 'VRN-ORD-2026-0006',
+      buyerName: 'Hendra Gunawan (Prospek Mitra)',
+      buyerPhone: '081288776655',
+      buyerEmail: 'hendragunawan@gmail.com',
+      shippingAddress: 'Komp. Graha Asri Blok C4 No. 12, Bekasi Timur',
+      referralMemberId: createdMembers['VRN-0003'].id,
+      orderStatus: 'PENDING_PAYMENT',
+      orderType: 'FIRST_PACK',
+      subtotal: 500000,
+      discount: 0,
+      shippingCost: 0,
+      total: 500000,
+    },
+  });
+
+  await prisma.orderItem.create({
+    data: {
+      orderId: pendingOrder.id,
+      productVariantId: boxVariant.id,
+      skuSnapshot: boxVariant.sku,
+      nameSnapshot: boxVariant.name,
+      unitPrice: boxVariant.price,
+      hppSnapshot: boxVariant.hpp,
+      quantity: 1,
+      lineTotal: 500000,
+    },
+  });
+
+  await prisma.payment.create({
+    data: {
+      orderId: pendingOrder.id,
+      amount: 500000,
+      status: 'PENDING',
+      provider: 'MANUAL_TRANSFER_BCA',
+      providerReference: 'INV-VRN-ORD-2026-0006',
+    },
+  });
+  console.log('✓ Order 6: Pesanan Menunggu Pembayaran (PENDING_PAYMENT Rp500.000) terdaftar.');
+
+  // --------------------------------------------------------------------------
+  // 10. Tambah Member Baru Status "Belum Belanja Perdana / Inactive"
+  // --------------------------------------------------------------------------
+  console.log('--- Mendaftarkan Member Baru Belum Belanja Pertama (Target Push Leader) ---');
+  
+  const inactiveMitras = [
+    {
+      email: 'mitra7@varena.id',
+      name: 'Ilham Pratama',
+      code: 'VRN-0007',
+      phone: '081277665544',
+      sponsorCode: 'VRN-0001', // Sponsor: Ahmad Fauzi
+      placementParentCode: 'VRN-0003',
+      joinedDaysAgo: 3,
+    },
+    {
+      email: 'mitra8@varena.id',
+      name: 'Fitri Handayani',
+      code: 'VRN-0008',
+      phone: '081366554433',
+      sponsorCode: 'VRN-0002', // Sponsor: Siti Nurhaliza
+      placementParentCode: 'VRN-0004',
+      joinedDaysAgo: 5,
+    },
+  ];
+
+  for (const im of inactiveMitras) {
+    const user = await prisma.user.create({
+      data: {
+        email: im.email,
+        phone: im.phone,
+        displayName: im.name,
+        passwordHash: defaultPassword,
+        status: 'ACTIVE',
+        createdAt: new Date(Date.now() - 3600000 * 24 * im.joinedDaysAgo),
+      },
+    });
+
+    await prisma.userRole.create({
+      data: { userId: user.id, roleId: mitraRole.id },
+    });
+
+    const member = await prisma.member.create({
+      data: {
+        userId: user.id,
+        memberCode: im.code,
+        displayName: im.name,
+        legalName: im.name,
+        memberStatus: 'ACTIVE',
+        kycStatus: 'VERIFIED',
+        joinedAt: new Date(Date.now() - 3600000 * 24 * im.joinedDaysAgo),
+      },
+    });
+
+    createdMembers[im.code] = member;
+
+    await prisma.ledgerAccount.create({
+      data: {
+        ownerType: 'MEMBER',
+        ownerId: member.id,
+        accountCode: `ACC-MBR-${member.memberCode}`,
+        accountType: 'LIABILITY',
+        currency: 'IDR',
+        balance: 0,
+        status: 'ACTIVE',
+      },
+    });
+
+    const sponsor = createdMembers[im.sponsorCode];
+    const parent = createdMembers[im.placementParentCode];
+
+    await prisma.sponsorRelationship.create({
+      data: {
+        memberId: member.id,
+        sponsorMemberId: sponsor.id,
+        reason: 'REFERRAL_REGISTRATION_ONLINE',
+        createdAt: new Date(Date.now() - 3600000 * 24 * im.joinedDaysAgo),
+      },
+    });
+
+    await prisma.placementRelationship.create({
+      data: {
+        memberId: member.id,
+        parentMemberId: parent.id,
+        status: 'ACTIVE',
+        createdAt: new Date(Date.now() - 3600000 * 24 * im.joinedDaysAgo),
+      },
+    });
+  }
+  console.log('✓ 2 Mitra Baru (VRN-0007 & VRN-0008) berhasil didaftarkan (Belum Belanja Perdana).');
+
+  // --------------------------------------------------------------------------
+  // 11. Tambah Riwayat Audit Logs Selama 60 Hari
+  // --------------------------------------------------------------------------
+  const ownerUser = await prisma.user.findUnique({ where: { email: 'owner@varena.id' } });
+  const admin1User = await prisma.user.findUnique({ where: { email: 'admin1@varena.id' } });
+  const admin2User = await prisma.user.findUnique({ where: { email: 'admin2@varena.id' } });
+
+  const auditHistory = [
+    {
+      actorUserId: ownerUser?.id,
+      action: 'MARKETING_PLAN_ACTIVATED',
+      entityType: 'MARKETING_PLAN',
+      entityId: plan.id,
+      beforeJson: null,
+      afterJson: JSON.stringify({ planCode: 'MP-2026-V1', repeatDevReward: 2000, firstPackDirectReward: 50000 }),
+      reason: 'Pemberlakuan SK Direksi DIR-VARENA-SK-2026/001 kepatuhan Permendag 70/2019',
+      daysAgo: 45,
+    },
+    {
+      actorUserId: admin1User?.id,
+      action: 'PRODUCT_HPP_UPDATED',
+      entityType: 'PRODUCT',
+      entityId: product.id,
+      beforeJson: JSON.stringify({ hppBox: 300000, hppSachet: 30000 }),
+      afterJson: JSON.stringify({ hppBox: 250000, hppSachet: 25000 }),
+      reason: 'Penyesuaian efisiensi batch produksi kopi herbal pabrikasi',
+      daysAgo: 30,
+    },
+    {
+      actorUserId: admin2User?.id,
+      action: 'MEMBER_KYC_VERIFIED',
+      entityType: 'MEMBER',
+      entityId: createdMembers['VRN-0001'].id,
+      beforeJson: JSON.stringify({ kycStatus: 'PENDING' }),
+      afterJson: JSON.stringify({ kycStatus: 'VERIFIED', nik: '3171029182910001' }),
+      reason: 'Validasi KTP dan rekening buku tabungan BCA mitra Ahmad Fauzi',
+      daysAgo: 14,
+    },
+    {
+      actorUserId: admin1User?.id,
+      action: 'ORDER_SHIPPED',
+      entityType: 'ORDER',
+      entityId: 'VRN-ORD-2026-0001',
+      beforeJson: JSON.stringify({ orderStatus: 'PAID' }),
+      afterJson: JSON.stringify({ orderStatus: 'SHIPPED', courier: 'JNE Express', resi: 'JNE-882019482-ID' }),
+      reason: 'Paket box perdana telah diserahkan ke kurir JNE',
+      daysAgo: 2,
+    },
+    {
+      actorUserId: admin1User?.id,
+      action: 'ORDER_SHIPPED',
+      entityType: 'ORDER',
+      entityId: 'VRN-ORD-2026-0002',
+      beforeJson: JSON.stringify({ orderStatus: 'PAID' }),
+      afterJson: JSON.stringify({ orderStatus: 'SHIPPED', courier: 'SiCepat Ekspres', resi: 'SCP-992104819-ID' }),
+      reason: 'Paket box perdana Budi Santoso diserahkan ke drop point SiCepat',
+      daysAgo: 1,
+    },
+  ];
+
+  for (const ah of auditHistory) {
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: ah.actorUserId || null,
+        action: ah.action,
+        entityType: ah.entityType,
+        entityId: ah.entityId,
+        beforeJson: ah.beforeJson,
+        afterJson: ah.afterJson,
+        reason: ah.reason,
+        createdAt: new Date(Date.now() - 3600000 * 24 * ah.daysAgo),
+      },
+    });
+  }
+  console.log('✓ Riwayat Audit Log Sistem (60 hari) berhasil diinjeksi.');
 
   // --------------------------------------------------------------------------
   // 9. Status Akhir Dompet & Eksekutif

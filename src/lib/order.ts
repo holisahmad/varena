@@ -193,3 +193,107 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     commissionResult,
   };
 }
+
+/**
+ * Admin action: Ship Order with Courier and Tracking Number
+ */
+export async function shipOrder({
+  orderId,
+  courierName,
+  trackingNumber,
+  actorUserId,
+}: {
+  orderId: string;
+  courierName: string;
+  trackingNumber: string;
+  actorUserId?: string | null;
+}) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error('Pesanan tidak ditemukan.');
+  }
+
+  if (order.orderStatus !== 'PAID' && order.orderStatus !== 'PROCESSING') {
+    throw new Error(`Pesanan dengan status ${order.orderStatus} tidak dapat diproses kirim.`);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: 'SHIPPED',
+        courierName: courierName.trim(),
+        trackingNumber: trackingNumber.trim(),
+        shippedAt: new Date(),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: actorUserId || null,
+        action: 'ORDER_SHIPPED',
+        entityType: 'ORDER',
+        entityId: order.id,
+        beforeJson: JSON.stringify({ orderStatus: order.orderStatus }),
+        afterJson: JSON.stringify({
+          orderStatus: 'SHIPPED',
+          courierName: courierName.trim(),
+          trackingNumber: trackingNumber.trim(),
+        }),
+        reason: `Pengiriman pesanan via ${courierName} no. resi ${trackingNumber}`,
+      },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * Admin or Consumer action: Complete Order (Delivered)
+ */
+export async function completeOrder({
+  orderId,
+  actorUserId,
+}: {
+  orderId: string;
+  actorUserId?: string | null;
+}) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error('Pesanan tidak ditemukan.');
+  }
+
+  if (order.orderStatus !== 'SHIPPED') {
+    throw new Error(`Hanya pesanan berstatus SHIPPED yang dapat diselesaikan.`);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: 'COMPLETED',
+        completedAt: new Date(),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: actorUserId || null,
+        action: 'ORDER_COMPLETED',
+        entityType: 'ORDER',
+        entityId: order.id,
+        beforeJson: JSON.stringify({ orderStatus: 'SHIPPED' }),
+        afterJson: JSON.stringify({ orderStatus: 'COMPLETED' }),
+        reason: 'Pesanan telah diterima oleh pembeli / diverifikasi selesai.',
+      },
+    });
+
+    return updated;
+  });
+}
