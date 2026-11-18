@@ -26,6 +26,10 @@ import {
   CreditCard,
   X,
   Building2,
+  Eye,
+  MapPin,
+  FileText,
+  BadgeCheck,
 } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 
@@ -47,10 +51,11 @@ export default function MemberDashboardPage() {
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
   const ORDERS_PER_PAGE = 5;
 
-  // Selected order for Payment Instruction Modal
-  const [selectedPaymentOrder, setSelectedPaymentOrder] = useState<any>(null);
+  // Selected order for Marketplace Detail Modal
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [copiedBankModal, setCopiedBankModal] = useState(false);
   const [copiedAmountModal, setCopiedAmountModal] = useState(false);
+  const [copiedResiModal, setCopiedResiModal] = useState(false);
   const [modalSettling, setModalSettling] = useState(false);
 
   const copyNominal = (amount: number, orderId: string) => {
@@ -59,21 +64,39 @@ export default function MemberDashboardPage() {
     setTimeout(() => setCopiedOrderId(null), 2000);
   };
 
+  const getOrderStatusStep = (status: string) => {
+    switch (status) {
+      case 'PENDING_PAYMENT':
+        return 1;
+      case 'PAID':
+      case 'PROCESSING':
+        return 3;
+      case 'SHIPPED':
+        return 4;
+      case 'COMPLETED':
+        return 5;
+      default:
+        return 1;
+    }
+  };
+
   const handleModalSimulatePayment = async () => {
-    if (!selectedPaymentOrder) return;
+    if (!selectedOrder) return;
     setModalSettling(true);
     try {
       const res = await fetch('/api/v1/orders/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: selectedPaymentOrder.id,
+          orderId: selectedOrder.id,
           providerRef: `SIM-MBR-${Date.now().toString().slice(-6)}`,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setSelectedPaymentOrder(null);
+        setSelectedOrder((prev: any) =>
+          prev ? { ...prev, orderStatus: 'PAID', paidAt: new Date().toISOString() } : null
+        );
         if (user) {
           loadDashboard(user.memberCode || 'VRN-0001', user.userId || user.id);
         }
@@ -196,6 +219,9 @@ export default function MemberDashboardPage() {
       if (!res.ok) throw new Error(data.error || 'Gagal mengonfirmasi penerimaan.');
 
       alert('Terima kasih! Pesanan Anda telah ditandai selesai.');
+      setSelectedOrder((prev: any) =>
+        prev && prev.id === orderId ? { ...prev, orderStatus: 'COMPLETED', completedAt: new Date().toISOString() } : prev
+      );
       loadDashboard(user?.memberCode || 'VRN-0001', user?.userId || user?.id);
     } catch (err: any) {
       alert(err.message);
@@ -456,23 +482,35 @@ export default function MemberDashboardPage() {
               </thead>
               <tbody className="divide-y divide-varena-taupe/10">
                 {paginatedPersonalOrders.map((po) => (
-                  <tr key={po.id} className="hover:bg-varena-ivory-light/40">
+                  <tr key={po.id} className="hover:bg-varena-ivory-light/40 transition">
                     <td className="py-2.5 px-3">
-                      <div className="font-mono font-bold text-varena-espresso">{po.orderNumber}</div>
-                      <div className="text-[10px] text-varena-taupe">
-                        {new Date(po.createdAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrder(po)}
+                        className="text-left group cursor-pointer"
+                        title="Klik untuk lihat detail pesanan lengkap"
+                      >
+                        <div className="font-mono font-bold text-varena-espresso group-hover:text-amber-800 flex items-center gap-1 transition">
+                          <span>{po.orderNumber}</span>
+                          <Eye className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-800 transition" />
+                        </div>
+                        <div className="text-[10px] text-varena-taupe">
+                          {new Date(po.createdAt).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </div>
+                      </button>
                     </td>
                     <td className="py-2.5 px-3">
-                      {po.items?.map((it: any, idx: number) => (
-                        <div key={idx} className="font-medium text-varena-espresso">
-                          {it.quantity}x {it.name}
-                        </div>
-                      ))}
+                      <div className="space-y-0.5">
+                        {po.items?.map((it: any, idx: number) => (
+                          <div key={idx} className="font-medium text-varena-espresso">
+                            {it.quantity}x {it.name}
+                          </div>
+                        ))}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
                       <div>Rp{po.total.toLocaleString('id-ID')}</div>
@@ -501,18 +539,18 @@ export default function MemberDashboardPage() {
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-semibold inline-block ${
                           po.orderStatus === 'COMPLETED'
-                            ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                            : po.orderStatus === 'SHIPPED'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                            : po.orderStatus === 'PAID'
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : po.orderStatus === 'SHIPPED'
+                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                            : po.orderStatus === 'PAID'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
                             : 'bg-amber-100 text-amber-800 border border-amber-300'
                         }`}
                       >
                         {po.orderStatus === 'PENDING_PAYMENT'
                           ? 'Menunggu Pembayaran'
                           : po.orderStatus === 'PAID'
-                          ? 'Dibayar (Diproses Gudang)'
+                          ? 'Diproses (Sedang Dikemas)'
                           : po.orderStatus === 'SHIPPED'
                           ? 'Sedang Dikirim Kurir'
                           : po.orderStatus === 'COMPLETED'
@@ -532,44 +570,80 @@ export default function MemberDashboardPage() {
                           </div>
                         </div>
                       ) : (
-                        <span className="text-[10px] text-varena-taupe italic">Belum dikirim</span>
+                        <span className="text-[10px] text-varena-taupe italic">
+                          {po.orderStatus === 'PENDING_PAYMENT' ? 'Menunggu Pembayaran' : 'Sedang Disiapkan Gudang'}
+                        </span>
                       )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      {po.orderStatus === 'SHIPPED' && (
-                        <button
-                          onClick={() => handleConfirmReceived(po.id)}
-                          disabled={actionLoadingId === po.id}
-                          className="px-2.5 py-1.5 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition shadow whitespace-nowrap"
-                        >
-                          {actionLoadingId === po.id ? 'Memproses...' : 'Konfirmasi Diterima'}
-                        </button>
-                      )}
-                      {po.orderStatus === 'COMPLETED' && (
-                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Diterima</span>
-                        </span>
-                      )}
-                      {po.orderStatus === 'PAID' && (
-                        <span className="text-[10px] text-varena-taupe">Sedang dikemas</span>
-                      )}
                       {po.orderStatus === 'PENDING_PAYMENT' && (
                         <div className="flex flex-col items-end gap-1">
                           <button
                             type="button"
-                            onClick={() => setSelectedPaymentOrder(po)}
+                            onClick={() => setSelectedOrder(po)}
                             className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] shadow-xs transition inline-flex items-center gap-1 whitespace-nowrap"
                           >
                             <CreditCard className="w-3 h-3" />
                             <span>Bayar Sekarang</span>
                           </button>
-                          <Link
-                            href={`/confirm-payment?orderNumber=${po.orderNumber}`}
-                            className="text-[10px] text-amber-800 hover:underline block"
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(po)}
+                            className="text-[10px] text-stone-500 hover:text-varena-espresso underline"
                           >
-                            Konfirmasi manual →
-                          </Link>
+                            Detail Pesanan
+                          </button>
+                        </div>
+                      )}
+
+                      {po.orderStatus === 'PAID' && (
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(po)}
+                            className="px-2.5 py-1 rounded border border-blue-300 bg-blue-50/70 hover:bg-blue-100 text-blue-900 font-semibold text-[11px] shadow-xs transition inline-flex items-center gap-1 whitespace-nowrap"
+                          >
+                            <Eye className="w-3 h-3 text-blue-700" />
+                            <span>Detail Pesanan</span>
+                          </button>
+                          <span className="text-[10px] text-blue-700">Sedang dikemas</span>
+                        </div>
+                      )}
+
+                      {po.orderStatus === 'SHIPPED' && (
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmReceived(po.id)}
+                            disabled={actionLoadingId === po.id}
+                            className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition shadow whitespace-nowrap inline-flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>{actionLoadingId === po.id ? 'Memproses...' : 'Konfirmasi Diterima'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(po)}
+                            className="text-[10px] text-indigo-700 hover:text-indigo-900 font-medium underline"
+                          >
+                            Lacak & Detail →
+                          </button>
+                        </div>
+                      )}
+
+                      {po.orderStatus === 'COMPLETED' && (
+                        <div className="flex flex-col items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(po)}
+                            className="px-2.5 py-1 rounded border border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100 text-emerald-900 font-semibold text-[11px] transition inline-flex items-center gap-1 whitespace-nowrap"
+                          >
+                            <Eye className="w-3 h-3 text-emerald-700" />
+                            <span>Detail Pesanan</span>
+                          </button>
+                          <span className="text-[10px] text-emerald-700 font-medium flex items-center gap-0.5">
+                            <Check className="w-2.5 h-2.5" /> Selesai
+                          </span>
                         </div>
                       )}
                     </td>
@@ -713,182 +787,453 @@ export default function MemberDashboardPage() {
         </div>
       </div>
 
-      {/* Modal Instruksi Pembayaran Pesanan */}
-      {selectedPaymentOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-varena-taupe/20 shadow-2xl overflow-hidden">
+      {/* Modal Detail & Pelacakan Pesanan Lengkap (Marketplace Experience) */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full border border-varena-taupe/20 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 bg-varena-espresso text-varena-gold-light flex items-center justify-between">
+            <div className="p-4 sm:p-5 bg-varena-espresso text-varena-gold-light flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-lg bg-varena-gold/20 flex items-center justify-center text-varena-gold">
-                  <CreditCard className="w-5 h-5" />
+                  <Package className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-base text-white">Instruksi Pembayaran</h3>
-                  <div className="text-[11px] text-varena-gold-light/80 font-mono">
-                    {selectedPaymentOrder.orderNumber}
+                  <h3 className="font-serif font-bold text-base text-white">Detail Pesanan & Pengiriman</h3>
+                  <div className="text-[11px] text-varena-gold-light/80 font-mono flex items-center gap-1.5 mt-0.5">
+                    <span>{selectedOrder.orderNumber}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(selectedOrder.orderNumber);
+                        alert(`Nomor pesanan ${selectedOrder.orderNumber} disalin!`);
+                      }}
+                      className="hover:text-white"
+                      title="Salin Nomor Pesanan"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedPaymentOrder(null)}
+                onClick={() => setSelectedOrder(null)}
                 className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-              {/* Order Info & Items */}
-              <div className="p-3.5 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2">
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-varena-taupe">Tanggal Pemesanan:</span>
-                  <span className="font-medium text-varena-espresso">
-                    {new Date(selectedPaymentOrder.createdAt).toLocaleDateString('id-ID', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
+            {/* Modal Body (Scrollable) */}
+            <div className="p-4 sm:p-6 space-y-4 overflow-y-auto text-xs">
+              {/* Marketplace Stepper Progress Bar */}
+              <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20">
+                <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider mb-3">
+                  Status Transaksi Marketplace:
+                </div>
+                <div className="relative flex items-center justify-between">
+                  {/* Background Track Line */}
+                  <div className="absolute left-3 right-3 top-3.5 h-0.5 bg-stone-200 -z-0" />
+                  {/* Active Colored Track Line */}
+                  <div
+                    className="absolute left-3 top-3.5 h-0.5 bg-emerald-600 transition-all duration-300 -z-0"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, ((getOrderStatusStep(selectedOrder.orderStatus) - 1) / 4) * 100))}%`,
+                    }}
+                  />
+
+                  {/* Step 1: Dipesan */}
+                  <div className="flex flex-col items-center relative z-10">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
+                        getOrderStatusStep(selectedOrder.orderStatus) >= 1
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                    >
+                      ✓
+                    </div>
+                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dipesan</span>
+                  </div>
+
+                  {/* Step 2: Dibayar */}
+                  <div className="flex flex-col items-center relative z-10">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
+                        getOrderStatusStep(selectedOrder.orderStatus) >= 2
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                    >
+                      {getOrderStatusStep(selectedOrder.orderStatus) >= 2 ? '✓' : '2'}
+                    </div>
+                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dibayar</span>
+                  </div>
+
+                  {/* Step 3: Dikemas */}
+                  <div className="flex flex-col items-center relative z-10">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
+                        getOrderStatusStep(selectedOrder.orderStatus) >= 3
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                    >
+                      {getOrderStatusStep(selectedOrder.orderStatus) >= 3 ? '✓' : '3'}
+                    </div>
+                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dikemas</span>
+                  </div>
+
+                  {/* Step 4: Dikirim */}
+                  <div className="flex flex-col items-center relative z-10">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
+                        getOrderStatusStep(selectedOrder.orderStatus) >= 4
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                    >
+                      {getOrderStatusStep(selectedOrder.orderStatus) >= 4 ? '✓' : '4'}
+                    </div>
+                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dikirim</span>
+                  </div>
+
+                  {/* Step 5: Selesai */}
+                  <div className="flex flex-col items-center relative z-10">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
+                        getOrderStatusStep(selectedOrder.orderStatus) >= 5
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-stone-200 text-stone-600'
+                      }`}
+                    >
+                      {getOrderStatusStep(selectedOrder.orderStatus) >= 5 ? '✓' : '5'}
+                    </div>
+                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Selesai</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Banner Card */}
+              {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs text-amber-950">Menunggu Pembayaran</div>
+                    <div className="text-[11px] text-amber-800 mt-0.5">
+                      Silakan selesaikan pembayaran sesuai nominal exact ke rekening resmi di bawah agar pesanan segera dikemas oleh gudang.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.orderStatus === 'PAID' && (
+                <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-300 text-blue-900 flex items-start gap-3">
+                  <Package className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs text-blue-950">Pembayaran Terverifikasi — Sedang Dikemas</div>
+                    <div className="text-[11px] text-blue-800 mt-0.5">
+                      Dana pembayaran telah diterima di rekening operasional. Tim logistik gudang VARENA sedang menyiapkan dan mengemas paket herbal Anda.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.orderStatus === 'SHIPPED' && (
+                <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-300 text-indigo-900 flex items-start gap-3">
+                  <Truck className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs text-indigo-950">Paket Sedang Dalam Pengiriman Kurir</div>
+                    <div className="text-[11px] text-indigo-800 mt-0.5">
+                      Pesanan Anda telah diserahkan ke pihak ekspedisi ({selectedOrder.courierName}). Segera periksa paket setelah tiba dan lakukan konfirmasi penerimaan.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.orderStatus === 'COMPLETED' && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs text-emerald-950">Pesanan Selesai</div>
+                    <div className="text-[11px] text-emerald-800 mt-0.5">
+                      Paket telah diterima dengan baik. Seluruh komisi jaringan dan mutasi buku besar telah dibukukan secara permanen.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Rincian Produk yang Dibeli */}
+              <div className="p-4 rounded-xl bg-white border border-varena-taupe/20 space-y-3">
+                <div className="font-bold text-varena-espresso text-xs flex items-center justify-between border-b border-varena-taupe/20 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <ShoppingBag className="w-4 h-4 text-varena-gold" />
+                    <span>Daftar Produk ({selectedOrder.items?.length || 0} Item)</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-varena-taupe uppercase">
+                    Tipe: {selectedOrder.orderType === 'FIRST_PACK' ? 'Paket Kemitraan' : 'Repeat Purchase'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-varena-taupe">Status Tagihan:</span>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold font-mono text-[10px]">
-                    Menunggu Pembayaran
-                  </span>
-                </div>
-                {selectedPaymentOrder.items && selectedPaymentOrder.items.length > 0 && (
-                  <div className="pt-2 border-t border-varena-taupe/20 space-y-1">
-                    <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Rincian Paket Produk:</div>
-                    {selectedPaymentOrder.items.map((it: any, idx: number) => (
-                      <div key={idx} className="flex justify-between font-medium text-varena-espresso">
-                        <span>{it.quantity}x {it.name}</span>
-                        <span className="font-mono">Rp{(it.lineTotal || it.price * it.quantity).toLocaleString('id-ID')}</span>
+                <div className="divide-y divide-varena-taupe/10">
+                  {selectedOrder.items?.map((it: any, idx: number) => (
+                    <div key={idx} className="py-2.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-varena-ivory flex items-center justify-center text-varena-espresso font-bold text-xs flex-shrink-0">
+                          {it.quantity}x
+                        </div>
+                        <div>
+                          <div className="font-semibold text-varena-espresso text-xs">{it.name}</div>
+                          <div className="text-[10px] text-varena-taupe">
+                            @Rp{it.price.toLocaleString('id-ID')} per box
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="font-mono font-bold text-varena-espresso text-right whitespace-nowrap">
+                        Rp{(it.lineTotal || it.price * it.quantity).toLocaleString('id-ID')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Bank destination card */}
-              <div className="p-3.5 rounded-xl bg-white border border-varena-gold/40 space-y-2 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">
-                    Transfer ke Rekening Tujuan:
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(PRIMARY_COMPANY_BANK.accountNumberClean);
-                      setCopiedBankModal(true);
-                      setTimeout(() => setCopiedBankModal(false), 2000);
-                    }}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold/15 hover:bg-varena-gold/30 px-2 py-0.5 rounded transition"
-                  >
-                    {copiedBankModal ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        <span className="text-emerald-700">Tersalin</span>
-                      </>
+              {/* Logistik & Alamat Pengiriman */}
+              <div className="p-4 rounded-xl bg-white border border-varena-taupe/20 space-y-3">
+                <div className="font-bold text-varena-espresso text-xs flex items-center gap-1.5 border-b border-varena-taupe/20 pb-2">
+                  <Truck className="w-4 h-4 text-varena-gold" />
+                  <span>Informasi Logistik & Pengiriman</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Kurir & No. Resi:</div>
+                    {selectedOrder.trackingNumber ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="font-semibold text-varena-espresso">{selectedOrder.courierName}</span>
+                        <span className="font-mono bg-stone-100 px-2 py-0.5 rounded font-bold text-varena-espresso">
+                          {selectedOrder.trackingNumber}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(selectedOrder.trackingNumber);
+                            setCopiedResiModal(true);
+                            setTimeout(() => setCopiedResiModal(false), 2000);
+                          }}
+                          className="text-[10px] bg-stone-100 hover:bg-stone-200 px-1.5 py-0.5 rounded transition text-varena-espresso inline-flex items-center gap-0.5"
+                          title="Salin No Resi"
+                        >
+                          {copiedResiModal ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span className="text-emerald-700">Tersalin</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-stone-600" />
+                              <span>Salin</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     ) : (
-                      <>
-                        <Copy className="w-3 h-3 text-varena-espresso" />
-                        <span>Salin No. Rek</span>
-                      </>
+                      <div className="mt-1 text-stone-500 italic text-[11px]">
+                        Nomor resi akan diterbitkan otomatis setelah paket diserahkan ke kurir.
+                      </div>
                     )}
-                  </button>
-                </div>
-                <div className="font-mono text-base font-bold text-varena-espresso tracking-wide">
-                  {PRIMARY_COMPANY_BANK.accountNumber}
-                </div>
-                <div className="text-xs font-semibold text-varena-espresso flex items-center justify-between">
-                  <span>Bank {PRIMARY_COMPANY_BANK.bankName}</span>
-                  <span className="text-stone-600 font-medium">a.n. {PRIMARY_COMPANY_BANK.accountHolder}</span>
-                </div>
-                {PRIMARY_COMPANY_BANK.statusNote && (
-                  <div className="text-[10px] text-stone-500 italic">
-                    *{PRIMARY_COMPANY_BANK.statusNote}
                   </div>
-                )}
+
+                  <div>
+                    <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Penerima & Alamat Kirim:</div>
+                    <div className="mt-1 text-varena-espresso font-medium text-[11px] leading-relaxed">
+                      <strong>{selectedOrder.buyerName}</strong>
+                      <div className="text-stone-600">{selectedOrder.shippingAddress || 'Alamat sesuai data pendaftaran akun'}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* Exact amount card */}
-              <div className="p-3.5 rounded-xl bg-varena-espresso text-center text-white">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-varena-gold-light/75 uppercase font-bold tracking-wider">
-                    Nominal Transfer (Harus Tepat):
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(String(selectedPaymentOrder.total));
-                      setCopiedAmountModal(true);
-                      setTimeout(() => setCopiedAmountModal(false), 2000);
-                    }}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold-light hover:bg-white px-2.5 py-0.5 rounded transition shadow-xs"
-                  >
-                    {copiedAmountModal ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-700" />
-                        <span className="text-emerald-800">Tersalin</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3 text-varena-espresso" />
-                        <span>Salin Nominal</span>
-                      </>
+              {/* Rincian Pembayaran (Payment Breakdown) */}
+              <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2">
+                <div className="font-bold text-varena-espresso text-xs flex items-center gap-1.5 border-b border-varena-taupe/20 pb-2">
+                  <CreditCard className="w-4 h-4 text-varena-gold" />
+                  <span>Rincian Pembayaran</span>
+                </div>
+                <div className="space-y-1.5 text-[11px]">
+                  <div className="flex justify-between text-stone-600">
+                    <span>Subtotal Harga Produk:</span>
+                    <span className="font-mono font-medium text-varena-espresso">
+                      Rp{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.uniqueCode || 0)).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-stone-600">
+                    <span>Biaya Ongkos Kirim:</span>
+                    <span className="font-mono text-emerald-700 font-semibold">
+                      {selectedOrder.shippingCost && selectedOrder.shippingCost > 0
+                        ? `Rp${selectedOrder.shippingCost.toLocaleString('id-ID')}`
+                        : 'Gratis Ongkir (Promo Korporasi)'}
+                    </span>
+                  </div>
+                  {selectedOrder.uniqueCode > 0 && (
+                    <div className="flex justify-between text-stone-600">
+                      <span>Kode Unik Pembayaran:</span>
+                      <span className="font-mono text-amber-800 font-semibold">
+                        +Rp{selectedOrder.uniqueCode}
+                      </span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-varena-taupe/20 flex justify-between items-center text-xs">
+                    <span className="font-bold text-varena-espresso">Total Tagihan:</span>
+                    <span className="font-serif font-bold text-base text-varena-espresso">
+                      Rp{selectedOrder.total.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-varena-taupe/20 text-[10px] text-stone-500 space-y-1">
+                  <div>Metode Pembayaran: <strong>Transfer Bank BRI (Operasional Resmi)</strong></div>
+                  <div>Waktu Pemesanan: {new Date(selectedOrder.createdAt).toLocaleString('id-ID')}</div>
+                  {selectedOrder.paidAt && (
+                    <div>Waktu Lunas: {new Date(selectedOrder.paidAt).toLocaleString('id-ID')}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Instruksi Transfer Bank (Tampil HANYA jika PENDING_PAYMENT) */}
+              {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+                <div className="space-y-3 pt-1">
+                  {/* Bank Destination Card */}
+                  <div className="p-3.5 rounded-xl bg-white border border-varena-gold/40 space-y-2 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">
+                        Transfer ke Rekening Tujuan:
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(PRIMARY_COMPANY_BANK.accountNumberClean);
+                          setCopiedBankModal(true);
+                          setTimeout(() => setCopiedBankModal(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold/15 hover:bg-varena-gold/30 px-2.5 py-0.5 rounded transition"
+                      >
+                        {copiedBankModal ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-emerald-700">Tersalin</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-varena-espresso" />
+                            <span>Salin No. Rek</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="font-mono text-base font-bold text-varena-espresso tracking-wide">
+                      {PRIMARY_COMPANY_BANK.accountNumber}
+                    </div>
+                    <div className="text-xs font-semibold text-varena-espresso flex items-center justify-between">
+                      <span>Bank {PRIMARY_COMPANY_BANK.bankName}</span>
+                      <span className="text-stone-600 font-medium">a.n. {PRIMARY_COMPANY_BANK.accountHolder}</span>
+                    </div>
+                    {PRIMARY_COMPANY_BANK.statusNote && (
+                      <div className="text-[10px] text-stone-500 italic">
+                        *{PRIMARY_COMPANY_BANK.statusNote}
+                      </div>
                     )}
-                  </button>
-                </div>
-                <div className="font-serif text-2xl font-bold text-varena-gold-light tracking-tight">
-                  Rp{selectedPaymentOrder.total.toLocaleString('id-ID')}
-                </div>
-                {selectedPaymentOrder.uniqueCode > 0 && (
-                  <div className="text-[11px] text-varena-gold-light/85 mt-1 font-medium">
-                    (termasuk kode unik: +Rp{selectedPaymentOrder.uniqueCode} untuk verifikasi otomatis)
                   </div>
-                )}
-              </div>
 
-              {/* Warning note */}
-              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px]">
-                <strong>Penting:</strong> Masukkan nominal transfer secara persis (termasuk kode unik di atas) agar pesanan Anda terverifikasi oleh sistem secara otomatis.
-              </div>
+                  {/* Exact Amount Card */}
+                  <div className="p-3.5 rounded-xl bg-varena-espresso text-center text-white">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] text-varena-gold-light/75 uppercase font-bold tracking-wider">
+                        Nominal Transfer (Harus Tepat):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(String(selectedOrder.total));
+                          setCopiedAmountModal(true);
+                          setTimeout(() => setCopiedAmountModal(false), 2000);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold-light hover:bg-white px-2.5 py-0.5 rounded transition shadow-xs"
+                      >
+                        {copiedAmountModal ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-700" />
+                            <span className="text-emerald-800">Tersalin</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-varena-espresso" />
+                            <span>Salin Nominal</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="font-serif text-2xl font-bold text-varena-gold-light tracking-tight">
+                      Rp{selectedOrder.total.toLocaleString('id-ID')}
+                    </div>
+                    {selectedOrder.uniqueCode > 0 && (
+                      <div className="text-[11px] text-varena-gold-light/85 mt-1 font-medium">
+                        (termasuk kode unik: +Rp{selectedOrder.uniqueCode} untuk verifikasi otomatis)
+                      </div>
+                    )}
+                  </div>
 
-              {/* Wrong transfer link */}
-              <div className="text-center pt-1">
-                <Link
-                  href={`/confirm-payment?orderNumber=${selectedPaymentOrder.orderNumber}`}
-                  className="text-[11px] text-varena-gold hover:underline font-semibold"
-                >
-                  Salah transfer nominal? Klik di sini untuk konfirmasi manual →
-                </Link>
-              </div>
+                  {/* Warning note */}
+                  <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px]">
+                    <strong>Penting:</strong> Masukkan nominal transfer secara persis (termasuk kode unik) agar pembayaran Anda terverifikasi otomatis oleh sistem.
+                  </div>
+
+                  <div className="text-center pt-1">
+                    <Link
+                      href={`/confirm-payment?orderNumber=${selectedOrder.orderNumber}`}
+                      className="text-[11px] text-varena-gold hover:underline font-semibold"
+                    >
+                      Salah transfer nominal? Klik di sini untuk konfirmasi manual →
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-col sm:flex-row gap-2 justify-between items-center">
+            {/* Modal Footer Actions */}
+            <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-col sm:flex-row gap-2 justify-between items-center flex-shrink-0">
               <Link
-                href={`/checkout?orderNumber=${selectedPaymentOrder.orderNumber}`}
+                href={`/checkout?orderNumber=${selectedOrder.orderNumber}`}
                 className="w-full sm:w-auto text-center py-2 px-3 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium text-xs"
               >
                 Halaman Invoice Lengkap →
               </Link>
+
               <div className="flex gap-2 w-full sm:w-auto">
+                {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+                  <button
+                    type="button"
+                    onClick={handleModalSimulatePayment}
+                    disabled={modalSettling}
+                    className="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
+                    title="Simulasikan pembayaran lunas di mode development"
+                  >
+                    {modalSettling ? 'Memproses...' : 'Simulasi Lunas'}
+                  </button>
+                )}
+
+                {selectedOrder.orderStatus === 'SHIPPED' && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmReceived(selectedOrder.id)}
+                    disabled={actionLoadingId === selectedOrder.id}
+                    className="flex-1 sm:flex-initial py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition flex items-center justify-center gap-1 shadow"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{actionLoadingId === selectedOrder.id ? 'Memproses...' : 'Konfirmasi Barang Diterima'}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={handleModalSimulatePayment}
-                  disabled={modalSettling}
-                  className="flex-1 sm:flex-initial py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
-                  title="Simulasikan pembayaran lunas di mode development"
-                >
-                  {modalSettling ? 'Memproses...' : 'Simulasi Lunas'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPaymentOrder(null)}
+                  onClick={() => setSelectedOrder(null)}
                   className="py-2 px-4 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition"
                 >
                   Tutup
