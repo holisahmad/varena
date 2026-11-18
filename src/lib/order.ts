@@ -17,16 +17,48 @@ export interface CheckoutPayload {
   referralCode?: string;
   buyerUserId?: string;
   items: CheckoutItem[];
+  shippingCost?: number; // Biaya kirim yang dibebankan ke pembeli (jika member biasa)
+  shippingExpense?: number; // Biaya kirim yang ditanggung kantor (jika pasokan stokis)
+  isStockistOrder?: boolean; // True jika pesanan stokis (bebas ongkir bagi stokis, ditanggung kantor)
+  stockistMemberId?: string;
+  fulfillmentSource?: string;
 }
 
 /**
- * Create Order with verified referral attribution and price snapshots
+ * Create Order with verified referral attribution, shipping policy, and price snapshots
  */
 export async function createOrder(payload: CheckoutPayload) {
-  const { buyerName, buyerPhone, buyerEmail, shippingAddress, referralCode, buyerUserId, items } = payload;
+  const {
+    buyerName,
+    buyerPhone,
+    buyerEmail,
+    shippingAddress,
+    referralCode,
+    buyerUserId,
+    items,
+    shippingCost: customShippingCost,
+    shippingExpense: customShippingExpense,
+    isStockistOrder,
+    stockistMemberId,
+    fulfillmentSource,
+  } = payload;
 
   if (!items || items.length === 0) {
     throw new Error('Order must contain at least 1 item.');
+  }
+
+  // Check if buyer is a registered regional stockist
+  let isStockist = Boolean(isStockistOrder);
+  let resolvedStockistId = stockistMemberId || null;
+
+  if (buyerUserId && !isStockist) {
+    const buyerMember = await prisma.member.findUnique({
+      where: { userId: buyerUserId },
+    });
+    if (buyerMember && (buyerMember.stockistType === 'MASTER' || buyerMember.stockistType === 'MOBILE')) {
+      isStockist = true;
+      resolvedStockistId = buyerMember.id;
+    }
   }
 
   // 1. Resolve Referral Member if provided
@@ -76,6 +108,22 @@ export async function createOrder(payload: CheckoutPayload) {
     };
   });
 
+  // Shipping cost policy:
+  // - If stockist order: shipping is FREE for stockist (shippingCost = 0), borne by corporate office as operational expense (shippingExpense = Rp35.000 or custom)
+  // - If regular member/customer order: member is charged shipping cost (default Rp20.000), office does not absorb as special stockist expense (shippingExpense = 0)
+  const shippingCost = isStockist
+    ? 0
+    : customShippingCost !== undefined
+    ? customShippingCost
+    : 20000;
+
+  const shippingExpense = isStockist
+    ? customShippingExpense !== undefined
+      ? customShippingExpense
+      : 35000
+    : 0;
+
+  const total = subtotal + shippingCost;
   const orderNumber = `VRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
 
   // 3. Persist Order in transaction
@@ -93,8 +141,11 @@ export async function createOrder(payload: CheckoutPayload) {
         orderType: hasFirstPack ? 'FIRST_PACK' : 'REPEAT_PURCHASE',
         subtotal,
         discount: 0,
-        shippingCost: 0,
-        total: subtotal,
+        shippingCost,
+        shippingExpense,
+        total,
+        fulfillmentSource: isStockist ? 'REGIONAL_STOCKIST' : (fulfillmentSource || 'CENTRAL_WAREHOUSE'),
+        stockistMemberId: resolvedStockistId,
       },
     });
 
@@ -117,7 +168,7 @@ export async function createOrder(payload: CheckoutPayload) {
     await tx.payment.create({
       data: {
         orderId: order.id,
-        amount: subtotal,
+        amount: total,
         status: 'PENDING',
         provider: 'SIMULATED',
       },
@@ -162,28 +213,64 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     },
   });
 
-  // 2. Post Payment Receipt to Ledger:
-  // DEBIT: Company Bank Clearing (`ACC-COMP-PAYOUT` or Bank)
-  // CREDIT: Company Operations Revenue (`ACC-COMP-OPS`)
+  // 2. Post Payment Receipt to Double-Entry Ledger:
+  // DEBIT: Company Bank Clearing (`ACC-COMP-PAYOUT`) for total cash received
+  // CREDIT: Company Operations Revenue (`ACC-COMP-OPS`) for product subtotal
+  // CREDIT: Company Shipping Fee Inflow (`ACC-COMP-OPS`) for member shipping cost (if any)
+  const ledgerEntries: Array<{
+    accountCode: string;
+    direction: 'DEBIT' | 'CREDIT';
+    amount: number;
+    memo: string;
+  }> = [
+    {
+      accountCode: 'ACC-COMP-PAYOUT',
+      direction: 'DEBIT',
+      amount: order.total,
+      memo: `Bank settlement received for ${order.orderNumber}`,
+    },
+    {
+      accountCode: 'ACC-COMP-OPS',
+      direction: 'CREDIT',
+      amount: order.subtotal,
+      memo: `Gross Product Sales Revenue for ${order.orderNumber}`,
+    },
+  ];
+
+  if (order.shippingCost > 0) {
+    ledgerEntries.push({
+      accountCode: 'ACC-COMP-OPS',
+      direction: 'CREDIT',
+      amount: order.shippingCost,
+      memo: `Shipping fee collected from member for ${order.orderNumber}`,
+    });
+  }
+
+  // If this order is a stockist supply order where shipping is absorbed by company:
+  // Post company operational freight expense:
+  // DEBIT ACC-COMP-OPS (Freight Operating Expense)
+  // CREDIT ACC-COMP-PAYOUT (Freight Cash Outflow to Courier)
+  if (order.shippingExpense > 0) {
+    ledgerEntries.push({
+      accountCode: 'ACC-COMP-OPS',
+      direction: 'DEBIT',
+      amount: order.shippingExpense,
+      memo: `Company freight operational expense for stockist hub delivery ${order.orderNumber}`,
+    });
+    ledgerEntries.push({
+      accountCode: 'ACC-COMP-PAYOUT',
+      direction: 'CREDIT',
+      amount: order.shippingExpense,
+      memo: `Freight payment to courier for stockist delivery ${order.orderNumber}`,
+    });
+  }
+
   await postLedgerTransaction({
     referenceType: 'ORDER_PAYMENT',
     referenceId: order.id,
     idempotencyKey: `LEDGER-ORDER-PAY-${order.id}`,
-    memo: `Customer Payment Received for ${order.orderNumber}`,
-    entries: [
-      {
-        accountCode: 'ACC-COMP-PAYOUT',
-        direction: 'DEBIT',
-        amount: order.total,
-        memo: `Bank settlement for ${order.orderNumber}`,
-      },
-      {
-        accountCode: 'ACC-COMP-OPS',
-        direction: 'CREDIT',
-        amount: order.total,
-        memo: `Gross Sales Revenue for ${order.orderNumber}`,
-      },
-    ],
+    memo: `Payment Settlement & Ledger Posting for ${order.orderNumber}`,
+    entries: ledgerEntries,
   });
 
   // 3. Trigger Deterministic Commission Calculation & Ledger Posting

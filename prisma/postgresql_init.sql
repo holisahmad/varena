@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS "orders" (
     "subtotal" INTEGER NOT NULL,
     "discount" INTEGER NOT NULL DEFAULT 0,
     "shippingCost" INTEGER NOT NULL DEFAULT 0,
+    "shippingExpense" INTEGER NOT NULL DEFAULT 0,
     "total" INTEGER NOT NULL,
     "currency" TEXT NOT NULL DEFAULT 'IDR',
     "marketingPlanVersionId" TEXT,

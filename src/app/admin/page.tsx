@@ -957,14 +957,16 @@ export default function AdminPage() {
               </span>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1.5 border-b border-varena-taupe/10">
-                  <span className="text-varena-taupe">Penjualan Paket Box:</span>
+                  <span className="text-varena-taupe">Penjualan Produk (Box & Sachet):</span>
                   <span className="font-mono font-bold text-varena-espresso">
-                    Rp{(stats?.grossSales ? stats.grossSales - 675000 : 0).toLocaleString('id-ID')}
+                    Rp{(stats?.productSales || stats?.grossSales || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-varena-taupe/10">
-                  <span className="text-varena-taupe">Penjualan Eceran Sachet:</span>
-                  <span className="font-mono font-bold text-varena-espresso">Rp675.000</span>
+                  <span className="text-varena-taupe">Penerimaan Ongkir Member:</span>
+                  <span className="font-mono font-bold text-emerald-700">
+                    Rp{(stats?.shippingCollected || 0).toLocaleString('id-ID')}
+                  </span>
                 </div>
                 <div className="flex justify-between pt-1 font-semibold text-emerald-800">
                   <span>Total Kas Masuk Diterima:</span>
@@ -975,9 +977,15 @@ export default function AdminPage() {
 
             <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-3">
               <span className="text-xs text-varena-taupe font-semibold uppercase tracking-wider block">
-                Beban & Liabilitas Komisi (Outflow)
+                Beban & Biaya Operasional (Outflow)
               </span>
               <div className="space-y-2 text-xs">
+                <div className="flex justify-between py-1.5 border-b border-varena-taupe/10">
+                  <span className="text-varena-taupe">Beban HPP Produk:</span>
+                  <span className="font-mono font-bold text-rose-700">
+                    Rp{(stats?.totalHpp || 0).toLocaleString('id-ID')}
+                  </span>
+                </div>
                 <div className="flex justify-between py-1.5 border-b border-varena-taupe/10">
                   <span className="text-varena-taupe">Komisi Mitra (Terposting):</span>
                   <span className="font-mono font-bold text-varena-espresso">
@@ -985,14 +993,14 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-varena-taupe/10">
-                  <span className="text-varena-taupe">Pencairan Dana Ditransfer:</span>
-                  <span className="font-mono font-bold text-emerald-700">
-                    Rp{(stats?.totalPayoutDisbursed || 0).toLocaleString('id-ID')}
+                  <span className="text-varena-taupe">Beban Ongkir Stokis (Kantor):</span>
+                  <span className="font-mono font-bold text-amber-800">
+                    Rp{(stats?.stockistShippingExpense || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="flex justify-between pt-1 font-semibold text-amber-800">
-                  <span>Antrean Penarikan Pending:</span>
-                  <span className="font-mono">Rp{(stats?.pendingPayoutAmount || 0).toLocaleString('id-ID')}</span>
+                <div className="flex justify-between pt-1 font-semibold text-slate-700">
+                  <span>Total Pencairan Ditransfer:</span>
+                  <span className="font-mono">Rp{(stats?.totalPayoutDisbursed || 0).toLocaleString('id-ID')}</span>
                 </div>
               </div>
             </div>

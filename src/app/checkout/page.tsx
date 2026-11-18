@@ -17,6 +17,7 @@ function CheckoutContent() {
   const [shippingAddress, setShippingAddress] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [referralInfo, setReferralInfo] = useState<any>(null);
+  const [isStockist, setIsStockist] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
@@ -59,6 +60,9 @@ function CheckoutContent() {
         if (u.displayName) setBuyerName((prev) => prev || u.displayName);
         if (u.email) setBuyerEmail((prev) => prev || u.email);
         if (u.phone) setBuyerPhone((prev) => prev || u.phone);
+        if (u.stockistType === 'MASTER' || u.stockistType === 'MOBILE') {
+          setIsStockist(true);
+        }
       } catch (e) {}
     }
   }, [searchParams]);
@@ -83,6 +87,8 @@ function CheckoutContent() {
 
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
   const subtotal = selectedVariant ? selectedVariant.price * quantity : 0;
+  const shippingCost = isStockist ? 0 : (subtotal > 0 ? 20000 : 0);
+  const total = subtotal + shippingCost;
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +119,8 @@ function CheckoutContent() {
           shippingAddress,
           referralCode: referralCode ? referralCode.trim() : undefined,
           items: [{ variantId: selectedVariantId, quantity }],
+          shippingCost,
+          isStockistOrder: isStockist,
         }),
       });
 
@@ -335,15 +343,19 @@ function CheckoutContent() {
                   <span>Subtotal Produk ({quantity}x)</span>
                   <span>Rp{subtotal.toLocaleString('id-ID')}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Ongkos Kirim Promo</span>
-                  <span className="text-varena-gold-light font-semibold">Gratis (Rp0)</span>
+                <div className="flex justify-between items-center">
+                  <span>Ongkos Kirim</span>
+                  {isStockist ? (
+                    <span className="text-emerald-400 font-semibold">Gratis (Ditanggung Kantor Pusat)</span>
+                  ) : (
+                    <span className="text-varena-gold-light font-semibold">Rp{shippingCost.toLocaleString('id-ID')}</span>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-base font-bold">
-                <span>Total Bayar:</span>
-                <span className="font-serif text-2xl text-varena-gold-light">Rp{subtotal.toLocaleString('id-ID')}</span>
+                <span>Total Tagihan:</span>
+                <span className="font-serif text-2xl text-varena-gold-light">Rp{total.toLocaleString('id-ID')}</span>
               </div>
 
               <button

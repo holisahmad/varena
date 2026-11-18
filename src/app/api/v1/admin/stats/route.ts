@@ -21,17 +21,22 @@ export async function GET(req: Request) {
       include: { items: true },
     });
 
-    let grossSales = 0;
+    let productSales = 0;
+    let shippingCollected = 0;
+    let stockistShippingExpense = 0;
     let totalHpp = 0;
 
     for (const o of paidOrders) {
-      grossSales += o.total;
+      productSales += o.subtotal;
+      shippingCollected += o.shippingCost;
+      stockistShippingExpense += (o as any).shippingExpense || 0;
       for (const item of o.items) {
         totalHpp += item.hppSnapshot * item.quantity;
       }
     }
 
-    const grossMargin = grossSales - totalHpp;
+    const grossSales = productSales + shippingCollected;
+    const grossMargin = productSales - totalHpp;
 
     // 2. Pending Payment Orders (Receivables / Belum Bayar)
     const pendingOrders = await prisma.order.findMany({
@@ -236,10 +241,13 @@ export async function GET(req: Request) {
         // Sales & Cashflow
         totalOrders: paidOrders.length + pendingOrdersCount,
         paidOrdersCount: paidOrders.length,
+        productSales,
+        shippingCollected,
         grossSales,
         totalHpp,
         grossMargin,
-        netResidual: grossMargin - totalCommissionDistributed - totalUnallocatedReserve,
+        stockistShippingExpense,
+        netResidual: grossSales - totalHpp - totalCommissionDistributed - totalUnallocatedReserve - stockistShippingExpense,
         totalCommissionDistributed,
         totalUnallocatedReserve,
         totalPayoutDisbursed,

@@ -212,6 +212,7 @@ model Order {
   subtotal               Int
   discount               Int       @default(0)
   shippingCost           Int       @default(0)
+  shippingExpense        Int       @default(0) // Biaya ongkir ditanggung kantor (misal pengiriman pasokan ke stokis)
   total                  Int
   currency               String    @default("IDR")
   marketingPlanVersionId String?

@@ -438,6 +438,7 @@ async function main() {
     shippingAddress,
     referralMember,
     items,
+    isStockistOrder = false,
   }) {
     const orderItemsData = [];
     let subtotal = 0;
@@ -461,6 +462,13 @@ async function main() {
       });
     }
 
+    // Shipping Policy:
+    // Member dibebankan ongkir Rp20.000.
+    // Untuk pasokan stokis: gratis ongkir bagi stokis (shippingCost = 0), ditanggung kantor pusat sebagai beban operasional (shippingExpense = Rp35.000).
+    const shippingCost = isStockistOrder ? 0 : 20000;
+    const shippingExpense = isStockistOrder ? 35000 : 0;
+    const total = subtotal + shippingCost;
+
     return prisma.$transaction(async (tx) => {
       // 1. Create Order
       const order = await tx.order.create({
@@ -476,8 +484,11 @@ async function main() {
           orderType: hasFirstPack ? 'FIRST_PACK' : 'REPEAT_PURCHASE',
           subtotal,
           discount: 0,
-          shippingCost: 0,
-          total: subtotal,
+          shippingCost,
+          shippingExpense,
+          total,
+          fulfillmentSource: isStockistOrder ? 'REGIONAL_STOCKIST' : 'CENTRAL_WAREHOUSE',
+          stockistMemberId: isStockistOrder ? buyerMember?.id : null,
           paidAt: new Date(),
         },
       });
@@ -496,7 +507,7 @@ async function main() {
       await tx.payment.create({
         data: {
           orderId: order.id,
-          amount: subtotal,
+          amount: total,
           status: 'SUCCESS',
           provider: 'SIMULATED_BCA_VA',
           providerReference: `PAY-${orderNumber}`,
@@ -505,17 +516,42 @@ async function main() {
       });
 
       // 3. Post Payment to General Ledger:
-      // DEBIT: Payout Clearing (`ACC-COMP-PAYOUT`) - cash received
-      // CREDIT: Company Operations Revenue (`ACC-COMP-OPS`)
+      // DEBIT: Payout Clearing (`ACC-COMP-PAYOUT`) - total cash received
+      // CREDIT: Company Operations Revenue (`ACC-COMP-OPS`) - product sales
+      // CREDIT: Company Shipping Fee (`ACC-COMP-OPS`) - member shipping cost
+      const orderLedgerEntries = [
+        { accountCode: 'ACC-COMP-PAYOUT', direction: 'DEBIT', amount: total },
+        { accountCode: 'ACC-COMP-OPS', direction: 'CREDIT', amount: subtotal },
+      ];
+
+      if (shippingCost > 0) {
+        orderLedgerEntries.push({
+          accountCode: 'ACC-COMP-OPS',
+          direction: 'CREDIT',
+          amount: shippingCost,
+        });
+      }
+
+      // If stockist order, kantor menanggung beban ongkir sebagai biaya operasional kantor
+      if (shippingExpense > 0) {
+        orderLedgerEntries.push({
+          accountCode: 'ACC-COMP-OPS',
+          direction: 'DEBIT',
+          amount: shippingExpense,
+        });
+        orderLedgerEntries.push({
+          accountCode: 'ACC-COMP-PAYOUT',
+          direction: 'CREDIT',
+          amount: shippingExpense,
+        });
+      }
+
       await postLedger(tx, {
         referenceType: 'ORDER_PAYMENT',
         referenceId: order.id,
         idempotencyKey: `LEDGER-PAY-${order.id}`,
         memo: `Pembayaran Pesanan ${order.orderNumber} (${buyerName || buyerMember?.displayName})`,
-        entries: [
-          { accountCode: 'ACC-COMP-PAYOUT', direction: 'DEBIT', amount: subtotal },
-          { accountCode: 'ACC-COMP-OPS', direction: 'CREDIT', amount: subtotal },
-        ],
+        entries: orderLedgerEntries,
       });
 
       // 4. Calculate Commissions
@@ -713,15 +749,17 @@ async function main() {
   });
   console.log('✓ Order 0: Pembelian Box Perdana oleh Ahmad Fauzi (VRN-0001) -> Komisi ke Leader 3 (VRN-LDR-03) & Korporasi');
 
-  // Order 1: Siti Nurhaliza (VRN-0002) beli Paket Perdana Box (Rp500.000)
+  // Order 1: Pasokan Box ke Siti Nurhaliza (VRN-0002) - Master Stokis Surabaya
+  // Bebas ongkir bagi stokis, biaya ongkir Rp35.000 ditanggung kantor sebagai biaya operasional
   // Sponsor: VRN-0001 (Ahmad Fauzi)
   await processSimulationOrder({
     orderNumber: 'VRN-ORD-2026-0001',
     buyerMember: createdMembers['VRN-0002'],
     referralMember: createdMembers['VRN-0002'],
     items: [{ variant: boxVariant, quantity: 1 }],
+    isStockistOrder: true,
   });
-  console.log('✓ Order 1: Pembelian Box Perdana oleh Siti Nurhaliza (VRN-0002) -> Komisi Rp60.000 untuk Ahmad Fauzi (VRN-0001)');
+  console.log('✓ Order 1: Pasokan ke Master Stokis Siti Nurhaliza (VRN-0002) -> Bebas Ongkir Stokis (Beban Operasional Kantor Rp35.000), Komisi Rp60.000 untuk Ahmad Fauzi (VRN-0001)');
 
   // Order 2: Budi Santoso (VRN-0003) beli Paket Perdana Box (Rp500.000)
   // Sponsor: VRN-0001 (Ahmad Fauzi)
@@ -888,7 +926,7 @@ async function main() {
     },
   });
 
-  // Order 6: Pesanan BELUM BAYAR (PENDING_PAYMENT) senilai Rp500.000
+  // Order 6: Pesanan BELUM BAYAR (PENDING_PAYMENT) senilai Rp500.000 + Ongkir Rp20.000 = Rp520.000
   // Calon Pembeli: Hendra Gunawan via Referral Budi Santoso (VRN-0003)
   const pendingOrder = await prisma.order.create({
     data: {
@@ -902,8 +940,9 @@ async function main() {
       orderType: 'FIRST_PACK',
       subtotal: 500000,
       discount: 0,
-      shippingCost: 0,
-      total: 500000,
+      shippingCost: 20000,
+      shippingExpense: 0,
+      total: 520000,
     },
   });
 
