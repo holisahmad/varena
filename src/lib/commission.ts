@@ -151,7 +151,7 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
 
   // --- REWARD 3: REPEAT PURCHASE DEV REWARD ---
   if (totalSachets > 0) {
-    const devSachetPerLevel = plan.repeatDevReward * totalSachets; // Rp1.000 * qty
+    const devSachetPerLevel = plan.repeatDevReward * totalSachets; // Rp2.000 * qty
     for (let lvl = 1; lvl <= maxLevels; lvl++) {
       const uplineAtLevel = uplines.find((u) => u.level === lvl);
       if (uplineAtLevel && uplineAtLevel.memberStatus === 'ACTIVE') {

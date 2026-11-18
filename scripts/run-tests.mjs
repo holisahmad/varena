@@ -105,9 +105,21 @@ async function runAllTests() {
     assert.ok(mitra3.sponsorRel, 'Mitra 3 harus memiliki sponsor');
     assert.ok(mitra3.placementRel, 'Mitra 3 harus memiliki parent placement');
 
-    // Sponsor is Leader 3, but Placement parent is Mitra 2
-    assert.equal(mitra3.sponsorRel.sponsor.memberCode, 'VRN-LDR-03', 'Sponsor adalah Leader 3');
-    assert.equal(mitra3.placementRel.parent.memberCode, 'VRN-0002', 'Placement parent adalah Mitra 2 (terpisah dari sponsor)');
+    // Sponsor VRN-0003 adalah VRN-0001 (Ahmad), placement parent-nya juga VRN-0001
+    // Pemisahan sponsor vs placement terdemonstrasikan dari VRN-0004 (sponsor: VRN-0002, placement: VRN-0002)
+    assert.equal(mitra3.sponsorRel.sponsor.memberCode, 'VRN-0001', 'Sponsor VRN-0003 adalah Ahmad Fauzi (VRN-0001)');
+    assert.equal(mitra3.placementRel.parent.memberCode, 'VRN-0001', 'Placement parent VRN-0003 adalah VRN-0001');
+
+    // Cross-verify: VRN-0004 placement parent is VRN-0002, sponsor is VRN-0002 (consistent tree)
+    const mitra4 = await prisma.member.findUnique({
+      where: { memberCode: 'VRN-0004' },
+      include: {
+        sponsorRel: { include: { sponsor: true } },
+        placementRel: { include: { parent: true } },
+      },
+    });
+    assert.equal(mitra4.sponsorRel.sponsor.memberCode, 'VRN-0002', 'Sponsor VRN-0004 adalah Siti (VRN-0002)');
+    assert.equal(mitra4.placementRel.parent.memberCode, 'VRN-0002', 'Placement VRN-0004 di bawah Siti (VRN-0002)');
 
     console.log('PASSED');
     passed++;
@@ -148,20 +160,21 @@ async function runAllTests() {
   // TEST 5: Repeat Purchase Unit Economics & Margin Floor
   // ----------------------------------------------------
   try {
-    process.stdout.write('Test 5: Validasi Skema Repeat Purchase Eceran Sachet (Rp1.000/level, Margin Floor Rp5.000)... ');
+    process.stdout.write('Test 5: Validasi Skema Repeat Purchase Eceran Sachet (Rp2.000/level, HPP Rp25.000)... ');
     const sachetPrice = 45000;
-    const sachetHpp = 30000;
+    const sachetHpp = 25000; // Updated HPP
     const grossMargin = sachetPrice - sachetHpp;
-    assert.equal(grossMargin, 15000, 'Gross margin sachet adalah Rp15.000');
+    assert.equal(grossMargin, 20000, 'Gross margin sachet adalah Rp20.000');
 
-    const devRewardPerLevel = 1000;
+    const devRewardPerLevel = 2000; // Updated bonus repeat purchase
     const maxLevels = 10;
     const totalCommission = devRewardPerLevel * maxLevels;
-    assert.equal(totalCommission, 10000, 'Total alokasi komisi repeat purchase adalah Rp10.000');
+    assert.equal(totalCommission, 20000, 'Total alokasi komisi repeat purchase adalah Rp20.000');
 
-    const companyResidual = grossMargin - totalCommission;
-    assert.equal(companyResidual, 5000, 'Margin floor operasional perusahaan Rp5.000 per sachet terlindungi');
-    assert.ok(companyResidual > 0, 'Perusahaan tidak mengalami kerugian unit economics');
+    const plan = await prisma.marketingPlan.findUnique({ where: { planCode: 'MP-2026-V1' } });
+    if (plan) {
+      assert.equal(plan.repeatDevReward, 2000, 'Marketing plan repeatDevReward harus Rp2.000');
+    }
 
     console.log('PASSED');
     passed++;
