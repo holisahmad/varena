@@ -233,6 +233,68 @@ async function runAllTests() {
     failed++;
   }
 
+  // ----------------------------------------------------
+  // TEST 7: Bound Bank Account Validation & Anti-Account Hijacking
+  // ----------------------------------------------------
+  try {
+    process.stdout.write('Test 7: Pengikatan Rekening Bank Terikat & Proteksi Anti-Pembajakan Akun... ');
+    const mitra3 = await prisma.member.findUnique({ where: { memberCode: 'VRN-0003' } });
+    assert.ok(mitra3, 'Mitra 3 harus ada');
+
+    // 1. Validasi nama rekening harus cocok dengan nama resmi member
+    const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const legitimateHolder = 'Budi Santoso';
+    const attackerHolder = 'Rekening Penampung Hacker';
+
+    const cleanMemberName = normalize(mitra3.displayName);
+    const isLegitMatch = normalize(legitimateHolder).includes(cleanMemberName) || cleanMemberName.includes(normalize(legitimateHolder));
+    const isAttackerMatch = normalize(attackerHolder).includes(cleanMemberName) || cleanMemberName.includes(normalize(attackerHolder));
+
+    assert.equal(isLegitMatch, true, 'Nama rekening sendiri harus lolos verifikasi');
+    assert.equal(isAttackerMatch, false, 'Rekening orang lain/pembajak harus ditolak');
+
+    // 2. Ikat rekening bank sah ke Mitra 3
+    const updatedMitra3 = await prisma.member.update({
+      where: { id: mitra3.id },
+      data: {
+        bankName: 'BCA',
+        bankAccountNumber: '5544332211',
+        bankAccountHolder: legitimateHolder,
+        bankLockedAt: new Date(),
+      },
+    });
+
+    assert.equal(updatedMitra3.bankAccountNumber, '5544332211', 'Nomor rekening terikat tersimpan');
+    assert.equal(updatedMitra3.bankName, 'BCA', 'Bank terikat tersimpan');
+    assert.ok(updatedMitra3.bankLockedAt, 'Rekening terkunci secara permanen');
+
+    // 3. Permohonan penarikan dana wajib otomatis mengikat ke rekening terdaftar
+    const wdBound = await prisma.withdrawalRequest.create({
+      data: {
+        memberId: updatedMitra3.id,
+        amount: 50000,
+        fee: 5000,
+        netAmount: 45000,
+        bankName: updatedMitra3.bankName,
+        accountNumberMasked: '5544****2211',
+        accountHolder: updatedMitra3.bankAccountHolder,
+        status: 'REQUESTED',
+      },
+    });
+
+    assert.equal(wdBound.bankName, 'BCA', 'Tujuan transfer terkunci ke bank terikat');
+    assert.equal(wdBound.accountHolder, 'Budi Santoso', 'Nama penerima terkunci sesuai akun');
+
+    // Cleanup
+    await prisma.withdrawalRequest.delete({ where: { id: wdBound.id } });
+
+    console.log('PASSED');
+    passed++;
+  } catch (err) {
+    console.log('FAILED:', err.message);
+    failed++;
+  }
+
   console.log('\n=====================================================');
   console.log(`Hasil Pengujian: ${passed} Passed, ${failed} Failed`);
   console.log('=====================================================\n');

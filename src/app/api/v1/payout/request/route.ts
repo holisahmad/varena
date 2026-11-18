@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
     const body = await req.json();
-    const { memberCode, amount, bankName, accountNumber, accountHolder } = body;
+    const { memberCode, amount } = body;
 
     // 1. Rate limiting: max 5 requests per 10 minutes per IP/member
     const rateCheck = checkRateLimit(`payout:${memberCode || ip}`, 5, 10 * 60 * 1000);
@@ -18,18 +18,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Suspicious injection check
-    const rawInputs = [memberCode, bankName, accountNumber, accountHolder].filter(Boolean).join(' ');
-    if (detectSuspiciousPatterns(rawInputs)) {
+    if (!memberCode || !amount) {
       return NextResponse.json(
-        { error: 'Input mengandung karakter atau pola yang dilarang.' },
-        { status: 400 }
-      );
-    }
-
-    if (!memberCode || !amount || !bankName || !accountNumber || !accountHolder) {
-      return NextResponse.json(
-        { error: 'Semua field penarikan saldo wajib diisi lengkap.' },
+        { error: 'Kode member dan nominal penarikan wajib disertakan.' },
         { status: 400 }
       );
     }
@@ -50,12 +41,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
     }
 
+    // Security Check: Enforce Bound Bank Account
+    if (!member.bankAccountNumber || !member.bankName || !member.bankAccountHolder) {
+      return NextResponse.json(
+        {
+          error:
+            'Rekening bank belum diikat. Demi keamanan dana Anda dari pembajakan akun, daftarkan rekening bank atas nama sendiri terlebih dahulu.',
+        },
+        { status: 400 }
+      );
+    }
+
     const withdrawal = await requestPayout({
       memberId: member.id,
       amount: numAmount,
-      bankName,
-      accountNumber,
-      accountHolder,
     });
 
     return NextResponse.json({

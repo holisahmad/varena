@@ -2,7 +2,7 @@
 // Prisma Schema - Strict ACID compliance & auditability
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -71,6 +71,13 @@ model Member {
   nik          String?
   memberStatus String    @default("ACTIVE") // PENDING, ACTIVE, SUSPENDED, TERMINATED
   kycStatus    String    @default("VERIFIED") // PENDING, VERIFIED, REJECTED
+
+  // Bound Bank Account for Secure Payouts
+  bankName             String?
+  bankAccountNumber    String?
+  bankAccountHolder    String?
+  bankLockedAt         DateTime?
+
   joinedAt     DateTime  @default(now())
   activatedAt  DateTime?
   createdAt    DateTime  @default(now())

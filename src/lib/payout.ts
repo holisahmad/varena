@@ -5,16 +5,16 @@ import { withTransactionRetry } from './security';
 export interface RequestPayoutParams {
   memberId: string;
   amount: number;
-  bankName: string;
-  accountNumber: string;
-  accountHolder: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountHolder?: string;
 }
 
 /**
- * Request Payout from Member Wallet
+ * Request Payout from Member Wallet (Enforces Bound Bank Account)
  */
 export async function requestPayout(params: RequestPayoutParams) {
-  const { memberId, amount, bankName, accountNumber, accountHolder } = params;
+  const { memberId, amount } = params;
 
   if (amount < 50000) {
     throw new Error('Batas minimum penarikan saldo adalah Rp50.000.');
@@ -28,6 +28,17 @@ export async function requestPayout(params: RequestPayoutParams) {
     throw new Error('Member tidak ditemukan.');
   }
 
+  // Enforce Bound Bank Account
+  const effectiveBank = member.bankName || params.bankName;
+  const effectiveAcc = member.bankAccountNumber || params.accountNumber;
+  const effectiveHolder = member.bankAccountHolder || params.accountHolder;
+
+  if (!effectiveBank || !effectiveAcc || !effectiveHolder) {
+    throw new Error(
+      'Anda belum mendaftarkan rekening bank terikat. Daftarkan rekening bank atas nama sendiri terlebih dahulu sebelum melakukan penarikan.'
+    );
+  }
+
   // Check current ledger balance
   const wallet = await getMemberWallet(member.memberCode);
   if (wallet.availableBalance < amount) {
@@ -38,7 +49,7 @@ export async function requestPayout(params: RequestPayoutParams) {
   const netAmount = amount - fee;
 
   // Mask account number: e.g. "1234567890" -> "123****890"
-  const cleanAcc = accountNumber.trim();
+  const cleanAcc = effectiveAcc.trim();
   const masked = cleanAcc.length > 6 
     ? `${cleanAcc.slice(0, 3)}****${cleanAcc.slice(-3)}`
     : '****' + cleanAcc.slice(-2);
@@ -50,9 +61,9 @@ export async function requestPayout(params: RequestPayoutParams) {
         amount,
         fee,
         netAmount,
-        bankName,
+        bankName: effectiveBank,
         accountNumberMasked: masked,
-        accountHolder,
+        accountHolder: effectiveHolder,
         status: 'REQUESTED',
       },
     });

@@ -174,6 +174,14 @@ export async function getMemberWallet(memberCode: string) {
     pendingHold,
     withdrawals,
     accountCode: account.accountCode,
+    bankInfo: member ? {
+      bankName: member.bankName,
+      bankAccountNumber: member.bankAccountNumber,
+      bankAccountHolder: member.bankAccountHolder,
+      isBankLocked: !!member.bankAccountNumber,
+      legalName: member.legalName,
+      displayName: member.displayName,
+    } : null,
     statement: account.entries.map((e) => ({
       id: e.id,
       date: e.createdAt,

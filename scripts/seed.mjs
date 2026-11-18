@@ -297,6 +297,10 @@ async function main() {
         legalName: m.name,
         memberStatus: 'ACTIVE',
         kycStatus: 'VERIFIED',
+        bankName: m.code === 'VRN-0001' ? 'BCA' : m.code === 'VRN-0002' ? 'MANDIRI' : null,
+        bankAccountNumber: m.code === 'VRN-0001' ? '1234567890' : m.code === 'VRN-0002' ? '9876543210' : null,
+        bankAccountHolder: m.code === 'VRN-0001' ? 'Ahmad Fauzi' : m.code === 'VRN-0002' ? 'Siti Nurhaliza' : null,
+        bankLockedAt: m.code === 'VRN-0001' || m.code === 'VRN-0002' ? new Date() : null,
         activatedAt: new Date(),
       },
     });
