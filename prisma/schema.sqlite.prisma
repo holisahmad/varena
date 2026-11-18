@@ -1,0 +1,430 @@
+// VARENA Direct Selling & Multilevel Marketing Platform
+// Prisma Schema - Strict ACID compliance & auditability
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. Identity & RBAC
+// -------------------------------------------------------------
+
+model User {
+  id              String      @id @default(uuid())
+  email           String      @unique
+  phone           String?     @unique
+  passwordHash    String
+  displayName     String
+  status          String      @default("ACTIVE") // ACTIVE, SUSPENDED, TERMINATED
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  userRoles       UserRole[]
+  member          Member?
+  orders          Order[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  code        String     @unique // OWNER, KOPERASI, OPERATIONS, ADMIN_1, ADMIN_2, LEADER_1, LEADER_2, LEADER_3, MITRA, CONSUMER, AUDITOR
+  name        String
+  description String?
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// -------------------------------------------------------------
+// 2. Member & Network (Sponsor vs. Placement)
+// -------------------------------------------------------------
+
+model Member {
+  id           String    @id @default(uuid())
+  userId       String    @unique
+  memberCode   String    @unique // e.g. VRN-0001
+  displayName  String
+  legalName    String
+  nik          String?
+  memberStatus String    @default("ACTIVE") // PENDING, ACTIVE, SUSPENDED, TERMINATED
+  kycStatus    String    @default("VERIFIED") // PENDING, VERIFIED, REJECTED
+  joinedAt     DateTime  @default(now())
+  activatedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relationships
+  sponsorRel            SponsorRelationship?   @relation("SponsorSelf")
+  sponsoredMembers      SponsorRelationship[]  @relation("SponsorUpline")
+  
+  placementRel          PlacementRelationship? @relation("PlacementSelf")
+  placedChildren        PlacementRelationship[] @relation("PlacementParent")
+  
+  placementHistories    PlacementHistory[]
+  commissionsEarned     CommissionItem[]       @relation("CommissionBeneficiary")
+  ledgerAccounts        LedgerAccount[]
+  withdrawalRequests    WithdrawalRequest[]
+  referredOrders        Order[]                @relation("ReferredOrders")
+
+  @@map("members")
+}
+
+model SponsorRelationship {
+  id              String   @id @default(uuid())
+  memberId        String   @unique
+  sponsorMemberId String
+  reason          String?  @default("INITIAL_REGISTRATION")
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  member  Member @relation("SponsorSelf", fields: [memberId], references: [id], onDelete: Cascade)
+  sponsor Member @relation("SponsorUpline", fields: [sponsorMemberId], references: [id], onDelete: Restrict)
+
+  @@index([sponsorMemberId])
+  @@map("sponsor_relationships")
+}
+
+model PlacementRelationship {
+  id             String    @id @default(uuid())
+  memberId       String    @unique // Exactly 1 active parent node
+  parentMemberId String
+  status         String    @default("ACTIVE") // ACTIVE, TRANSFERRED
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  createdBy      String?
+  approvedBy     String?
+  createdAt      DateTime  @default(now())
+
+  member Member @relation("PlacementSelf", fields: [memberId], references: [id], onDelete: Cascade)
+  parent Member @relation("PlacementParent", fields: [parentMemberId], references: [id], onDelete: Restrict)
+
+  @@index([parentMemberId, status])
+  @@map("placement_relationships")
+}
+
+model PlacementHistory {
+  id          String   @id @default(uuid())
+  memberId    String
+  oldParentId String?
+  newParentId String
+  effectiveAt DateTime @default(now())
+  reason      String
+  requestedBy String
+  approvedBy  String
+  createdAt   DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, effectiveAt])
+  @@map("placement_histories")
+}
+
+// -------------------------------------------------------------
+// 3. Catalog, Inventory & Orders
+// -------------------------------------------------------------
+
+model Product {
+  id          String           @id @default(uuid())
+  name        String
+  slug        String           @unique
+  description String
+  category    String           @default("HERBAL_BEVERAGE")
+  status      String           @default("ACTIVE") // DRAFT, ACTIVE, ARCHIVED
+  bpomNumber  String?
+  halalNumber String?
+  imageUrl    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  variants ProductVariant[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id            String      @id @default(uuid())
+  productId     String
+  sku           String      @unique
+  name          String
+  packSize      Int         @default(10) // 10 sachets or 1 sachet
+  unit          String      @default("box") // box, sachet
+  price         Int         // in IDR Integer (e.g. 500000 or 45000)
+  hpp           Int         // in IDR Integer (e.g. 300000 or 30000)
+  stockQuantity Int         @default(1000)
+  status        String      @default("ACTIVE")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@map("product_variants")
+}
+
+model Order {
+  id                     String    @id @default(uuid())
+  orderNumber            String    @unique // e.g. ORD-20261113-0001
+  buyerUserId            String?
+  buyerName              String
+  buyerPhone             String
+  buyerEmail             String?
+  shippingAddress        String
+  referralMemberId       String?
+  orderStatus            String    @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, COMPLETED, CANCELLED, REFUNDED
+  orderType              String    @default("FIRST_PACK") // FIRST_PACK, REPEAT_PURCHASE
+  subtotal               Int
+  discount               Int       @default(0)
+  shippingCost           Int       @default(0)
+  total                  Int
+  currency               String    @default("IDR")
+  marketingPlanVersionId String?
+  paidAt                 DateTime?
+  courierName            String?   // e.g. JNE, J&T, SiCepat, Pos Indonesia
+  trackingNumber         String?   // e.g. JNE-88291024-ID
+  shippedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  buyerUser      User?           @relation(fields: [buyerUserId], references: [id], onDelete: SetNull)
+  referralMember Member?         @relation("ReferredOrders", fields: [referralMemberId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  payments       Payment[]
+  commissionRuns CommissionRun[]
+
+  @@index([orderStatus, paidAt])
+  @@index([referralMemberId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String @id @default(uuid())
+  orderId          String
+  productVariantId String
+  skuSnapshot      String
+  nameSnapshot     String
+  unitPrice        Int
+  hppSnapshot      Int
+  quantity         Int
+  lineTotal        Int
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
+
+  @@map("order_items")
+}
+
+model Payment {
+  id                String    @id @default(uuid())
+  orderId           String
+  provider          String    @default("MANUAL_TRANSFER") // MANUAL_TRANSFER, MIDTRANS, XENDIT, SIMULATED
+  providerReference String?
+  amount            Int
+  status            String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  paidAt            DateTime?
+  webhookEventId    String?   @unique
+  createdAt         DateTime  @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// -------------------------------------------------------------
+// 4. Marketing Plan & Commission Engine
+// -------------------------------------------------------------
+
+model MarketingPlan {
+  id                         String    @id @default(uuid())
+  planCode                   String    @unique // e.g. MP-2026-V1
+  version                    Int       @default(1)
+  name                       String
+  status                     String    @default("ACTIVE") // DRAFT, ACTIVE, RETIRED
+  firstPackDirectReward      Int       @default(50000)
+  firstPackDevReward         Int       @default(10000)
+  firstPackDevMaxLevels      Int       @default(10)
+  repeatDevReward            Int       @default(1000) // Rp1.000 / sachet baseline
+  repeatDevMaxLevels         Int       @default(10)
+  effectiveFrom              DateTime  @default(now())
+  effectiveTo                DateTime?
+  createdBy                  String
+  approvedBy                 String?
+  approvalReference          String?
+  createdAt                  DateTime  @default(now())
+
+  commissionRuns CommissionRun[]
+
+  @@map("marketing_plans")
+}
+
+model CommissionRun {
+  id                 String   @id @default(uuid())
+  sourceOrderId      String
+  planVersionId      String
+  calculationStatus  String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, REVERSED
+  idempotencyKey     String   @unique
+  totalCommission    Int      @default(0)
+  unallocatedAmount  Int      @default(0)
+  inputSnapshot      String?  // JSON stringified input
+  startedAt          DateTime @default(now())
+  completedAt        DateTime @default(now())
+
+  order Order         @relation(fields: [sourceOrderId], references: [id], onDelete: Cascade)
+  plan  MarketingPlan @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+
+  items CommissionItem[]
+
+  @@map("commission_runs")
+}
+
+model CommissionItem {
+  id                  String   @id @default(uuid())
+  commissionRunId     String
+  beneficiaryMemberId String?  // Null if unallocated
+  rewardType          String   // DIRECT_SPONSOR, DEVELOPMENT_PLACEMENT, UNALLOCATED_DEV_RESERVE
+  levelNumber         Int      @default(0)
+  amount              Int      // IDR Integer
+  status              String   @default("ELIGIBLE") // ELIGIBLE, HELD, APPROVED, PAID, REVERSED
+  reasonCode          String?  // e.g. "DIRECT_SPONSOR_BONUS", "UPLINE_DEV_L1", "UNALLOCATED_L9_EMPTY"
+  formulaSnapshot     String?
+  createdAt           DateTime @default(now())
+
+  commissionRun CommissionRun @relation(fields: [commissionRunId], references: [id], onDelete: Cascade)
+  beneficiary   Member?       @relation("CommissionBeneficiary", fields: [beneficiaryMemberId], references: [id], onDelete: SetNull)
+
+  @@index([beneficiaryMemberId, status])
+  @@index([commissionRunId])
+  @@map("commission_items")
+}
+
+// -------------------------------------------------------------
+// 5. Double-Entry Ledger & Wallet
+// -------------------------------------------------------------
+
+model LedgerAccount {
+  id          String   @id @default(uuid())
+  ownerType   String   // MEMBER, COMPANY_OPERATIONS, COMPANY_UNALLOCATED_RESERVE, COMPANY_PAYOUT_CLEARING
+  ownerId     String?  // memberId or company internal key
+  accountCode String   @unique // e.g. ACC-MBR-VRN-0001, ACC-COMP-OPS
+  accountType String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  currency    String   @default("IDR")
+  balance     Int      @default(0)
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+
+  member  Member?       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  entries LedgerEntry[]
+
+  @@map("ledger_accounts")
+}
+
+model LedgerTransaction {
+  id             String   @id @default(uuid())
+  referenceType  String   // ORDER_PAYMENT, COMMISSION_CREDIT, WITHDRAWAL_HOLD, WITHDRAWAL_PAID, WITHDRAWAL_REVERSAL
+  referenceId    String   // orderId, commissionRunId, withdrawalId
+  transactionType String  // STANDARD, REVERSAL
+  status         String   @default("POSTED") // POSTED, VOID
+  idempotencyKey String   @unique
+  memo           String
+  postedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  entries LedgerEntry[]
+
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String   @id @default(uuid())
+  transactionId String
+  accountId     String
+  direction     String   // DEBIT, CREDIT
+  amount        Int      // IDR Integer > 0
+  memo          String?
+  createdAt     DateTime @default(now())
+
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId, createdAt])
+  @@index([transactionId])
+  @@map("ledger_entries")
+}
+
+// -------------------------------------------------------------
+// 6. Withdrawal & Payout
+// -------------------------------------------------------------
+
+model WithdrawalRequest {
+  id                   String    @id @default(uuid())
+  memberId             String
+  amount               Int       // requested amount
+  fee                  Int       @default(0) // withdrawal administrative fee
+  netAmount            Int       // amount to transfer
+  bankName             String
+  accountNumberMasked  String
+  accountHolder        String
+  status               String    @default("REQUESTED") // REQUESTED, UNDER_REVIEW, APPROVED, REJECTED, PAID, FAILED
+  rejectionReason      String?
+  providerReference    String?
+  requestedAt          DateTime  @default(now())
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  paidAt               DateTime?
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([status, requestedAt])
+  @@index([memberId, status])
+  @@map("withdrawal_requests")
+}
+
+// -------------------------------------------------------------
+// 7. Security, Audit & Outbox
+// -------------------------------------------------------------
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorUserId   String?
+  action        String   // LOGIN, ORDER_CREATED, PLACEMENT_TRANSFER, COMMISSION_RUN, WITHDRAWAL_APPROVE, etc.
+  entityType    String   // ORDER, MEMBER, COMMISSION, WITHDRAWAL
+  entityId      String
+  beforeJson    String?
+  afterJson     String?
+  reason        String?
+  ipAddress     String?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+

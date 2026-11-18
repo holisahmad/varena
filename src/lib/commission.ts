@@ -1,6 +1,7 @@
 import prisma from './prisma';
 import { getPlacementUplines, getDirectSponsor } from './network';
 import { postLedgerTransaction } from './ledger';
+import { withTransactionRetry } from './security';
 
 export interface CommissionResult {
   runId: string;
@@ -178,7 +179,7 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
   }
 
   // 4. Persist Commission Run & Items in an ACID transaction
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const commissionRun = await tx.commissionRun.create({
       data: {
         sourceOrderId: order.id,
@@ -274,5 +275,5 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
         reason: i.reasonCode,
       })),
     };
-  }, { maxWait: 15000, timeout: 30000 });
+  });
 }

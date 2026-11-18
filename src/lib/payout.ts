@@ -1,5 +1,6 @@
 import prisma from './prisma';
 import { getMemberWallet, postLedgerTransaction } from './ledger';
+import { withTransactionRetry } from './security';
 
 export interface RequestPayoutParams {
   memberId: string;
@@ -42,7 +43,7 @@ export async function requestPayout(params: RequestPayoutParams) {
     ? `${cleanAcc.slice(0, 3)}****${cleanAcc.slice(-3)}`
     : '****' + cleanAcc.slice(-2);
 
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const withdrawal = await tx.withdrawalRequest.create({
       data: {
         memberId,
@@ -57,7 +58,7 @@ export async function requestPayout(params: RequestPayoutParams) {
     });
 
     return withdrawal;
-  }, { maxWait: 15000, timeout: 30000 });
+  });
 }
 
 /**
@@ -87,7 +88,7 @@ export async function approvePayout({
 
   const memberCode = withdrawal.member.memberCode;
 
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     // 1. Update withdrawal status to PAID
     const updated = await tx.withdrawalRequest.update({
       where: { id: withdrawalId },
@@ -141,5 +142,5 @@ export async function approvePayout({
     });
 
     return updated;
-  }, { maxWait: 15000, timeout: 30000 });
+  });
 }

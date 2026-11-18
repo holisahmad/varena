@@ -1,11 +1,32 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { checkRateLimit, detectSuspiciousPatterns, withTransactionRetry } from '@/lib/security';
 
 export async function POST(req: Request) {
   try {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+
+    // 1. Rate limiting: max 10 registrations per hour per IP
+    const rateCheck = checkRateLimit(`reg:${ip}`, 10, 60 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Terlalu banyak permintaan pendaftaran. Coba lagi dalam ${rateCheck.retryAfterSec} detik.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { email, password, displayName, legalName, phone, sponsorCode, placementParentCode } = body;
+
+    // 2. Suspicious injection check
+    const rawInputs = [email, displayName, legalName, phone, sponsorCode, placementParentCode].filter(Boolean).join(' ');
+    if (detectSuspiciousPatterns(rawInputs)) {
+      return NextResponse.json(
+        { error: 'Input terdeteksi mengandung format tidak valid / mencurigakan.' },
+        { status: 400 }
+      );
+    }
 
     if (!email || !password || !displayName || !sponsorCode) {
       return NextResponse.json(
@@ -43,7 +64,7 @@ export async function POST(req: Request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await withTransactionRetry(async (tx) => {
       // Create User
       const user = await tx.user.create({
         data: {

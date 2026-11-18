@@ -2,7 +2,7 @@
 // Prisma Schema - Strict ACID compliance & auditability
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -318,6 +318,7 @@ model CommissionItem {
   beneficiary   Member?       @relation("CommissionBeneficiary", fields: [beneficiaryMemberId], references: [id], onDelete: SetNull)
 
   @@index([beneficiaryMemberId, status])
+  @@index([commissionRunId])
   @@map("commission_items")
 }
 
@@ -371,6 +372,7 @@ model LedgerEntry {
   account     LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@index([accountId, createdAt])
+  @@index([transactionId])
   @@map("ledger_entries")
 }
 
@@ -398,6 +400,7 @@ model WithdrawalRequest {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([status, requestedAt])
+  @@index([memberId, status])
   @@map("withdrawal_requests")
 }
 

@@ -1,6 +1,7 @@
 import prisma from './prisma';
 import { calculateOrderCommissions } from './commission';
 import { postLedgerTransaction } from './ledger';
+import { withTransactionRetry } from './security';
 
 export interface CheckoutItem {
   variantId: string;
@@ -77,7 +78,7 @@ export async function createOrder(payload: CheckoutPayload) {
   const orderNumber = `VRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
 
   // 3. Persist Order in transaction
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const order = await tx.order.create({
       data: {
         orderNumber,
@@ -258,7 +259,7 @@ export async function shipOrder({
     throw new Error(`Pesanan dengan status ${order.orderStatus} tidak dapat diproses kirim.`);
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {
@@ -311,7 +312,7 @@ export async function completeOrder({
     throw new Error(`Hanya pesanan berstatus SHIPPED yang dapat diselesaikan.`);
   }
 
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const updated = await tx.order.update({
       where: { id: orderId },
       data: {

@@ -1,4 +1,5 @@
 import prisma from './prisma';
+import { withTransactionRetry } from './security';
 
 export interface LedgerEntryItem {
   accountCode: string;
@@ -111,7 +112,7 @@ export async function postLedgerTransaction(params: PostTransactionParams, txCli
     return runOnTx(txClient);
   }
 
-  return prisma.$transaction(runOnTx, { maxWait: 15000, timeout: 30000 });
+  return withTransactionRetry(runOnTx);
 }
 
 /**
