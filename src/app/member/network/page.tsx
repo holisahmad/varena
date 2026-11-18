@@ -100,28 +100,30 @@ export default function MemberNetworkPage() {
         </div>
 
         {/* Tab Switcher */}
-        <div className="inline-flex p-1 rounded-xl bg-varena-ivory-surface border border-varena-taupe/20 text-xs font-semibold">
+        <div className="inline-flex flex-wrap p-1 rounded-xl bg-varena-ivory-surface border border-varena-taupe/20 text-xs font-semibold gap-1">
           <button
             onClick={() => setTab('placement')}
-            className={`px-4 py-2 rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 ${
               tab === 'placement'
                 ? 'bg-varena-espresso text-varena-gold-light shadow-sm'
                 : 'text-varena-taupe hover:text-varena-espresso'
             }`}
           >
-            <GitFork className="w-3.5 h-3.5" />
-            <span>Pohon Penempatan (Placement)</span>
+            <GitFork className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">Pohon Penempatan (Placement)</span>
+            <span className="sm:hidden">Placement</span>
           </button>
           <button
             onClick={() => setTab('sponsor')}
-            className={`px-4 py-2 rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-3 py-2 rounded-lg transition flex items-center gap-1.5 ${
               tab === 'sponsor'
                 ? 'bg-varena-espresso text-varena-gold-light shadow-sm'
                 : 'text-varena-taupe hover:text-varena-espresso'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Garis Sponsor Langsung</span>
+            <Users className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">Garis Sponsor Langsung</span>
+            <span className="sm:hidden">Sponsor</span>
           </button>
         </div>
       </div>
@@ -258,7 +260,7 @@ export default function MemberNetworkPage() {
             <div className="text-center py-12 text-xs text-varena-taupe">Memuat daftar sponsor...</div>
           ) : sponsorList.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-xs text-left min-w-[560px]">
                 <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                   <tr>
                     <th className="py-3 px-4">Kode Mitra</th>

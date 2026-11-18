@@ -894,7 +894,7 @@ export default function AdminPage() {
             value={omniQuery}
             onChange={(e) => handleOmniSearch(e.target.value)}
             onFocus={() => { if (omniQuery.length >= 2) setShowOmniDropdown(true); }}
-            placeholder="Omni-Search: Cari kode mitra (VRN-0001), nomor pesanan, resi kurir, rekening bank, atau mutasi ledger..."
+            placeholder="Cari kode mitra, nomor pesanan, resi kurir, atau rekening bank..."
             className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-varena-taupe/30 text-xs focus:outline-none focus:border-varena-gold bg-white shadow-sm font-medium"
           />
           {omniLoading && (
@@ -1218,7 +1218,7 @@ export default function AdminPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[600px]">
                   <thead className="bg-amber-50 text-amber-900 uppercase font-semibold border-b border-amber-200">
                     <tr>
                       <th className="py-2.5 px-3">No. Pesanan</th>
@@ -1351,7 +1351,7 @@ export default function AdminPage() {
                   setOrderSearchQuery(e.target.value);
                   loadFilteredOrders(orderStatusFilter, e.target.value);
                 }}
-                placeholder="Cari nomor pesanan, nama pembeli, nomor telepon, atau nomor resi kurir..."
+                placeholder="Cari nomor pesanan, nama pembeli, telepon, atau resi..."
                 className="w-full pl-9 pr-4 py-2 rounded-lg border border-varena-taupe/30 text-xs focus:outline-none focus:border-varena-gold bg-white"
               />
             </div>
@@ -1373,7 +1373,7 @@ export default function AdminPage() {
           {/* Payment Proof Review Section */}
           {paymentProofOrders.length > 0 && (
             <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-amber-600" />
                 <h3 className="font-serif font-bold text-amber-900">
                   Konfirmasi Transfer Manual ({paymentProofOrders.length} pesanan)
@@ -1475,7 +1475,7 @@ export default function AdminPage() {
 
             {orders.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[900px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">No. Order / Tanggal</th>
@@ -1778,7 +1778,7 @@ export default function AdminPage() {
 
             {/* Batch Action Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-varena-ivory-light border border-varena-taupe/20">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleSelectAllPayouts}
@@ -1798,7 +1798,7 @@ export default function AdminPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <a
                   href="/api/v1/admin/payouts/batch-export?status=REQUESTED"
                   download="varena_batch_payout_export.csv"
@@ -1829,7 +1829,7 @@ export default function AdminPage() {
 
             {withdrawals.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[950px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3 w-8">#</th>
@@ -2132,7 +2132,7 @@ export default function AdminPage() {
               </p>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[600px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Kode Mitra</th>
@@ -2333,7 +2333,7 @@ export default function AdminPage() {
 
             {auditLogs.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[600px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Waktu Kejadian</th>
@@ -2519,7 +2519,7 @@ export default function AdminPage() {
 
             {stockists.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[600px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Kode Mitra</th>
@@ -2617,7 +2617,7 @@ export default function AdminPage() {
 
             {waOutboxMessages.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[600px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Waktu Dispatch</th>

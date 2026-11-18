@@ -158,7 +158,7 @@ export default function MemberDashboardPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
       {/* Top Welcome Card */}
-      <div className="bg-gradient-to-r from-varena-espresso-dark via-[#3A2C23] to-varena-espresso text-varena-ivory p-6 sm:p-8 rounded-2xl border border-varena-gold/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+      <div className="bg-gradient-to-r from-varena-espresso-dark via-[#3A2C23] to-varena-espresso text-varena-ivory p-5 sm:p-8 rounded-2xl border border-varena-gold/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <div className="flex items-center gap-4">
           <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-varena-gold/60 p-0.5 bg-varena-espresso-dark flex-shrink-0 shadow-md">
             <Image
@@ -173,7 +173,7 @@ export default function MemberDashboardPage() {
             <div className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-gold-light border border-varena-gold/30 mb-1">
               Portal Kemitraan Resmi
             </div>
-            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-varena-ivory-light">
+            <h1 className="font-serif text-xl sm:text-3xl font-bold text-varena-ivory-light">
               Halo, {user.displayName}
             </h1>
             <p className="text-xs text-varena-taupe-light mt-0.5 font-mono">
@@ -183,13 +183,13 @@ export default function MemberDashboardPage() {
         </div>
 
         {/* Referral Share Box */}
-        <div className="bg-varena-espresso/80 border border-varena-gold/40 p-3.5 rounded-xl flex flex-col gap-2 max-w-sm w-full">
+        <div className="bg-varena-espresso/80 border border-varena-gold/40 p-3.5 rounded-xl flex flex-col gap-2 w-full sm:max-w-sm">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-varena-gold-light flex items-center gap-1.5">
               <Share2 className="w-3.5 h-3.5" />
-              <span>Tautan Referral Anda:</span>
+              <span>Tautan Referral:</span>
             </span>
-            {copied && <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Tersalin ke Clipboard!</span>}
+            {copied && <span className="text-[10px] text-emerald-400 font-semibold animate-pulse">Tersalin!</span>}
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -197,7 +197,7 @@ export default function MemberDashboardPage() {
               readOnly
               value={referralLink}
               onClick={(e) => (e.target as HTMLInputElement).select()}
-              className="bg-black/30 border border-[#5A4535] text-[11px] font-mono text-varena-ivory px-2.5 py-1.5 rounded flex-1 select-all outline-none cursor-pointer"
+              className="bg-black/30 border border-[#5A4535] text-[11px] font-mono text-varena-ivory px-2.5 py-1.5 rounded flex-1 min-w-0 select-all outline-none cursor-pointer"
             />
             <button
               type="button"
@@ -310,13 +310,13 @@ export default function MemberDashboardPage() {
               <div className="font-serif text-2xl font-bold text-varena-espresso mt-1">
                 Rp{(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')}
               </div>
-              <div className="text-[11px] text-varena-taupe mt-1">
+              <div className="text-[11px] text-varena-taupe mt-1 leading-relaxed">
                 {memberProfile.uniqueCodeBalance >= 10000 ? (
                   <>
-                    ✓ <strong className="text-emerald-700">Rp{(Math.floor(memberProfile.uniqueCodeBalance / 1000) * 1000).toLocaleString('id-ID')}</strong> eligible ditarik (kelipatan Rp1.000)
+                    ✓ <strong className="text-emerald-700">Rp{(Math.floor(memberProfile.uniqueCodeBalance / 1000) * 1000).toLocaleString('id-ID')}</strong> eligible ditarik
                     {memberProfile.uniqueCodeBalance % 1000 > 0 && (
                       <span className="block text-stone-500 text-[10px]">
-                        Sisa Rp{(memberProfile.uniqueCodeBalance % 1000).toLocaleString('id-ID')} tetap tersimpan di akun
+                        Sisa Rp{(memberProfile.uniqueCodeBalance % 1000).toLocaleString('id-ID')} tersimpan
                       </span>
                     )}
                   </>
@@ -379,7 +379,7 @@ export default function MemberDashboardPage() {
 
         {personalOrders.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+            <table className="w-full text-xs text-left min-w-[600px]">
               <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                 <tr>
                   <th className="py-2.5 px-3">No. Pesanan</th>
@@ -518,7 +518,7 @@ export default function MemberDashboardPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+            <table className="w-full text-xs text-left min-w-[560px]">
               <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                 <tr>
                   <th className="py-2.5 px-3">No. Pesanan</th>

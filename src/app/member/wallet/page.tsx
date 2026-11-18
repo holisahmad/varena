@@ -278,7 +278,7 @@ export default function MemberWalletPage() {
                 )}
 
                 <form onSubmit={handleBindBankAccount} className="space-y-3" suppressHydrationWarning>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="block font-semibold text-varena-espresso mb-1">Pilih Bank *</label>
                       <select
@@ -521,7 +521,7 @@ export default function MemberWalletPage() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[560px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Tanggal</th>
@@ -594,7 +594,7 @@ export default function MemberWalletPage() {
               <div className="text-center py-16 text-xs text-varena-taupe">Memuat buku besar...</div>
             ) : wallet?.statement && wallet.statement.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-xs text-left min-w-[480px]">
                   <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
                     <tr>
                       <th className="py-2.5 px-3">Tanggal</th>

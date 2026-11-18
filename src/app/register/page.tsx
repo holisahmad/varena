@@ -159,7 +159,7 @@ function RegisterForm() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="block font-semibold text-varena-espresso mb-1">Email *</label>
                 <input
