@@ -24,8 +24,17 @@ interface NotificationDropdownProps {
 export default function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { items, totalBadgeCount, markAllAsRead, ackOrders, ackWallet, ackAdminOrders, ackAdminPayout } =
-    useNotifications();
+  const {
+    items,
+    totalBadgeCount,
+    markAllAsRead,
+    markItemAsRead,
+    isItemRead,
+    ackOrders,
+    ackWallet,
+    ackAdminOrders,
+    ackAdminPayout,
+  } = useNotifications();
 
   // Close on Escape or click outside
   useEffect(() => {
@@ -53,12 +62,7 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
   if (!isOpen) return null;
 
   const handleItemClick = (item: NotificationItem) => {
-    // Ack according to type
-    if (item.type === 'ORDER_PENDING' || item.type === 'ORDER_SHIPPED') ackOrders();
-    else if (item.type === 'COMMISSION_NEW' || item.type === 'PAYOUT_STATUS') ackWallet();
-    else if (item.type === 'ADMIN_ORDER') ackAdminOrders();
-    else if (item.type === 'ADMIN_PAYOUT') ackAdminPayout();
-
+    markItemAsRead(item.id);
     onClose();
     router.push(item.url);
   };
@@ -188,30 +192,38 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
               </p>
             </div>
           ) : (
-            items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleItemClick(item)}
-                className="w-full text-left p-3 hover:bg-white/5 transition flex items-start gap-3 group relative cursor-pointer"
-              >
-                {getItemIcon(item.type)}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-semibold text-varena-gold-light truncate group-hover:text-white transition">
-                      {item.title}
-                    </span>
-                    <span className="text-[10px] text-varena-taupe-light font-mono flex-shrink-0">
-                      {formatRelativeTime(item.createdAt)}
-                    </span>
+            items.map((item) => {
+              const unread = !isItemRead(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleItemClick(item)}
+                  className={`w-full text-left p-3 hover:bg-white/10 transition flex items-start gap-3 group relative cursor-pointer ${
+                    unread ? 'bg-white/[0.04]' : 'opacity-85'
+                  }`}
+                >
+                  {getItemIcon(item.type)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 truncate">
+                        {unread && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
+                        <span className="text-xs font-semibold text-varena-gold-light truncate group-hover:text-white transition">
+                          {item.title}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-varena-taupe-light font-mono flex-shrink-0">
+                        {formatRelativeTime(item.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-varena-ivory/80 line-clamp-2 mt-0.5 leading-snug">
+                      {item.message}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-varena-ivory/80 line-clamp-2 mt-0.5 leading-snug">
-                    {item.message}
-                  </p>
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-varena-taupe-light group-hover:text-varena-gold group-hover:translate-x-0.5 transition flex-shrink-0 mt-1 opacity-60 group-hover:opacity-100" />
-              </button>
-            ))
+                  <ArrowRight className="w-3.5 h-3.5 text-varena-taupe-light group-hover:text-varena-gold group-hover:translate-x-0.5 transition flex-shrink-0 mt-1 opacity-60 group-hover:opacity-100" />
+                </button>
+              );
+            })
           )}
         </div>
 

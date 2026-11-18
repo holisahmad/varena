@@ -36,30 +36,24 @@ interface AdminBadge {
 
 type BadgeData = MemberBadge | AdminBadge | { role: 'guest'; total: 0; items?: [] } | null;
 
-// ─── Ack helpers (localStorage) ─────────────────────────────────────────────
+// ─── Read Items Storage (localStorage) ──────────────────────────────────────
 
-const ACK_KEY = 'varena_notif_ack';
+const READ_ITEMS_KEY = 'varena_read_notif_ids';
 
-function getAck(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
+function getReadIds(): string[] {
+  if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(ACK_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(READ_ITEMS_KEY) || '[]');
   } catch {
-    return {};
+    return [];
   }
 }
 
-function setAck(key: string) {
-  const ack = getAck();
-  ack[key] = new Date().toISOString();
-  localStorage.setItem(ACK_KEY, JSON.stringify(ack));
-}
-
-function isNewer(latestAt: string | null | undefined, ackKey: string): boolean {
-  if (!latestAt) return false;
-  const ack = getAck();
-  if (!ack[ackKey]) return true; // never acked
-  return new Date(latestAt) > new Date(ack[ackKey]);
+function saveReadIds(ids: string[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(READ_ITEMS_KEY, JSON.stringify(ids.slice(-100)));
+  } catch {}
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -68,19 +62,17 @@ interface NotificationContextValue {
   badge: BadgeData;
   items: NotificationItem[];
   totalBadgeCount: number;
-  // Computed member badge counts (0 = no badge)
   memberOrdersBadge: number;
   memberWalletBadge: number;
-  // Computed admin badge counts
   adminOrdersBadge: number;
   adminPayoutBadge: number;
-  // Ack functions
+  isItemRead: (id: string) => boolean;
   ackOrders: () => void;
   ackWallet: () => void;
   ackAdminOrders: () => void;
   ackAdminPayout: () => void;
+  markItemAsRead: (id: string) => void;
   markAllAsRead: () => void;
-  // Force refresh
   refresh: () => void;
 }
 
@@ -92,10 +84,12 @@ const NotificationContext = createContext<NotificationContextValue>({
   memberWalletBadge: 0,
   adminOrdersBadge: 0,
   adminPayoutBadge: 0,
+  isItemRead: () => false,
   ackOrders: () => {},
   ackWallet: () => {},
   ackAdminOrders: () => {},
   ackAdminPayout: () => {},
+  markItemAsRead: () => {},
   markAllAsRead: () => {},
   refresh: () => {},
 });
@@ -104,8 +98,13 @@ const NotificationContext = createContext<NotificationContextValue>({
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [badge, setBadge] = useState<BadgeData>(null);
-  const [tick, setTick] = useState(0);
+  const [readIds, setReadIds] = useState<string[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Initialize read IDs from localStorage
+  useEffect(() => {
+    setReadIds(getReadIds());
+  }, []);
 
   const fetchBadge = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -147,73 +146,103 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [fetchBadge]);
 
-  // ── Computed badge values ──────────────────────────────────────────────────
+  const items: NotificationItem[] =
+    badge && 'items' in badge && Array.isArray(badge.items) ? badge.items : [];
 
-  const memberOrdersBadge = (() => {
-    if (!badge || badge.role !== 'member') return 0;
-    if (!isNewer(badge.orders.latestAt, 'orders')) return 0;
-    return badge.orders.count;
-  })();
+  const isItemRead = useCallback(
+    (id: string) => readIds.includes(id),
+    [readIds]
+  );
 
-  const memberWalletBadge = (() => {
-    if (!badge || badge.role !== 'member') return 0;
-    return isNewer(badge.wallet.latestAt, 'wallet') ? 1 : 0;
-  })();
+  // Unread items
+  const unreadItems = items.filter((it) => !readIds.includes(it.id));
 
-  const adminOrdersBadge = (() => {
-    if (!badge || badge.role !== 'admin') return 0;
-    if (!isNewer(badge.orders.latestAt, 'adminOrders')) return 0;
-    return badge.orders.totalCount;
-  })();
+  // Computed badge counts based on unread items
+  const memberOrdersBadge = unreadItems.filter(
+    (it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED'
+  ).length;
 
-  const adminPayoutBadge = (() => {
-    if (!badge || badge.role !== 'admin') return 0;
-    if (!isNewer(badge.payout.latestAt, 'adminPayout')) return 0;
-    return badge.payout.pendingCount;
-  })();
+  const memberWalletBadge = unreadItems.filter(
+    (it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS'
+  ).length;
 
-  const totalBadgeCount = (() => {
-    if (!badge) return 0;
-    if (badge.role === 'member') {
-      return memberOrdersBadge + memberWalletBadge;
-    }
-    if (badge.role === 'admin') {
-      return adminOrdersBadge + adminPayoutBadge;
-    }
-    return 0;
-  })();
+  const adminOrdersBadge = unreadItems.filter(
+    (it) => it.type === 'ADMIN_ORDER'
+  ).length;
 
-  const items: NotificationItem[] = badge && 'items' in badge && Array.isArray(badge.items) ? badge.items : [];
+  const adminPayoutBadge = unreadItems.filter(
+    (it) => it.type === 'ADMIN_PAYOUT'
+  ).length;
 
-  // ── Ack helpers ───────────────────────────────────────────────────────────
+  const totalBadgeCount = unreadItems.length;
 
-  const ackOrders = useCallback(() => {
-    setAck('orders');
-    setTick((t) => t + 1);
-  }, []);
+  // ── Ack and Read Handlers ──────────────────────────────────────────────────
 
-  const ackWallet = useCallback(() => {
-    setAck('wallet');
-    setTick((t) => t + 1);
-  }, []);
-
-  const ackAdminOrders = useCallback(() => {
-    setAck('adminOrders');
-    setTick((t) => t + 1);
-  }, []);
-
-  const ackAdminPayout = useCallback(() => {
-    setAck('adminPayout');
-    setTick((t) => t + 1);
+  const markItemAsRead = useCallback((id: string) => {
+    setReadIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      saveReadIds(next);
+      return next;
+    });
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    setAck('orders');
-    setAck('wallet');
-    setAck('adminOrders');
-    setAck('adminPayout');
-    setTick((t) => t + 1);
-  }, []);
+    const allIds = items.map((it) => it.id);
+    setReadIds((prev) => {
+      const next = Array.from(new Set([...prev, ...allIds]));
+      saveReadIds(next);
+      return next;
+    });
+  }, [items]);
+
+  const ackOrders = useCallback(() => {
+    const orderIds = items
+      .filter((it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED')
+      .map((it) => it.id);
+    if (orderIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...orderIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, [items]);
+
+  const ackWallet = useCallback(() => {
+    const walletIds = items
+      .filter((it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS')
+      .map((it) => it.id);
+    if (walletIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...walletIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, [items]);
+
+  const ackAdminOrders = useCallback(() => {
+    const adminOrderIds = items.filter((it) => it.type === 'ADMIN_ORDER').map((it) => it.id);
+    if (adminOrderIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...adminOrderIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, [items]);
+
+  const ackAdminPayout = useCallback(() => {
+    const payoutIds = items.filter((it) => it.type === 'ADMIN_PAYOUT').map((it) => it.id);
+    if (payoutIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...payoutIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, [items]);
 
   return (
     <NotificationContext.Provider
@@ -225,10 +254,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         memberWalletBadge,
         adminOrdersBadge,
         adminPayoutBadge,
+        isItemRead,
         ackOrders,
         ackWallet,
         ackAdminOrders,
         ackAdminPayout,
+        markItemAsRead,
         markAllAsRead,
         refresh: fetchBadge,
       }}
