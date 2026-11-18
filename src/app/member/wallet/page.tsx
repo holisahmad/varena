@@ -95,21 +95,33 @@ export default function MemberWalletPage() {
         {/* Balance Card & Payout Form */}
         <div className="md:col-span-5 space-y-6">
           {/* Balance Widget */}
-          <div className="bg-gradient-to-br from-varena-espresso-dark to-varena-espresso text-varena-ivory p-6 rounded-2xl border border-varena-gold/40 shadow-md">
+          <div className="bg-gradient-to-br from-varena-espresso-dark to-varena-espresso text-varena-ivory p-6 rounded-2xl border border-varena-gold/40 shadow-md space-y-3">
             <div className="flex items-center justify-between text-xs text-varena-taupe-light">
               <span>Saldo Dompet Tersedia</span>
               <span className="font-mono text-[10px] bg-black/40 px-2 py-0.5 rounded text-varena-gold-light">
                 {wallet?.accountCode || 'ACC-MBR'}
               </span>
             </div>
-            <div className="font-serif text-3xl sm:text-4xl font-bold text-varena-gold-light mt-3">
+            <div className="font-serif text-3xl sm:text-4xl font-bold text-varena-gold-light">
               Rp{(wallet?.availableBalance || 0).toLocaleString('id-ID')}
             </div>
-            <div className="mt-4 pt-4 border-t border-[#4A3B30] flex items-center justify-between text-[11px] text-varena-ivory/70">
-              <span>Integritas Buku Besar:</span>
-              <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Terverifikasi ACID</span>
+
+            {wallet?.pendingHold > 0 && (
+              <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-xs text-amber-200 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span>Tertahan (Review Finance):</span>
+                </span>
+                <span className="font-mono font-bold text-amber-300">
+                  Rp{wallet.pendingHold.toLocaleString('id-ID')}
+                </span>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-[#4A3B30] flex items-center justify-between text-[11px] text-varena-ivory/70">
+              <span>Total Saldo Buku Besar:</span>
+              <span className="font-mono font-semibold text-varena-gold-light">
+                Rp{(wallet?.ledgerBalance ?? wallet?.availableBalance ?? 0).toLocaleString('id-ID')}
               </span>
             </div>
           </div>
@@ -203,8 +215,83 @@ export default function MemberWalletPage() {
           </div>
         </div>
 
-        {/* Ledger Statement Table */}
-        <div className="md:col-span-7 bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+        {/* Ledger Statement & Withdrawal Requests */}
+        <div className="md:col-span-7 space-y-6">
+          {/* Withdrawal Requests Tracking */}
+          {wallet?.withdrawals && wallet.withdrawals.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-varena-gold" />
+                  <span>Riwayat Permohonan Penarikan Saldo</span>
+                </h2>
+                <span className="text-xs text-varena-taupe font-mono">
+                  {wallet.withdrawals.filter((w: any) => w.status === 'REQUESTED').length} Diproses
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                    <tr>
+                      <th className="py-2.5 px-3">Tanggal</th>
+                      <th className="py-2.5 px-3">Nominal Bersih</th>
+                      <th className="py-2.5 px-3">Rekening Tujuan</th>
+                      <th className="py-2.5 px-3">Status Finance</th>
+                      <th className="py-2.5 px-3 text-right">No. Referensi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-varena-taupe/10">
+                    {wallet.withdrawals.map((w: any) => (
+                      <tr key={w.id} className="hover:bg-varena-ivory-light/40">
+                        <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
+                          {new Date(w.requestedAt).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
+                          Rp{w.netAmount.toLocaleString('id-ID')}
+                          <span className="text-[10px] text-varena-taupe block font-normal">
+                            Bruto: Rp{w.amount.toLocaleString('id-ID')}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-medium">{w.bankName} - {w.accountNumberMasked}</div>
+                          <div className="text-[10px] text-varena-taupe">a.n. {w.accountHolder}</div>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              w.status === 'PAID' || w.status === 'APPROVED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : w.status === 'REQUESTED' || w.status === 'UNDER_REVIEW'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {w.status === 'REQUESTED'
+                              ? 'Menunggu Review Finance'
+                              : w.status === 'APPROVED' || w.status === 'PAID'
+                              ? 'Selesai Dicairkan'
+                              : w.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-[10px] text-varena-taupe whitespace-nowrap">
+                          {w.providerReference || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Ledger Statement Table */}
+          <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
               <History className="w-5 h-5 text-varena-gold" />
@@ -272,6 +359,7 @@ export default function MemberWalletPage() {
               Belum ada mutasi buku besar pada akun ini. Lakukan penjualan retail atau daftarkan mitra baru untuk menghasilkan komisi.
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

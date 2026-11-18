@@ -115,31 +115,63 @@ export async function postLedgerTransaction(params: PostTransactionParams, txCli
 }
 
 /**
- * Get accurate wallet balance for a member derived from Ledger
+ * Get accurate wallet balance for a member derived from Ledger.
+ * availableBalance = ledger balance − pending withdrawal holds
  */
 export async function getMemberWallet(memberCode: string) {
   const accountCode = `ACC-MBR-${memberCode}`;
-  const account = await prisma.ledgerAccount.findUnique({
-    where: { accountCode },
-    include: {
-      entries: {
-        include: { transaction: true },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
+
+  const [account, member] = await Promise.all([
+    prisma.ledgerAccount.findUnique({
+      where: { accountCode },
+      include: {
+        entries: {
+          include: { transaction: true },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+        },
       },
-    },
-  });
+    }),
+    prisma.member.findUnique({ where: { memberCode } }),
+  ]);
 
   if (!account) {
     return {
       availableBalance: 0,
+      ledgerBalance: 0,
+      pendingHold: 0,
       accountCode,
       statement: [],
     };
   }
 
+  // Sum all pending withdrawal requests (REQUESTED | UNDER_REVIEW)
+  let pendingHold = 0;
+  let withdrawals: any[] = [];
+  if (member) {
+    const [pending, list] = await Promise.all([
+      prisma.withdrawalRequest.aggregate({
+        where: {
+          memberId: member.id,
+          status: { in: ['REQUESTED', 'UNDER_REVIEW'] },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.withdrawalRequest.findMany({
+        where: { memberId: member.id },
+        orderBy: { requestedAt: 'desc' },
+        take: 10,
+      }),
+    ]);
+    pendingHold = pending._sum.amount ?? 0;
+    withdrawals = list;
+  }
+
   return {
-    availableBalance: account.balance,
+    availableBalance: Math.max(0, account.balance - pendingHold),
+    ledgerBalance: account.balance,
+    pendingHold,
+    withdrawals,
     accountCode: account.accountCode,
     statement: account.entries.map((e) => ({
       id: e.id,

@@ -8,6 +8,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [stats, setStats] = useState<any>(null);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [marketingPlan, setMarketingPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Authentication & RBAC Guard
@@ -45,16 +46,20 @@ export default function AdminPage() {
         return;
       }
 
+      const activeUserId = parsed.userId || parsed.id;
+      parsed.userId = activeUserId;
+      parsed.id = activeUserId;
+
       setCurrentUser(parsed);
       setAuthChecking(false);
-      loadAllData(parsed.id);
+      loadAllData(activeUserId);
     } catch {
       router.push('/login?redirect=/admin');
     }
   }, [router]);
 
   const loadAllData = (userId?: string) => {
-    const uid = userId || currentUser?.id;
+    const uid = userId || currentUser?.userId || currentUser?.id;
     if (!uid) return;
     setLoading(true);
     Promise.all([
@@ -79,17 +84,18 @@ export default function AdminPage() {
       return;
     }
     setActionLoading(true);
+    const uid = currentUser?.userId || currentUser?.id;
     try {
       const res = await fetch('/api/v1/payout/admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': currentUser?.id,
+          'x-user-id': uid,
         },
         body: JSON.stringify({
           withdrawalId,
           providerReference: transferRef,
-          actorUserId: currentUser?.id,
+          actorUserId: uid,
         }),
       });
 
@@ -101,7 +107,7 @@ export default function AdminPage() {
       alert('Payout berhasil disetujui dan mutasi buku besar telah diposting!');
       setApprovingId(null);
       setTransferRef('');
-      loadAllData(currentUser?.id);
+      loadAllData(uid);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -112,18 +118,19 @@ export default function AdminPage() {
   const handleExecutePlacementTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     setTransferStatus(null);
+    const uid = currentUser?.userId || currentUser?.id;
     try {
       const res = await fetch('/api/v1/network/transfer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': currentUser?.id,
+          'x-user-id': uid,
         },
         body: JSON.stringify({
           memberCode: transferMemberCode.trim().toUpperCase(),
           newParentCode: transferNewParentCode.trim().toUpperCase(),
           reason: transferReason,
-          actorUserId: currentUser?.id,
+          actorUserId: uid,
         }),
       });
 
@@ -209,7 +216,7 @@ export default function AdminPage() {
         </div>
 
         <button
-          onClick={() => loadAllData(currentUser?.id)}
+          onClick={() => loadAllData(currentUser?.userId)}
           className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-xs font-semibold hover:bg-varena-ivory flex items-center gap-1.5 self-start sm:self-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />
@@ -314,12 +321,14 @@ export default function AdminPage() {
                     <td className="py-2.5 px-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          w.status === 'PAID'
+                          w.status === 'PAID' || w.status === 'APPROVED'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                            : w.status === 'REQUESTED' || w.status === 'UNDER_REVIEW'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
                         }`}
                       >
-                        {w.status}
+                        {w.status === 'REQUESTED' ? 'MENUNGGU VERIFIKASI' : w.status === 'APPROVED' || w.status === 'PAID' ? 'SELESAI DICAIRKAN' : w.status}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-right">
@@ -481,7 +490,7 @@ export default function AdminPage() {
               </div>
               <div className="flex justify-between">
                 <span>Repeat Purchase - Upline Dev Reward:</span>
-                <span className="font-bold text-emerald-800">Rp1.000 / level / sachet</span>
+                <span className="font-bold text-emerald-800">Rp2.000 / level / sachet</span>
               </div>
             </div>
           </div>
