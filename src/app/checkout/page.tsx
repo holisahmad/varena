@@ -34,11 +34,18 @@ function CheckoutContent() {
   const [settleResult, setSettleResult] = useState<any>(null);
   const [settling, setSettling] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
+  const [copiedAmount, setCopiedAmount] = useState(false);
 
   const copyAccountNumber = (accountNum: string) => {
     navigator.clipboard?.writeText(accountNum.replace(/\s+/g, ''));
     setCopiedBank(true);
     setTimeout(() => setCopiedBank(false), 2000);
+  };
+
+  const copyAmount = (amount: number) => {
+    navigator.clipboard?.writeText(String(amount));
+    setCopiedAmount(true);
+    setTimeout(() => setCopiedAmount(false), 2000);
   };
 
   useEffect(() => {
@@ -544,14 +551,36 @@ function CheckoutContent() {
                 </div>
 
                 {/* Exact amount */}
-                <div className="mt-3 p-3 rounded-lg bg-varena-espresso text-center">
-                  <div className="text-[10px] text-varena-gold-light/70 uppercase font-bold mb-1">Nominal EXACT yang harus ditransfer:</div>
-                  <div className="font-serif text-2xl font-bold text-varena-gold-light">
+                <div className="mt-3 p-3.5 rounded-lg bg-varena-espresso text-center">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-varena-gold-light/75 uppercase font-bold tracking-wider text-left">
+                      Nominal Yang Harus Ditransfer:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyAmount(orderResult.total)}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold-light hover:bg-white px-2.5 py-0.5 rounded transition shadow-xs"
+                      title="Salin Angka Nominal Transfer"
+                    >
+                      {copiedAmount ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-700" />
+                          <span className="text-emerald-800">Tersalin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3 text-varena-espresso" />
+                          <span>Salin Nominal</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="font-serif text-2xl font-bold text-varena-gold-light tracking-tight">
                     Rp{(orderResult.total).toLocaleString('id-ID')}
                   </div>
                   {uniqueCode > 0 && (
-                    <div className="text-[11px] text-varena-gold-light/80 mt-1">
-                      (termasuk kode unik: +Rp{uniqueCode} untuk rekonsiliasi)
+                    <div className="text-[11px] text-varena-gold-light/85 mt-1 font-medium">
+                      (termasuk kode unik: +Rp{uniqueCode} untuk rekonsiliasi otomatis)
                     </div>
                   )}
                 </div>

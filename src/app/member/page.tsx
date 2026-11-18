@@ -40,7 +40,14 @@ export default function MemberDashboardPage() {
   // Pagination states for order tables
   const [personalOrdersPage, setPersonalOrdersPage] = useState(1);
   const [referralOrdersPage, setReferralOrdersPage] = useState(1);
+  const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
   const ORDERS_PER_PAGE = 5;
+
+  const copyNominal = (amount: number, orderId: string) => {
+    navigator.clipboard?.writeText(String(amount));
+    setCopiedOrderId(orderId);
+    setTimeout(() => setCopiedOrderId(null), 2000);
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -430,7 +437,27 @@ export default function MemberDashboardPage() {
                       ))}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
-                      Rp{po.total.toLocaleString('id-ID')}
+                      <div>Rp{po.total.toLocaleString('id-ID')}</div>
+                      {po.orderStatus === 'PENDING_PAYMENT' && (
+                        <button
+                          type="button"
+                          onClick={() => copyNominal(po.total, po.id)}
+                          className="mt-1 inline-flex items-center gap-1 text-[10px] text-varena-espresso bg-stone-100 hover:bg-stone-200 px-1.5 py-0.5 rounded transition font-sans font-normal"
+                          title="Salin nominal transfer"
+                        >
+                          {copiedOrderId === po.id ? (
+                            <>
+                              <Check className="w-2.5 h-2.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-semibold">Tersalin</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-2.5 h-2.5 text-stone-600" />
+                              <span>Salin Nominal</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </td>
                     <td className="py-2.5 px-3">
                       <span
