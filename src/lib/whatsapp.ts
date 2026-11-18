@@ -1,3 +1,5 @@
+import { PRIMARY_COMPANY_BANK } from '@/config/bank';
+
 /**
  * VARENA WhatsApp Gateway & Notification Engine
  * High-conversion automated messaging for members, buyers, and corporate operations
@@ -55,9 +57,9 @@ export function templateOrderInvoice(params: {
     `📦 *Nomor Pesanan*: \`${params.orderNumber}\`\n` +
     `🛍️ *Produk*: ${params.itemsSummary}\n` +
     `💰 *Total Pembayaran*: *Rp${params.total.toLocaleString('id-ID')}*\n\n` +
-    `Silakan transfer ke Rekening Resmi Korporasi:\n` +
-    `🏛️ *Bank BCA*: 8820-192-888\n` +
-    `👤 *Atas Nama*: PT VARENA MAJU BERSAMA\n\n` +
+    `Silakan transfer ke Rekening Operasional Resmi:\n` +
+    `🏛️ *Bank ${PRIMARY_COMPANY_BANK.bankName}*: ${PRIMARY_COMPANY_BANK.accountNumber}\n` +
+    `👤 *Atas Nama*: ${PRIMARY_COMPANY_BANK.accountHolder}\n\n` +
     `Setelah transfer, pesanan Anda akan segera diproses dan dikirim. Terima kasih!`
   );
 }

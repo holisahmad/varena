@@ -3,7 +3,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ShoppingBag, CheckCircle, ShieldCheck, CreditCard, ArrowRight, Sparkles } from 'lucide-react';
+import { ShoppingBag, CheckCircle, ShieldCheck, CreditCard, ArrowRight, Sparkles, Copy, Check } from 'lucide-react';
+import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -32,6 +33,13 @@ function CheckoutContent() {
   const [orderResult, setOrderResult] = useState<any>(null);
   const [settleResult, setSettleResult] = useState<any>(null);
   const [settling, setSettling] = useState(false);
+  const [copiedBank, setCopiedBank] = useState(false);
+
+  const copyAccountNumber = (accountNum: string) => {
+    navigator.clipboard?.writeText(accountNum.replace(/\s+/g, ''));
+    setCopiedBank(true);
+    setTimeout(() => setCopiedBank(false), 2000);
+  };
 
   useEffect(() => {
     // 1. Fetch available product variants
@@ -499,10 +507,40 @@ function CheckoutContent() {
                 </div>
 
                 {/* Bank destination */}
-                <div className="p-3 rounded-lg bg-white border border-varena-gold/30 text-left space-y-1">
-                  <div className="text-[10px] text-varena-taupe uppercase font-bold">Transfer ke Rekening:</div>
-                  <div className="font-mono font-bold text-varena-espresso">8820-192-888</div>
-                  <div className="text-xs font-semibold text-varena-espresso">BCA — a.n. PT VARENA MAJU BERSAMA</div>
+                <div className="p-3.5 rounded-lg bg-white border border-varena-gold/30 text-left space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Transfer ke Rekening:</div>
+                    <button
+                      type="button"
+                      onClick={() => copyAccountNumber(PRIMARY_COMPANY_BANK.accountNumberClean)}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-espresso bg-varena-gold/15 hover:bg-varena-gold/30 px-2 py-0.5 rounded transition"
+                      title="Salin Nomor Rekening"
+                    >
+                      {copiedBank ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-700">Tersalin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3 text-varena-espresso" />
+                          <span>Salin No. Rek</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="font-mono text-base font-bold text-varena-espresso tracking-wide">
+                    {PRIMARY_COMPANY_BANK.accountNumber}
+                  </div>
+                  <div className="text-xs font-semibold text-varena-espresso flex items-center justify-between">
+                    <span>Bank {PRIMARY_COMPANY_BANK.bankName}</span>
+                    <span className="text-stone-600 font-medium">a.n. {PRIMARY_COMPANY_BANK.accountHolder}</span>
+                  </div>
+                  {PRIMARY_COMPANY_BANK.statusNote && (
+                    <div className="text-[10px] text-stone-500 italic">
+                      *{PRIMARY_COMPANY_BANK.statusNote}
+                    </div>
+                  )}
                 </div>
 
                 {/* Exact amount */}

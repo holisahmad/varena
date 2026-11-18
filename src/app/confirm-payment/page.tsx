@@ -13,7 +13,10 @@ import {
   Building2,
   FileText,
   Clock,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 
 function ConfirmPaymentContent() {
   const searchParams = useSearchParams();
@@ -29,6 +32,13 @@ function ConfirmPaymentContent() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedBank, setCopiedBank] = useState(false);
+
+  const copyAccountNumber = (accountNum: string) => {
+    navigator.clipboard?.writeText(accountNum.replace(/\s+/g, ''));
+    setCopiedBank(true);
+    setTimeout(() => setCopiedBank(false), 2000);
+  };
 
   useEffect(() => {
     const paramOrder = searchParams.get('orderNumber');
@@ -118,21 +128,42 @@ function ConfirmPaymentContent() {
 
         {/* Informasi Rekening Resmi */}
         <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 text-xs space-y-2">
-          <div className="font-bold text-varena-espresso flex items-center gap-1.5">
-            <Building2 className="w-4 h-4 text-varena-gold" />
-            <span>Rekening Resmi Tujuan Transfer Korporasi:</span>
+          <div className="font-bold text-varena-espresso flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-varena-gold" />
+              <span>Rekening Resmi Tujuan Transfer:</span>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-            <div className="p-2.5 rounded-lg bg-white border border-varena-taupe/20">
-              <div className="text-varena-taupe">Bank BCA:</div>
-              <div className="font-mono font-bold text-varena-espresso text-sm">8820-192-888</div>
-              <div className="text-[10px] text-varena-taupe">a.n. PT VARENA MAJU BERSAMA</div>
+          <div className="p-3.5 rounded-lg bg-white border border-varena-taupe/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div>
+              <div className="text-varena-taupe text-[10px] uppercase font-bold tracking-wider">
+                Bank {PRIMARY_COMPANY_BANK.bankName} ({PRIMARY_COMPANY_BANK.bankFullName})
+              </div>
+              <div className="font-mono font-bold text-varena-espresso text-base tracking-wide mt-0.5">
+                {PRIMARY_COMPANY_BANK.accountNumber}
+              </div>
+              <div className="text-[11px] text-stone-600 font-medium mt-0.5">
+                a.n. <strong className="text-varena-espresso">{PRIMARY_COMPANY_BANK.accountHolder}</strong>{' '}
+                <span className="text-[10px] text-stone-500 italic">({PRIMARY_COMPANY_BANK.statusNote})</span>
+              </div>
             </div>
-            <div className="p-2.5 rounded-lg bg-white border border-varena-taupe/20">
-              <div className="text-varena-taupe">Bank Mandiri:</div>
-              <div className="font-mono font-bold text-varena-espresso text-sm">137-00-1928-8888</div>
-              <div className="text-[10px] text-varena-taupe">a.n. PT VARENA MAJU BERSAMA</div>
-            </div>
+            <button
+              type="button"
+              onClick={() => copyAccountNumber(PRIMARY_COMPANY_BANK.accountNumberClean)}
+              className="self-start sm:self-center inline-flex items-center gap-1.5 text-xs font-semibold text-varena-espresso bg-varena-gold/15 hover:bg-varena-gold/30 px-3 py-1.5 rounded-lg transition"
+            >
+              {copiedBank ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700">Tersalin</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-varena-espresso" />
+                  <span>Salin No. Rek</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
