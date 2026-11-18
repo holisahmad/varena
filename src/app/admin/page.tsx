@@ -1844,7 +1844,7 @@ export default function AdminPage() {
                     </div>
 
                     {/* Footer */}
-                    <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-col sm:flex-row justify-between items-center gap-2 flex-shrink-0">
+                    <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-row flex-wrap justify-between items-center gap-2 flex-shrink-0">
                       <div className="text-stone-500 text-[11px]">
                         VARENA Order Management
                       </div>
@@ -1876,13 +1876,6 @@ export default function AdminPage() {
                             Input Resi & Kirim
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setViewOrderDetail(null)}
-                          className="py-2 px-4 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-semibold text-xs transition"
-                        >
-                          Tutup
-                        </button>
                       </div>
                     </div>
                   </div>

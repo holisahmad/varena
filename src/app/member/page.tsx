@@ -56,6 +56,7 @@ export default function MemberDashboardPage() {
   const [copiedBankModal, setCopiedBankModal] = useState(false);
   const [copiedAmountModal, setCopiedAmountModal] = useState(false);
   const [copiedResiModal, setCopiedResiModal] = useState(false);
+  const [copiedOrderNumberModal, setCopiedOrderNumberModal] = useState(false);
   const [modalSettling, setModalSettling] = useState(false);
 
   const copyNominal = (amount: number, orderId: string) => {
@@ -805,12 +806,23 @@ export default function MemberDashboardPage() {
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(selectedOrder.orderNumber);
-                        alert(`Nomor pesanan ${selectedOrder.orderNumber} disalin!`);
+                        setCopiedOrderNumberModal(true);
+                        setTimeout(() => setCopiedOrderNumberModal(false), 2000);
                       }}
-                      className="hover:text-white"
+                      className="text-[10px] bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded transition text-varena-gold-light inline-flex items-center gap-0.5"
                       title="Salin Nomor Pesanan"
                     >
-                      <Copy className="w-3 h-3" />
+                      {copiedOrderNumberModal ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400">Tersalin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Salin</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
