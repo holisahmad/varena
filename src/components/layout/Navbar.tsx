@@ -4,16 +4,17 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { ShoppingBag, Menu, X, LogOut } from 'lucide-react';
+import { ShoppingBag, Menu, X, LogOut, Bell } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
-import NotifBadge from '@/components/ui/NotifBadge';
+import NotificationDropdown from '@/components/layout/NotificationDropdown';
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { memberOrdersBadge, memberWalletBadge, ackOrders, ackWallet } = useNotifications();
+  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const { memberOrdersBadge, memberWalletBadge, totalBadgeCount, ackOrders, ackWallet } = useNotifications();
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -134,8 +135,28 @@ export default function Navbar() {
             )}
           </nav>
 
-          {/* User profile & Actions */}
+          {/* Desktop User profile & Actions */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Desktop Notification Bell (when user logged in) */}
+            {user && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                  className="p-2 rounded-lg bg-varena-espresso-light/60 hover:bg-varena-espresso-light text-varena-gold-light hover:text-white transition relative"
+                  aria-label="Buka Notifikasi"
+                  title="Notifikasi"
+                >
+                  <Bell className="w-4 h-4" />
+                  {totalBadgeCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+                      {totalBadgeCount > 9 ? '9+' : totalBadgeCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
             {user ? (
               <div className="flex items-center gap-3">
                 <div className="text-right">
@@ -168,24 +189,49 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile menu trigger */}
-          <div className="flex md:hidden items-center gap-2">
+          {/* Mobile Header Actions */}
+          <div className="flex md:hidden items-center gap-1">
+            {/* Notification Bell (Disamping Checkout) */}
+            <button
+              type="button"
+              onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+              className="p-2 text-varena-gold-light hover:text-white relative rounded-lg focus:outline-none transition"
+              aria-label="Notifikasi"
+              title="Notifikasi"
+            >
+              <Bell className="w-5 h-5" />
+              {totalBadgeCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow leading-none">
+                  {totalBadgeCount > 9 ? '9+' : totalBadgeCount}
+                </span>
+              )}
+            </button>
+
+            {/* Checkout ShoppingBag */}
             <Link
               href="/checkout"
-              className="p-2 text-varena-gold-light"
+              className="p-2 text-varena-gold-light hover:text-white transition"
               aria-label="Keranjang"
             >
               <ShoppingBag className="w-5 h-5" />
             </Link>
+
+            {/* Mobile Menu Hamburger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-md text-varena-ivory hover:text-varena-gold-light focus:outline-none"
+              className="p-2 rounded-md text-varena-ivory hover:text-varena-gold-light focus:outline-none transition"
               aria-label="Toggle Menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
+
+        {/* Floating Notification Dropdown Popover */}
+        <NotificationDropdown
+          isOpen={notifDropdownOpen}
+          onClose={() => setNotifDropdownOpen(false)}
+        />
       </div>
 
       {/* Mobile Drawer Navigation */}

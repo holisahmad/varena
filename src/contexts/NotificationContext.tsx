@@ -4,11 +4,21 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface NotificationItem {
+  id: string;
+  type: 'ORDER_PENDING' | 'ORDER_SHIPPED' | 'COMMISSION_NEW' | 'PAYOUT_STATUS' | 'ADMIN_ORDER' | 'ADMIN_PAYOUT';
+  title: string;
+  message: string;
+  url: string;
+  createdAt: string;
+}
+
 interface MemberBadge {
   role: 'member';
   orders: { count: number; latestAt: string | null };
   wallet: { latestAt: string | null };
   total: number;
+  items?: NotificationItem[];
 }
 
 interface AdminBadge {
@@ -21,9 +31,10 @@ interface AdminBadge {
   };
   payout: { pendingCount: number; latestAt: string | null };
   total: number;
+  items?: NotificationItem[];
 }
 
-type BadgeData = MemberBadge | AdminBadge | { role: 'guest'; total: 0 } | null;
+type BadgeData = MemberBadge | AdminBadge | { role: 'guest'; total: 0; items?: [] } | null;
 
 // ─── Ack helpers (localStorage) ─────────────────────────────────────────────
 
@@ -55,23 +66,28 @@ function isNewer(latestAt: string | null | undefined, ackKey: string): boolean {
 
 interface NotificationContextValue {
   badge: BadgeData;
+  items: NotificationItem[];
+  totalBadgeCount: number;
   // Computed member badge counts (0 = no badge)
   memberOrdersBadge: number;
   memberWalletBadge: number;
   // Computed admin badge counts
   adminOrdersBadge: number;
   adminPayoutBadge: number;
-  // Ack functions — call when user navigates to that section
+  // Ack functions
   ackOrders: () => void;
   ackWallet: () => void;
   ackAdminOrders: () => void;
   ackAdminPayout: () => void;
+  markAllAsRead: () => void;
   // Force refresh
   refresh: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue>({
   badge: null,
+  items: [],
+  totalBadgeCount: 0,
   memberOrdersBadge: 0,
   memberWalletBadge: 0,
   adminOrdersBadge: 0,
@@ -80,6 +96,7 @@ const NotificationContext = createContext<NotificationContextValue>({
   ackWallet: () => {},
   ackAdminOrders: () => {},
   ackAdminPayout: () => {},
+  markAllAsRead: () => {},
   refresh: () => {},
 });
 
@@ -87,7 +104,6 @@ const NotificationContext = createContext<NotificationContextValue>({
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [badge, setBadge] = useState<BadgeData>(null);
-  // tick forces re-render of computed badges after ack
   const [tick, setTick] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -95,7 +111,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
-      setBadge({ role: 'guest', total: 0 });
+      setBadge({ role: 'guest', total: 0, items: [] });
       return;
     }
     let user: any;
@@ -118,7 +134,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const data = await res.json();
       setBadge(data);
     } catch {
-      // silent fail — badge just stays stale
+      // silent fail
     }
   }, []);
 
@@ -131,7 +147,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [fetchBadge]);
 
-  // ── Computed badge values (re-evaluated on badge change or ack tick) ──────
+  // ── Computed badge values ──────────────────────────────────────────────────
 
   const memberOrdersBadge = (() => {
     if (!badge || badge.role !== 'member') return 0;
@@ -156,6 +172,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return badge.payout.pendingCount;
   })();
 
+  const totalBadgeCount = (() => {
+    if (!badge) return 0;
+    if (badge.role === 'member') {
+      return memberOrdersBadge + memberWalletBadge;
+    }
+    if (badge.role === 'admin') {
+      return adminOrdersBadge + adminPayoutBadge;
+    }
+    return 0;
+  })();
+
+  const items: NotificationItem[] = badge && 'items' in badge && Array.isArray(badge.items) ? badge.items : [];
+
   // ── Ack helpers ───────────────────────────────────────────────────────────
 
   const ackOrders = useCallback(() => {
@@ -178,10 +207,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setTick((t) => t + 1);
   }, []);
 
+  const markAllAsRead = useCallback(() => {
+    setAck('orders');
+    setAck('wallet');
+    setAck('adminOrders');
+    setAck('adminPayout');
+    setTick((t) => t + 1);
+  }, []);
+
   return (
     <NotificationContext.Provider
       value={{
         badge,
+        items,
+        totalBadgeCount,
         memberOrdersBadge,
         memberWalletBadge,
         adminOrdersBadge,
@@ -190,6 +229,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         ackWallet,
         ackAdminOrders,
         ackAdminPayout,
+        markAllAsRead,
         refresh: fetchBadge,
       }}
     >
