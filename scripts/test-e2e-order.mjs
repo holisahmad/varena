@@ -112,24 +112,84 @@ async function testAll() {
   console.log(`  - Added unique code: Rp${order.uniqueCode}`);
   console.log(`  - New Balance: Rp${settledProf.member.uniqueCodeBalance}`);
 
-  // 8. Test withdrawal endpoint with uniqueCodeBalance
-  console.log('8. Testing Payout with Unique Code Balance threshold');
-  // Test withdrawal request directly since bank is already bound
+  // 8. Test withdrawal with user exact example:
+  // Bonus: Rp50.000, Unique code: Rp12.800
+  // Eligible from unique code: Rp12.000, remaining in account: Rp800
+  // Payout request: Rp50.000 + Rp12.000 = Rp62.000
+  // Bank fee: Rp6.500
+  // Net transferred: Rp62.000 - Rp6.500 = Rp55.500
+  console.log('\n8. Testing Payout with User Scenario (50.000 bonus + 12.800 unique code -> withdraw 62.000, fee 6.500):');
+  
+  const { PrismaClient } = await import('@prisma/client');
+  const prismaClient = new PrismaClient();
+
+  // Adjust bonus available balance to exactly 50.000 by adding a pending hold if needed
+  const initialWallet = await fetchJson('/api/v1/wallet?memberCode=VRN-0001');
+  const currentBonus = initialWallet.wallet.availableBalance;
+  if (currentBonus > 50000) {
+    const diff = currentBonus - 50000;
+    const ahmadMem = await prismaClient.member.findUnique({ where: { memberCode: 'VRN-0001' } });
+    await prismaClient.withdrawalRequest.create({
+      data: {
+        memberId: ahmadMem.id,
+        amount: diff,
+        fee: 6500,
+        netAmount: Math.max(0, diff - 6500),
+        bankName: 'BCA',
+        accountNumberMasked: '123****890',
+        accountHolder: ahmadMem.displayName,
+        status: 'REQUESTED',
+      },
+    });
+  }
+
+  // Set member's uniqueCodeBalance to exactly 12,800
+  await prismaClient.member.update({
+    where: { memberCode: 'VRN-0001' },
+    data: { uniqueCodeBalance: 12800 },
+  });
+  await prismaClient.$disconnect();
+
+  const profBeforeWD = await fetchJson('/api/v1/member/profile?memberCode=VRN-0001');
+  const walletBeforeWD = await fetchJson('/api/v1/wallet?memberCode=VRN-0001');
+  console.log(`  - Saldo Bonus Komisi: Rp${walletBeforeWD.wallet.availableBalance}`);
+  console.log(`  - Saldo Kode Unik: Rp${profBeforeWD.member.uniqueCodeBalance}`);
+
+  // Test withdrawal request with Rp62.000 (Rp50.000 bonus + Rp12.000 unique code)
   const payoutRes = await fetchJson('/api/v1/payout/request', {
     method: 'POST',
     body: JSON.stringify({
       memberCode: 'VRN-0001',
-      amount: 50000,
+      amount: 62000,
     }),
   });
+
   console.log('✓ Payout request successful:');
   console.log(`  - Payout ID: ${payoutRes.withdrawal.id}`);
-  console.log(`  - Amount: Rp${payoutRes.withdrawal.amount}`);
-  console.log(`  - Net: Rp${payoutRes.withdrawal.netAmount}`);
-  console.log(`  - Unique Code Deducted: Rp${payoutRes.withdrawal.fromUniqueCode || 0}`);
+  console.log(`  - Amount Requested: Rp${payoutRes.withdrawal.amount}`);
+  console.log(`  - Bank Admin Fee: Rp${payoutRes.withdrawal.fee}`);
+  console.log(`  - Net masuk rekening: Rp${payoutRes.withdrawal.netAmount}`);
+
+  if (payoutRes.withdrawal.amount !== 62000) {
+    throw new Error(`Expected amount 62000, got ${payoutRes.withdrawal.amount}`);
+  }
+  if (payoutRes.withdrawal.fee !== 6500) {
+    throw new Error(`Expected fee 6500, got ${payoutRes.withdrawal.fee}`);
+  }
+  if (payoutRes.withdrawal.netAmount !== 55500) {
+    throw new Error(`Expected net amount 55500, got ${payoutRes.withdrawal.netAmount}`);
+  }
+
+  // Check remaining uniqueCodeBalance in member account
+  const profAfterWD = await fetchJson('/api/v1/member/profile?memberCode=VRN-0001');
+  console.log(`✓ Sisa saldo kode unik di akun member: Rp${profAfterWD.member.uniqueCodeBalance}`);
+  if (profAfterWD.member.uniqueCodeBalance !== 800) {
+    throw new Error(`Expected remaining uniqueCodeBalance 800, got ${profAfterWD.member.uniqueCodeBalance}`);
+  }
 
   console.log('\n======================================================');
   console.log('  E2E TEST PASSED 100%! ALL FEATURES OPERATIONAL.     ');
+  console.log('  50.000 + 12.000 = 62.000 - 6.500 = 55.500 (Sisa 800)');
   console.log('======================================================');
 }
 

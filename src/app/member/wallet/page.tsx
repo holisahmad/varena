@@ -139,6 +139,14 @@ export default function MemberWalletPage() {
   const isBankBound = Boolean(wallet?.bankInfo?.isBankLocked && wallet?.bankInfo?.bankAccountNumber);
   const registeredName = wallet?.bankInfo?.legalName || wallet?.bankInfo?.displayName || user.displayName;
 
+  const bonusBalance = wallet?.availableBalance || 0;
+  const eligibleUniqueCode = uniqueCodeBalance >= 10000 ? Math.floor(uniqueCodeBalance / 1000) * 1000 : 0;
+  const remainingUniqueCode = uniqueCodeBalance - eligibleUniqueCode;
+  const totalWithdrawable = bonusBalance + eligibleUniqueCode;
+  const enteredAmount = parseInt(amount, 10) || 0;
+  const adminFee = 6500;
+  const netEstimated = enteredAmount > adminFee ? enteredAmount - adminFee : 0;
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
       <div>
@@ -371,32 +379,42 @@ export default function MemberWalletPage() {
                 </div>
 
                 {/* Saldo Breakdown */}
-                <div className="p-3 rounded-lg bg-varena-ivory-light border border-varena-taupe/20 space-y-1.5 text-xs">
-                  <div className="font-semibold text-varena-espresso text-[11px] uppercase tracking-wide mb-2">Rincian Saldo Dapat Ditarik</div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-600">Saldo Bonus Komisi:</span>
-                    <span className="font-mono font-semibold text-varena-espresso">Rp{(wallet?.availableBalance || 0).toLocaleString('id-ID')}</span>
-                  </div>
+                <div className="p-3.5 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2 text-xs">
+                  <div className="font-semibold text-varena-espresso text-[11px] uppercase tracking-wide">Rincian Saldo Dapat Ditarik</div>
+                  
                   <div className="flex justify-between items-center">
-                    <span className="text-stone-600">Kode Unik Terkumpul:</span>
+                    <span className="text-stone-600">Saldo Bonus Komisi:</span>
+                    <span className="font-mono font-semibold text-varena-espresso">Rp{bonusBalance.toLocaleString('id-ID')}</span>
+                  </div>
+
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-stone-600">Kode Unik Terkumpul:</span>
+                      <div className="text-[10px] text-stone-500 font-mono">Total: Rp{uniqueCodeBalance.toLocaleString('id-ID')}</div>
+                    </div>
                     <div className="text-right">
                       <span className={`font-mono font-semibold ${uniqueCodeBalance >= 10000 ? 'text-emerald-700' : 'text-stone-400'}`}>
-                        Rp{uniqueCodeBalance.toLocaleString('id-ID')}
+                        Eligible: Rp{eligibleUniqueCode.toLocaleString('id-ID')}
                       </span>
-                      {uniqueCodeBalance < 10000 && uniqueCodeBalance > 0 && (
-                        <div className="text-[10px] text-stone-400">(min. Rp10.000 untuk eligible)</div>
+                      {uniqueCodeBalance >= 10000 ? (
+                        <div className="text-[10px] text-stone-500">
+                          {remainingUniqueCode > 0 ? `Sisa Rp${remainingUniqueCode.toLocaleString('id-ID')} tersimpan di akun` : 'Kelipatan Rp1.000'}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-stone-400">(min. Rp10.000 untuk dapat ditarik)</div>
                       )}
                     </div>
                   </div>
-                  <div className="pt-1.5 border-t border-varena-taupe/20 flex justify-between font-bold">
+
+                  <div className="pt-2 border-t border-varena-taupe/20 flex justify-between font-bold text-sm">
                     <span className="text-varena-espresso">Total Dapat Ditarik:</span>
-                    <span className="font-mono text-varena-espresso">
-                      Rp{((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)).toLocaleString('id-ID')}
+                    <span className="font-mono text-varena-gold font-bold">
+                      Rp{totalWithdrawable.toLocaleString('id-ID')}
                     </span>
                   </div>
-                  {uniqueCodeBalance >= 10000 && (
-                    <div className="text-[10px] text-emerald-700 font-semibold">
-                      ✓ Kode unik Rp{uniqueCodeBalance.toLocaleString('id-ID')} eligible untuk digabung dengan penarikan
+                  {eligibleUniqueCode > 0 && (
+                    <div className="text-[10px] text-emerald-700 font-medium">
+                      ✓ Termasuk Rp{eligibleUniqueCode.toLocaleString('id-ID')} dari saldo kode unik (kelipatan Rp1.000)
                     </div>
                   )}
                 </div>
@@ -405,59 +423,72 @@ export default function MemberWalletPage() {
                   <div className="flex items-center justify-between mb-1">
                     <label className="font-semibold text-varena-espresso">Nominal Penarikan (Rp) *</label>
                     <span className="text-[10px] text-stone-500 font-mono">
-                      Maks: Rp{((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)).toLocaleString('id-ID')}
+                      Maks: Rp{totalWithdrawable.toLocaleString('id-ID')}
                     </span>
                   </div>
                   <input
                     type="number"
                     min="50000"
-                    max={((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0))}
-                    step="10000"
+                    max={totalWithdrawable}
+                    step="1000"
                     required
                     suppressHydrationWarning
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Minimal Rp50.000"
+                    placeholder="Minimal Rp50.000 (kelipatan Rp1.000)"
                     className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold font-mono text-sm"
                   />
                 </div>
 
                 {/* Quick Selection Buttons */}
-                <div className="flex items-center gap-2">
-                  {[50000, 100000, 250000, 500000].map((quickVal) => (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[50000, 60000, 100000, 250000].map((quickVal) => (
                     <button
                       key={quickVal}
                       type="button"
                       onClick={() => setAmount(String(quickVal))}
-                      disabled={(wallet?.availableBalance || 0) < quickVal}
+                      disabled={totalWithdrawable < quickVal}
                       className="px-2.5 py-1 text-[10px] font-medium rounded border border-stone-300 hover:border-varena-gold hover:text-varena-gold transition disabled:opacity-40 disabled:hover:border-stone-300 disabled:hover:text-inherit"
                     >
                       {(quickVal / 1000).toLocaleString('id-ID')}k
                     </button>
                   ))}
-                  {((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)) >= 50000 && (
+                  {totalWithdrawable >= 50000 && (
                     <button
                       type="button"
-                      onClick={() => setAmount(String((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)))}
+                      onClick={() => setAmount(String(totalWithdrawable))}
                       className="px-2.5 py-1 text-[10px] font-bold rounded border border-varena-gold bg-varena-gold/10 text-varena-espresso hover:bg-varena-gold/20 transition"
                     >
-                      Tarik Semua
+                      Tarik Semua (Rp{totalWithdrawable.toLocaleString('id-ID')})
                     </button>
                   )}
                 </div>
 
+                {/* Real-time Net Transfer Calculation Preview */}
+                {enteredAmount >= 50000 && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                    <div className="flex justify-between items-center font-bold">
+                      <span>Total Masuk Rekening Bank:</span>
+                      <span className="font-mono text-sm text-emerald-800">Rp{netEstimated.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-mono">
+                      Rincian: Rp{enteredAmount.toLocaleString('id-ID')} - Biaya Admin Rp6.500 = Rp{netEstimated.toLocaleString('id-ID')}
+                    </div>
+                  </div>
+                )}
+
                 <div className="text-[10px] text-stone-500 pt-1 border-t border-stone-100 flex items-center justify-between">
                   <span>Biaya transfer antar bank:</span>
-                  <span className="font-mono font-semibold text-stone-700">Rp5.000 (otomatis dipotong)</span>
+                  <span className="font-mono font-semibold text-stone-700">Rp6.500 (otomatis dipotong)</span>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={submitting || ((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)) < 50000 || !amount || parseInt(amount, 10) < 50000}
+                  disabled={submitting || totalWithdrawable < 50000 || !amount || enteredAmount < 50000 || enteredAmount > totalWithdrawable}
                   className="w-full py-3 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition disabled:opacity-50 flex items-center justify-center gap-2 shadow"
                 >
                   <Wallet className="w-4 h-4" />
-                  <span>{submitting ? 'Memproses Penarikan...' : 'Kirim Permohonan Penarikan'}</span>
+                  <span>{submitting ? 'Memproses Penarikan...' : `Kirim Permohonan Penarikan ${enteredAmount >= 50000 ? `(Rp${enteredAmount.toLocaleString('id-ID')})` : ''}`}</span>
                 </button>
               </form>
             ) : (

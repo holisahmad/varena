@@ -45,8 +45,12 @@ export async function requestPayout(params: RequestPayoutParams) {
   const bonusBalance = wallet.availableBalance;
   const uniqueCodeBalance = member.uniqueCodeBalance || 0;
 
-  // Rule: Saldo kode unik hanya dapat diikutsertakan ditarik jika sudah terakumulasi minimal Rp10.000
-  const eligibleUniqueCode = uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0;
+  // Rule: Saldo kode unik hanya dapat diikutsertakan ditarik jika sudah terakumulasi minimal Rp10.000.
+  // Tambahan penarikan kode unik di atas Rp10.000 harus dalam kelipatan Rp1.000 (sisa ratusan tetap di akun member).
+  const eligibleUniqueCode = uniqueCodeBalance >= 10000
+    ? Math.floor(uniqueCodeBalance / 1000) * 1000
+    : 0;
+  const remainingInAccount = uniqueCodeBalance - eligibleUniqueCode;
   const totalWithdrawable = bonusBalance + eligibleUniqueCode;
 
   if (amount > totalWithdrawable) {
@@ -56,7 +60,7 @@ export async function requestPayout(params: RequestPayoutParams) {
       );
     }
     throw new Error(
-      `Saldo tidak mencukupi. Total saldo dapat ditarik: Rp${totalWithdrawable.toLocaleString('id-ID')} (Bonus Komisi: Rp${bonusBalance.toLocaleString('id-ID')}, Kode Unik Terkumpul: Rp${eligibleUniqueCode.toLocaleString('id-ID')}), diminta: Rp${amount.toLocaleString('id-ID')}`
+      `Saldo tidak mencukupi. Total saldo dapat ditarik: Rp${totalWithdrawable.toLocaleString('id-ID')} (Bonus Komisi: Rp${bonusBalance.toLocaleString('id-ID')}, Kode Unik Eligible: Rp${eligibleUniqueCode.toLocaleString('id-ID')}${remainingInAccount > 0 ? `, Sisa Rp${remainingInAccount.toLocaleString('id-ID')} tersimpan di akun` : ''}), diminta: Rp${amount.toLocaleString('id-ID')}`
     );
   }
 
@@ -64,8 +68,27 @@ export async function requestPayout(params: RequestPayoutParams) {
   const fromBonus = Math.min(bonusBalance, amount);
   const fromUniqueCode = amount - fromBonus;
 
-  const fee = 5000; // Standar biaya transfer antar-bank
+  if (fromUniqueCode > 0) {
+    if (uniqueCodeBalance < 10000) {
+      throw new Error(
+        `Saldo kode unik (Rp${uniqueCodeBalance.toLocaleString('id-ID')}) belum mencapai batas minimal Rp10.000 untuk dapat ditarik.`
+      );
+    }
+    if (fromUniqueCode % 1000 !== 0) {
+      throw new Error(
+        `Penarikan dari saldo kode unik harus dalam kelipatan Rp1.000 (saat ini terambil Rp${fromUniqueCode.toLocaleString('id-ID')}).`
+      );
+    }
+  }
+
+  const fee = 6500; // Biaya transfer antar-bank / BI-FAST
   const netAmount = amount - fee;
+
+  if (netAmount <= 0) {
+    throw new Error(
+      `Nominal penarikan (Rp${amount.toLocaleString('id-ID')}) harus lebih besar dari biaya transfer bank Rp${fee.toLocaleString('id-ID')}.`
+    );
+  }
 
   // Mask account number: e.g. "1234567890" -> "123****890"
   const cleanAcc = effectiveAcc.trim();

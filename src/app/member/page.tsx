@@ -311,9 +311,18 @@ export default function MemberDashboardPage() {
                 Rp{(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')}
               </div>
               <div className="text-[11px] text-varena-taupe mt-1">
-                {memberProfile.uniqueCodeBalance >= 10000
-                  ? '✓ Dapat ditarik — gabungkan dengan bonus komisi (min. total Rp50.000)'
-                  : `Terkumpul Rp${(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')} dari Rp10.000 minimum`}
+                {memberProfile.uniqueCodeBalance >= 10000 ? (
+                  <>
+                    ✓ <strong className="text-emerald-700">Rp{(Math.floor(memberProfile.uniqueCodeBalance / 1000) * 1000).toLocaleString('id-ID')}</strong> eligible ditarik (kelipatan Rp1.000)
+                    {memberProfile.uniqueCodeBalance % 1000 > 0 && (
+                      <span className="block text-stone-500 text-[10px]">
+                        Sisa Rp{(memberProfile.uniqueCodeBalance % 1000).toLocaleString('id-ID')} tetap tersimpan di akun
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  `Terkumpul Rp${(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')} dari Rp10.000 minimum`
+                )}
               </div>
             </div>
             <div className={`px-2 py-1 rounded-full text-[10px] font-bold ${

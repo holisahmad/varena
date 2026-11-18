@@ -821,8 +821,8 @@ async function main() {
     data: {
       memberId: ahmadMember.id,
       amount: 50000,
-      fee: 5000,
-      netAmount: 45000,
+      fee: 6500,
+      netAmount: 43500,
       bankName: 'BCA',
       accountNumberMasked: '123****890',
       accountHolder: 'Ahmad Fauzi',
@@ -845,7 +845,8 @@ async function main() {
       memo: `Pencairan Saldo Payout Disetujui Rp50.000 ke BCA 123****890 (${ahmadMember.memberCode})`,
       entries: [
         { accountCode: `ACC-MBR-${ahmadMember.memberCode}`, direction: 'DEBIT', amount: 50000 },
-        { accountCode: 'ACC-COMP-PAYOUT', direction: 'CREDIT', amount: 50000 },
+        { accountCode: 'ACC-COMP-PAYOUT', direction: 'CREDIT', amount: 43500 },
+        { accountCode: 'ACC-COMP-OPS', direction: 'CREDIT', amount: 6500 },
       ],
     });
 
@@ -875,8 +876,8 @@ async function main() {
     data: {
       memberId: ahmadMember.id,
       amount: 50000,
-      fee: 5000,
-      netAmount: 45000,
+      fee: 6500,
+      netAmount: 43500,
       bankName: 'Bank Mandiri',
       accountNumberMasked: '987****321',
       accountHolder: 'Ahmad Fauzi',
