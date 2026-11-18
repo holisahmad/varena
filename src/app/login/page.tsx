@@ -80,12 +80,13 @@ function LoginForm() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4 text-xs">
+        <form onSubmit={handleLogin} className="space-y-4 text-xs" suppressHydrationWarning>
           <div>
             <label className="block font-semibold text-varena-espresso mb-1">Email Terdaftar</label>
             <input
               type="email"
               required
+              suppressHydrationWarning
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nama@varena.id"
@@ -98,6 +99,7 @@ function LoginForm() {
             <input
               type="password"
               required
+              suppressHydrationWarning
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -108,6 +110,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
+            suppressHydrationWarning
             className="w-full py-3 rounded-lg bg-varena-espresso text-varena-ivory font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center justify-center gap-2 shadow"
           >
             <LogIn className="w-4 h-4 text-varena-gold-light" />

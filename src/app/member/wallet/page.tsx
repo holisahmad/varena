@@ -262,12 +262,13 @@ export default function MemberWalletPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleBindBankAccount} className="space-y-3">
+                <form onSubmit={handleBindBankAccount} className="space-y-3" suppressHydrationWarning>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block font-semibold text-varena-espresso mb-1">Pilih Bank *</label>
                       <select
                         value={bindBankName}
+                        suppressHydrationWarning
                         onChange={(e) => setBindBankName(e.target.value)}
                         className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold bg-white"
                       >
@@ -286,6 +287,7 @@ export default function MemberWalletPage() {
                       <input
                         type="text"
                         required
+                        suppressHydrationWarning
                         value={bindAccountNumber}
                         onChange={(e) => setBindAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
                         placeholder="Contoh: 1234567890"
@@ -299,6 +301,7 @@ export default function MemberWalletPage() {
                     <input
                       type="text"
                       required
+                      suppressHydrationWarning
                       value={bindAccountHolder}
                       onChange={(e) => setBindAccountHolder(e.target.value)}
                       placeholder={`Harus sesuai: ${registeredName}`}
@@ -311,6 +314,7 @@ export default function MemberWalletPage() {
 
                   <button
                     type="submit"
+                    suppressHydrationWarning
                     disabled={bindingBank || !bindAccountNumber || !bindAccountHolder}
                     className="w-full py-2.5 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow"
                   >
@@ -344,7 +348,7 @@ export default function MemberWalletPage() {
             )}
 
             {isBankBound ? (
-              <form onSubmit={handleRequestPayout} className="space-y-3.5 text-xs">
+              <form onSubmit={handleRequestPayout} className="space-y-3.5 text-xs" suppressHydrationWarning>
                 {/* Destination Bank Display (Read-Only) */}
                 <div className="p-3 rounded-lg bg-stone-50 border border-stone-200 flex items-center justify-between text-xs">
                   <div>
@@ -372,6 +376,7 @@ export default function MemberWalletPage() {
                     max={wallet?.availableBalance || 0}
                     step="10000"
                     required
+                    suppressHydrationWarning
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="Minimal Rp50.000"

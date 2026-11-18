@@ -10,6 +10,7 @@ function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [mounted, setMounted] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [legalName, setLegalName] = useState('');
   const [email, setEmail] = useState('');
@@ -23,8 +24,9 @@ function RegisterForm() {
   const [successResult, setSuccessResult] = useState<any>(null);
 
   useEffect(() => {
+    setMounted(true);
     const paramRef = searchParams?.get('ref');
-    const storedRef = localStorage.getItem('varena_referral_code');
+    const storedRef = typeof window !== 'undefined' ? localStorage.getItem('varena_referral_code') : null;
     const initialRef = (paramRef || storedRef || 'VRN-0001').toUpperCase();
     setSponsorCode(initialRef);
     checkSponsor(initialRef);
@@ -82,7 +84,7 @@ function RegisterForm() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-12 w-full">
-      <div className="bg-white border border-varena-taupe/20 rounded-2xl p-6 sm:p-8 shadow-sm">
+      <div className="bg-white border border-varena-taupe/20 rounded-2xl p-6 sm:p-8 shadow-sm" suppressHydrationWarning>
         <div className="text-center mb-6">
           <div className="relative w-16 h-16 mx-auto rounded-full overflow-hidden border border-varena-gold p-0.5 bg-varena-espresso-dark mb-3 shadow-md">
             <Image
@@ -106,13 +108,14 @@ function RegisterForm() {
         )}
 
         {!successResult ? (
-          <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
+          <form onSubmit={handleRegister} className="space-y-3.5 text-xs" suppressHydrationWarning>
             {/* Sponsor Box */}
             <div className="p-3 rounded-xl bg-varena-ivory-light border border-varena-gold/40">
               <label className="block font-semibold text-varena-espresso mb-1">Kode Sponsor Pengundang *</label>
               <input
                 type="text"
                 required
+                suppressHydrationWarning
                 value={sponsorCode}
                 onChange={(e) => {
                   const val = e.target.value.toUpperCase();
@@ -135,6 +138,7 @@ function RegisterForm() {
               <input
                 type="text"
                 required
+                suppressHydrationWarning
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Contoh: Ahmad Fauzi"
@@ -147,6 +151,7 @@ function RegisterForm() {
               <input
                 type="text"
                 required
+                suppressHydrationWarning
                 value={legalName}
                 onChange={(e) => setLegalName(e.target.value)}
                 placeholder="Nama lengkap sesuai identitas resmi"
@@ -160,6 +165,7 @@ function RegisterForm() {
                 <input
                   type="email"
                   required
+                  suppressHydrationWarning
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@domain.com"
@@ -171,6 +177,7 @@ function RegisterForm() {
                 <input
                   type="tel"
                   required
+                  suppressHydrationWarning
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="08123456789"
@@ -184,6 +191,7 @@ function RegisterForm() {
               <input
                 type="password"
                 required
+                suppressHydrationWarning
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimal 8 karakter"
@@ -194,6 +202,7 @@ function RegisterForm() {
             <div className="pt-2">
               <button
                 type="submit"
+                suppressHydrationWarning
                 disabled={loading || !sponsorInfo}
                 className="w-full py-3 rounded-lg bg-varena-gold text-varena-espresso font-semibold text-xs hover:bg-varena-gold-hover transition flex items-center justify-center gap-2 shadow disabled:opacity-50"
               >
