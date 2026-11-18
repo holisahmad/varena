@@ -211,9 +211,10 @@ async function run() {
   fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.png'), fav32);
 
   const icoBuffer = createIcoFromPngs([fav16, fav32, fav48]);
-  fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon.ico'), icoBuffer);
+  // Next.js App Router serves /favicon.ico from src/app/favicon.ico
+  // Writing to both public/ and src/app/ causes a 500 conflicting-public-file-page in Next.js
   fs.writeFileSync(path.join(APP_DIR, 'favicon.ico'), icoBuffer);
-  console.log('✓ Generated public/favicon.ico & src/app/favicon.ico (Multi-size 16/32/48 ICO)');
+  console.log('✓ Generated src/app/favicon.ico (Multi-size 16/32/48 ICO for App Router)');
 
   console.log('=== All assets successfully updated! ===');
 }
