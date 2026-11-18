@@ -154,16 +154,6 @@ export async function GET(req: Request) {
           buyerUserId: user.id,
           orderStatus: { in: ['PENDING_PAYMENT', 'SHIPPED'] },
         },
-        select: {
-          id: true,
-          orderNumber: true,
-          orderStatus: true,
-          total: true,
-          courierName: true,
-          trackingNumber: true,
-          createdAt: true,
-          shippedAt: true,
-        },
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
@@ -200,8 +190,10 @@ export async function GET(req: Request) {
 
     // Latest timestamp for orders badge
     let latestOrderAt: Date | null = null;
-    for (const o of actionOrders) {
-      const t = o.orderStatus === 'SHIPPED' ? (o.shippedAt ?? o.createdAt) : o.createdAt;
+    for (const o of (actionOrders as any[])) {
+      const orderDate = o.createdAt instanceof Date ? o.createdAt : new Date(o.createdAt);
+      const shipDate = o.shippedAt ? (o.shippedAt instanceof Date ? o.shippedAt : new Date(o.shippedAt)) : null;
+      const t = o.orderStatus === 'SHIPPED' ? (shipDate ?? orderDate) : orderDate;
       if (!latestOrderAt || t > latestOrderAt) latestOrderAt = t;
     }
 
@@ -217,24 +209,29 @@ export async function GET(req: Request) {
     // Build notification items list
     const items: NotificationItem[] = [];
 
-    for (const o of actionOrders) {
+    for (const o of (actionOrders as any[])) {
+      const orderDate = o.createdAt instanceof Date ? o.createdAt : new Date(o.createdAt);
+      const shipDate = o.shippedAt ? (o.shippedAt instanceof Date ? o.shippedAt : new Date(o.shippedAt)) : null;
+
       if (o.orderStatus === 'PENDING_PAYMENT') {
         items.push({
           id: `order-pnd-${o.id}`,
           type: 'ORDER_PENDING',
           title: 'Pesanan Menunggu Pembayaran',
-          message: `Segera bayar pesanan ${o.orderNumber} sejumlah Rp${o.total.toLocaleString('id-ID')}`,
+          message: `Segera bayar pesanan ${o.orderNumber} sejumlah Rp${Number(o.total || 0).toLocaleString('id-ID')}`,
           url: `/checkout?orderNumber=${o.orderNumber}`,
-          createdAt: o.createdAt.toISOString(),
+          createdAt: orderDate.toISOString(),
         });
       } else if (o.orderStatus === 'SHIPPED') {
+        const courier = o.courierName || 'Kurir';
+        const resi = o.trackingNumber ? ` (${o.trackingNumber})` : '';
         items.push({
           id: `order-shp-${o.id}`,
           type: 'ORDER_SHIPPED',
           title: 'Pesanan Sedang Dikirim',
-          message: `Paket ${o.orderNumber} via ${o.courierName || 'Kurir'} (${o.trackingNumber || 'Dalam perjalanan'}). Klik untuk konfirmasi jika paket telah tiba.`,
+          message: `Paket ${o.orderNumber} via ${courier}${resi}. Klik untuk konfirmasi jika paket telah tiba.`,
           url: '/member#pesanan',
-          createdAt: (o.shippedAt ?? o.createdAt).toISOString(),
+          createdAt: (shipDate ?? orderDate).toISOString(),
         });
       }
     }
