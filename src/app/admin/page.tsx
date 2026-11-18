@@ -39,6 +39,8 @@ import {
   MapPin,
   QrCode,
   MessageSquare,
+  Eye,
+  Copy,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -117,6 +119,9 @@ export default function AdminPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [transferRef, setTransferRef] = useState<string>('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Order Detail Modal State
+  const [viewOrderDetail, setViewOrderDetail] = useState<any | null>(null);
 
   // Shipping Modal State
   const [shippingModalOrder, setShippingModalOrder] = useState<any | null>(null);
@@ -1534,16 +1539,26 @@ export default function AdminPage() {
                         {orders.map((o) => (
                           <tr key={o.id} className="hover:bg-varena-ivory-light/40">
                             <td className="py-2.5 px-3">
-                              <div className="font-mono font-bold text-varena-espresso">{o.orderNumber}</div>
-                              <div className="text-[10px] text-varena-taupe">
-                                {new Date(o.createdAt).toLocaleDateString('id-ID', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setViewOrderDetail(o)}
+                                className="text-left group cursor-pointer"
+                                title="Klik untuk lihat detail transaksi lengkap"
+                              >
+                                <div className="font-mono font-bold text-varena-espresso group-hover:text-amber-800 flex items-center gap-1 transition">
+                                  <span>{o.orderNumber}</span>
+                                  <Eye className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-800 transition" />
+                                </div>
+                                <div className="text-[10px] text-varena-taupe">
+                                  {new Date(o.createdAt).toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </div>
+                              </button>
                             </td>
                             <td className="py-2.5 px-3 max-w-[200px]">
                               <div className="font-semibold text-varena-espresso">{o.buyerName}</div>
@@ -1643,6 +1658,14 @@ export default function AdminPage() {
                                   <span>Selesai</span>
                                 </span>
                               )}
+
+                              <button
+                                type="button"
+                                onClick={() => setViewOrderDetail(o)}
+                                className="text-[10px] text-stone-500 hover:text-varena-espresso underline block mt-1 ml-auto"
+                              >
+                                Detail Transaksi →
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -1665,6 +1688,206 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+              {/* Modal Detail & Audit Pesanan Admin */}
+              {viewOrderDetail && (
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+                  <div className="bg-white rounded-2xl max-w-2xl w-full border border-varena-taupe/20 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+                    {/* Header */}
+                    <div className="p-4 sm:p-5 bg-varena-espresso text-varena-gold-light flex items-center justify-between flex-shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-varena-gold/20 flex items-center justify-center text-varena-gold">
+                          <Package className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-serif font-bold text-base text-white">Rincian Lengkap Pesanan</h3>
+                          <div className="text-[11px] text-varena-gold-light/80 font-mono mt-0.5">
+                            {viewOrderDetail.orderNumber}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setViewOrderDetail(null)}
+                        className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5 sm:p-6 space-y-4 overflow-y-auto text-xs">
+                      {/* Status and Timestamp Summary */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                        <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                          <div className="text-[10px] text-stone-500 uppercase font-bold">Status Pesanan</div>
+                          <div className="font-bold text-xs mt-1 text-varena-espresso">{viewOrderDetail.orderStatus}</div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                          <div className="text-[10px] text-stone-500 uppercase font-bold">Tipe Order</div>
+                          <div className="font-bold text-xs mt-1 text-varena-espresso">{viewOrderDetail.orderType}</div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                          <div className="text-[10px] text-stone-500 uppercase font-bold">Total Nilai</div>
+                          <div className="font-bold text-xs mt-1 text-varena-espresso font-mono">Rp{viewOrderDetail.total.toLocaleString('id-ID')}</div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                          <div className="text-[10px] text-stone-500 uppercase font-bold">Tanggal Order</div>
+                          <div className="font-semibold text-[11px] mt-1 text-varena-espresso">
+                            {new Date(viewOrderDetail.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Customer & Shipping Details */}
+                      <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2">
+                        <div className="font-bold text-varena-espresso text-xs flex items-center gap-1.5 border-b border-varena-taupe/20 pb-1.5">
+                          <MapPin className="w-4 h-4 text-varena-gold" />
+                          <span>Penerima & Alamat Pengiriman</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                          <div>
+                            <div className="text-stone-500 font-semibold">Nama Pembeli / Penerima:</div>
+                            <div className="font-bold text-varena-espresso text-xs">{viewOrderDetail.buyerName}</div>
+                            <div className="text-stone-600 font-mono mt-0.5">{viewOrderDetail.buyerPhone}</div>
+                            {viewOrderDetail.buyerEmail && <div className="text-stone-600">{viewOrderDetail.buyerEmail}</div>}
+                          </div>
+                          <div>
+                            <div className="text-stone-500 font-semibold">Alamat Tujuan:</div>
+                            <div className="text-varena-espresso leading-relaxed">{viewOrderDetail.shippingAddress}</div>
+                            {(viewOrderDetail.shippingDistrict || viewOrderDetail.shippingCity) && (
+                              <div className="text-stone-600 mt-0.5">
+                                {[viewOrderDetail.shippingDistrict, viewOrderDetail.shippingCity, viewOrderDetail.shippingProvince, viewOrderDetail.shippingPostalCode].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                            {viewOrderDetail.shippingNotes && (
+                              <div className="text-stone-500 italic mt-1">Catatan kurir: {viewOrderDetail.shippingNotes}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Items Ordered */}
+                      <div className="p-4 rounded-xl bg-white border border-varena-taupe/20 space-y-2">
+                        <div className="font-bold text-varena-espresso text-xs border-b border-varena-taupe/20 pb-1.5">
+                          Rincian Produk ({viewOrderDetail.items?.length || 0} Item)
+                        </div>
+                        <div className="divide-y divide-varena-taupe/10">
+                          {viewOrderDetail.items?.map((it: any) => (
+                            <div key={it.id} className="py-2 flex items-center justify-between text-[11px]">
+                              <div>
+                                <span className="font-bold text-varena-espresso">{it.quantity}x</span> {it.nameSnapshot}
+                                <span className="text-[10px] text-stone-400 font-mono ml-2">SKU: {it.skuSnapshot}</span>
+                              </div>
+                              <div className="font-mono font-bold text-varena-espresso">
+                                Rp{(it.lineTotal || it.unitPrice * it.quantity).toLocaleString('id-ID')}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Logistics & Tracking */}
+                      <div className="p-4 rounded-xl bg-white border border-varena-taupe/20 space-y-2">
+                        <div className="font-bold text-varena-espresso text-xs flex items-center gap-1.5 border-b border-varena-taupe/20 pb-1.5">
+                          <Truck className="w-4 h-4 text-varena-gold" />
+                          <span>Status Pengiriman Kurir</span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <div>
+                            <div className="text-stone-500">Ekspedisi Kurir:</div>
+                            <div className="font-bold text-varena-espresso">{viewOrderDetail.courierName || 'Belum Ditentukan'}</div>
+                          </div>
+                          <div>
+                            <div className="text-stone-500">Nomor Resi:</div>
+                            <div className="font-mono font-bold text-varena-espresso">
+                              {viewOrderDetail.trackingNumber || 'Belum Ada Resi'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-stone-500">Sumber Pemenuhan:</div>
+                            <div className="font-medium text-varena-espresso">{viewOrderDetail.fulfillmentSource}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Manual Transfer Proof If Present */}
+                      {viewOrderDetail.paymentConfirmationStatus && viewOrderDetail.paymentConfirmationStatus !== 'NONE' && (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
+                          <div className="font-bold text-amber-950 text-xs flex items-center gap-1.5 border-b border-amber-200 pb-1.5">
+                            <CreditCard className="w-4 h-4 text-amber-700" />
+                            <span>Data Konfirmasi Transfer Manual</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                            <div>Bank Asal: <strong>{viewOrderDetail.senderBankName || '-'}</strong></div>
+                            <div>Nama Pemilik: <strong>{viewOrderDetail.senderAccountName || '-'}</strong></div>
+                            <div>Nominal Ditransfer: <strong className="font-mono">Rp{viewOrderDetail.transferAmountPaid?.toLocaleString('id-ID') || '-'}</strong></div>
+                            <div>Status Konfirmasi: <strong className="text-amber-800">{viewOrderDetail.paymentConfirmationStatus}</strong></div>
+                          </div>
+                          {viewOrderDetail.transferNotes && (
+                            <div className="text-[11px] text-stone-600 italic">Catatan: {viewOrderDetail.transferNotes}</div>
+                          )}
+                          {viewOrderDetail.paymentProofUrl && (
+                            <div className="pt-1">
+                              <a
+                                href={viewOrderDetail.paymentProofUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block px-3 py-1 text-xs rounded bg-amber-700 hover:bg-amber-800 text-white font-semibold transition"
+                              >
+                                Buka Foto Bukti Transfer ↗
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-col sm:flex-row justify-between items-center gap-2 flex-shrink-0">
+                      <div className="text-stone-500 text-[11px]">
+                        VARENA Order Management
+                      </div>
+                      <div className="flex gap-2">
+                        {viewOrderDetail.orderStatus === 'PENDING_PAYMENT' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const o = viewOrderDetail;
+                              setViewOrderDetail(null);
+                              handleConfirmOrderPayment(o.id);
+                            }}
+                            className="py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition"
+                          >
+                            Konfirmasi Lunas Sekarang
+                          </button>
+                        )}
+                        {viewOrderDetail.orderStatus === 'PAID' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const o = viewOrderDetail;
+                              setViewOrderDetail(null);
+                              setShippingModalOrder(o);
+                              setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
+                            }}
+                            className="py-2 px-3 rounded-lg bg-varena-espresso hover:bg-varena-espresso-dark text-varena-gold-light font-semibold text-xs transition"
+                          >
+                            Input Resi & Kirim
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setViewOrderDetail(null)}
+                          className="py-2 px-4 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-semibold text-xs transition"
+                        >
+                          Tutup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Modal Input Resi Kurir Pengiriman */}
               {shippingModalOrder && (

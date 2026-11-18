@@ -25,7 +25,11 @@ export async function GET(req: Request) {
     const whereClause: any = {};
 
     if (status !== 'ALL') {
-      whereClause.orderStatus = status;
+      if (status === 'MANUAL_CONFIRMATION' || status === 'SUBMITTED') {
+        whereClause.paymentConfirmationStatus = 'SUBMITTED';
+      } else {
+        whereClause.orderStatus = status;
+      }
     }
 
     if (q) {
@@ -37,7 +41,7 @@ export async function GET(req: Request) {
       ];
     }
 
-    const [orders, filteredCount, pendingPaymentCount, paidCount, shippedCount, completedCount, totalCount] = await Promise.all([
+    const [orders, filteredCount, pendingPaymentCount, paidCount, shippedCount, completedCount, manualConfirmationCount, totalCount] = await Promise.all([
       prisma.order.findMany({
         where: whereClause,
         include: {
@@ -70,6 +74,7 @@ export async function GET(req: Request) {
       prisma.order.count({ where: { orderStatus: 'PAID' } }),
       prisma.order.count({ where: { orderStatus: 'SHIPPED' } }),
       prisma.order.count({ where: { orderStatus: 'COMPLETED' } }),
+      prisma.order.count({ where: { paymentConfirmationStatus: 'SUBMITTED' } }),
       prisma.order.count(),
     ]);
 
@@ -88,6 +93,7 @@ export async function GET(req: Request) {
         paidReadyToShip: paidCount,
         shipped: shippedCount,
         completed: completedCount,
+        manualConfirmation: manualConfirmationCount,
       },
     });
   } catch (err: any) {
