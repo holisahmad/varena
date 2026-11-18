@@ -18,19 +18,52 @@ export async function GET(req: Request) {
     const userEmail = req.headers.get('x-user-email');
 
     if (!userId && !userEmail) {
-      return NextResponse.json({ role: 'guest', total: 0, items: [] });
+      return NextResponse.json({
+        role: 'guest',
+        total: 1,
+        items: [
+          {
+            id: 'guest-welcome-notif',
+            type: 'ORDER_PENDING',
+            title: 'Masuk Mitra untuk Notifikasi',
+            message: 'Silakan masuk ke akun kemitraan Anda untuk memantau status pesanan, pengiriman resi, dan komisi secara real-time.',
+            url: '/login',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
     }
 
     // Resolve user & roles
     const user = await prisma.user.findFirst({
-      where: userId ? { id: userId } : { email: userEmail! },
+      where: {
+        OR: [
+          ...(userId ? [{ id: userId }] : []),
+          ...(userEmail ? [{ email: userEmail }] : []),
+        ],
+      },
       include: {
         userRoles: { include: { role: true } },
         member: { select: { id: true, memberCode: true } },
       },
     });
 
-    if (!user) return NextResponse.json({ role: 'guest', total: 0, items: [] });
+    if (!user) {
+      return NextResponse.json({
+        role: 'guest',
+        total: 1,
+        items: [
+          {
+            id: 'guest-welcome-notif',
+            type: 'ORDER_PENDING',
+            title: 'Masuk Mitra untuk Notifikasi',
+            message: 'Silakan masuk ke akun kemitraan Anda untuk memantau status pesanan, pengiriman resi, dan komisi secara real-time.',
+            url: '/login',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+    }
 
     const roleCodes = user.userRoles.map((ur) => ur.role.code.toLowerCase());
     const isAdmin = roleCodes.some((r) =>
@@ -151,7 +184,10 @@ export async function GET(req: Request) {
       // Orders needing member action: pending payment or shipped (needs delivery confirm)
       prisma.order.findMany({
         where: {
-          buyerUserId: user.id,
+          OR: [
+            { buyerUserId: user.id },
+            ...(user.email ? [{ buyerEmail: user.email }] : []),
+          ],
           orderStatus: { in: ['PENDING_PAYMENT', 'SHIPPED'] },
         },
         orderBy: { createdAt: 'desc' },

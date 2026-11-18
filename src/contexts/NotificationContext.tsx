@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [readIds, setReadIds] = useState<string[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const pathname = usePathname();
+
   // Initialize read IDs from localStorage
   useEffect(() => {
     setReadIds(getReadIds());
@@ -109,23 +112,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const fetchBadge = useCallback(async () => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('varena_user');
-    if (!stored) {
-      setBadge({ role: 'guest', total: 0, items: [] });
-      return;
+    let user: any = null;
+    if (stored) {
+      try {
+        user = JSON.parse(stored);
+      } catch {}
     }
-    let user: any;
-    try {
-      user = JSON.parse(stored);
-    } catch {
-      return;
-    }
-    if (!user?.id) return;
+
+    const userId = user?.userId || user?.id || '';
+    const userEmail = user?.email || '';
 
     try {
       const res = await fetch('/api/v1/notifications/badge', {
         headers: {
-          'x-user-id': user.id,
-          'x-user-email': user.email || '',
+          'x-user-id': userId,
+          'x-user-email': userEmail,
         },
         cache: 'no-store',
       });
@@ -137,14 +138,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // Initial fetch + 60s polling
+  // Fetch on pathname change + 60s polling
   useEffect(() => {
     fetchBadge();
     intervalRef.current = setInterval(fetchBadge, 60_000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchBadge]);
+  }, [pathname, fetchBadge]);
 
   const items: NotificationItem[] =
     badge && 'items' in badge && Array.isArray(badge.items) ? badge.items : [];

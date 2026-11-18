@@ -137,25 +137,23 @@ export default function Navbar() {
 
           {/* Desktop User profile & Actions */}
           <div className="hidden md:flex items-center gap-3">
-            {/* Desktop Notification Bell (when user logged in) */}
-            {user && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                  className="p-2 rounded-lg bg-varena-espresso-light/60 hover:bg-varena-espresso-light text-varena-gold-light hover:text-white transition relative"
-                  aria-label="Buka Notifikasi"
-                  title="Notifikasi"
-                >
-                  <Bell className="w-4 h-4" />
-                  {totalBadgeCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
-                      {totalBadgeCount > 9 ? '9+' : totalBadgeCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
+            {/* Desktop Notification Bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                className="p-2 rounded-lg bg-varena-espresso-light/60 hover:bg-varena-espresso-light text-varena-gold-light hover:text-white transition relative"
+                aria-label="Buka Notifikasi"
+                title="Notifikasi"
+              >
+                <Bell className="w-4 h-4" />
+                {totalBadgeCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow">
+                    {totalBadgeCount > 9 ? '9+' : totalBadgeCount}
+                  </span>
+                )}
+              </button>
+            </div>
 
             {user ? (
               <div className="flex items-center gap-3">
