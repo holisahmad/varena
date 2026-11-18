@@ -118,15 +118,17 @@ export function detectSuspiciousPatterns(text: string): boolean {
  */
 export async function withTransactionRetry<T>(
   fn: (tx: any) => Promise<T>,
-  maxRetries: number = 3,
+  maxRetriesOrOptions: number | { maxRetries?: number; maxWait?: number; timeout?: number } = 3,
   baseDelayMs: number = 100
 ): Promise<T> {
+  const maxRetries = typeof maxRetriesOrOptions === 'number' ? maxRetriesOrOptions : (maxRetriesOrOptions?.maxRetries ?? 3);
+  const txOptions = typeof maxRetriesOrOptions === 'object' ? maxRetriesOrOptions : {};
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
       return await prisma.$transaction(fn, {
-        maxWait: 15000,
-        timeout: 30000,
+        maxWait: txOptions.maxWait ?? 15000,
+        timeout: txOptions.timeout ?? 30000,
       });
     } catch (err: any) {
       attempt++;

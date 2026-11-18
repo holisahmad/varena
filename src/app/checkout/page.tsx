@@ -14,10 +14,19 @@ function CheckoutContent() {
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [referralInfo, setReferralInfo] = useState<any>(null);
   const [isStockist, setIsStockist] = useState(false);
+
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [shippingProvince, setShippingProvince] = useState('');
+  const [shippingCity, setShippingCity] = useState('');
+  const [shippingDistrict, setShippingDistrict] = useState('');
+  const [shippingPostalCode, setShippingPostalCode] = useState('');
+  const [addressDetail, setAddressDetail] = useState('');
+  const [shippingNotes, setShippingNotes] = useState('');
+  const [uniqueCode, setUniqueCode] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
@@ -63,6 +72,13 @@ function CheckoutContent() {
         if (u.stockistType === 'MASTER' || u.stockistType === 'MOBILE') {
           setIsStockist(true);
         }
+        if (u.recipientName) setRecipientName(u.recipientName);
+        if (u.recipientPhone) setRecipientPhone(u.recipientPhone);
+        if (u.province) setShippingProvince(u.province);
+        if (u.city) setShippingCity(u.city);
+        if (u.district) setShippingDistrict(u.district);
+        if (u.postalCode) setShippingPostalCode(u.postalCode);
+        if (u.addressDetail) setAddressDetail(u.addressDetail);
       } catch (e) {}
     }
   }, [searchParams]);
@@ -88,7 +104,7 @@ function CheckoutContent() {
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
   const subtotal = selectedVariant ? selectedVariant.price * quantity : 0;
   const shippingCost = isStockist ? 0 : (subtotal > 0 ? 20000 : 0);
-  const total = subtotal + shippingCost;
+  const total = subtotal + shippingCost; // uniqueCode added server-side, displayed after order created
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,11 +132,18 @@ function CheckoutContent() {
           buyerName,
           buyerPhone,
           buyerEmail,
-          shippingAddress,
+          shippingAddress: `${addressDetail}, ${shippingDistrict}, ${shippingCity}, ${shippingProvince} ${shippingPostalCode}`,
           referralCode: referralCode ? referralCode.trim() : undefined,
           items: [{ variantId: selectedVariantId, quantity }],
           shippingCost,
           isStockistOrder: isStockist,
+          recipientName: recipientName || buyerName,
+          recipientPhone: recipientPhone || buyerPhone,
+          shippingProvince,
+          shippingCity,
+          shippingDistrict,
+          shippingPostalCode,
+          shippingNotes,
         }),
       });
 
@@ -129,6 +152,7 @@ function CheckoutContent() {
         throw new Error(data.error || 'Gagal memproses pesanan.');
       }
       setOrderResult(data.order);
+      if (data.order.uniqueCode) setUniqueCode(data.order.uniqueCode);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -245,26 +269,26 @@ function CheckoutContent() {
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-semibold text-varena-espresso mb-1">Nama Lengkap Pembeli *</label>
+                  <label className="block font-semibold text-varena-espresso mb-1">Nama Penerima *</label>
                   <input
                     type="text"
                     required
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    placeholder="Contoh: Budi Gunawan"
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                    placeholder={buyerName || 'Nama penerima paket'}
                     className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-varena-espresso mb-1">Nomor WhatsApp / HP *</label>
+                    <label className="block font-semibold text-varena-espresso mb-1">Nomor HP Penerima *</label>
                     <input
                       type="tel"
                       required
-                      value={buyerPhone}
-                      onChange={(e) => setBuyerPhone(e.target.value)}
-                      placeholder="081234567890"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      placeholder={buyerPhone || '081234567890'}
                       className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
                     />
                   </div>
@@ -280,14 +304,81 @@ function CheckoutContent() {
                   </div>
                 </div>
 
+                <div className="pt-2 border-t border-varena-taupe/20">
+                  <p className="font-bold text-varena-espresso mb-2 text-[11px] uppercase tracking-wide">Alamat Pengiriman Terstruktur</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">Provinsi *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingProvince}
+                      onChange={(e) => setShippingProvince(e.target.value)}
+                      placeholder="DKI Jakarta"
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">Kota / Kabupaten *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingCity}
+                      onChange={(e) => setShippingCity(e.target.value)}
+                      placeholder="Jakarta Selatan"
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">Kecamatan *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingDistrict}
+                      onChange={(e) => setShippingDistrict(e.target.value)}
+                      placeholder="Kebayoran Baru"
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-varena-espresso mb-1">Kode Pos *</label>
+                    <input
+                      type="text"
+                      required
+                      value={shippingPostalCode}
+                      onChange={(e) => setShippingPostalCode(e.target.value)}
+                      placeholder="12160"
+                      pattern="[0-9]{5}"
+                      maxLength={5}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block font-semibold text-varena-espresso mb-1">Alamat Lengkap Pengiriman *</label>
+                  <label className="block font-semibold text-varena-espresso mb-1">Detail Jalan / Alamat *</label>
                   <textarea
                     required
                     rows={2}
-                    value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    placeholder="Jl. Mawar No. 12, RT 01/02, Kebayoran Baru, Jakarta Selatan"
+                    value={addressDetail}
+                    onChange={(e) => setAddressDetail(e.target.value)}
+                    placeholder="Jl. Mawar No. 12, RT 01/02, Komplek..."
+                    className="w-full px-3.5 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-varena-espresso mb-1">Catatan untuk Kurir (Opsional)</label>
+                  <textarea
+                    rows={1}
+                    value={shippingNotes}
+                    onChange={(e) => setShippingNotes(e.target.value)}
+                    placeholder="Patokan / catatan pengantar"
                     className="w-full px-3.5 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
                   ></textarea>
                 </div>
@@ -357,6 +448,7 @@ function CheckoutContent() {
                 <span>Total Tagihan:</span>
                 <span className="font-serif text-2xl text-varena-gold-light">Rp{total.toLocaleString('id-ID')}</span>
               </div>
+              <p className="text-[10px] text-varena-gold-light/70">+ kode unik 3 digit akan ditambahkan otomatis</p>
 
               <button
                 type="submit"
@@ -399,21 +491,58 @@ function CheckoutContent() {
           </div>
 
           {!settleResult ? (
-            <div className="p-5 rounded-xl border-2 border-dashed border-varena-gold/60 bg-amber-50/40 text-center space-y-3">
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-varena-espresso">
-                <CreditCard className="w-4 h-4 text-varena-gold" />
-                <span>Simulasi Pembayaran Terverifikasi (Sandbox)</span>
+            <div className="p-5 rounded-xl border-2 border-dashed border-varena-gold/60 bg-amber-50/40 space-y-4">
+              <div className="text-center">
+                <div className="text-xs font-bold text-varena-espresso flex items-center justify-center gap-1.5 mb-3">
+                  <CreditCard className="w-4 h-4 text-varena-gold" />
+                  <span>Instruksi Pembayaran</span>
+                </div>
+
+                {/* Bank destination */}
+                <div className="p-3 rounded-lg bg-white border border-varena-gold/30 text-left space-y-1">
+                  <div className="text-[10px] text-varena-taupe uppercase font-bold">Transfer ke Rekening:</div>
+                  <div className="font-mono font-bold text-varena-espresso">8820-192-888</div>
+                  <div className="text-xs font-semibold text-varena-espresso">BCA — a.n. PT VARENA MAJU BERSAMA</div>
+                </div>
+
+                {/* Exact amount */}
+                <div className="mt-3 p-3 rounded-lg bg-varena-espresso text-center">
+                  <div className="text-[10px] text-varena-gold-light/70 uppercase font-bold mb-1">Nominal EXACT yang harus ditransfer:</div>
+                  <div className="font-serif text-2xl font-bold text-varena-gold-light">
+                    Rp{(orderResult.total).toLocaleString('id-ID')}
+                  </div>
+                  {uniqueCode > 0 && (
+                    <div className="text-[11px] text-varena-gold-light/80 mt-1">
+                      (termasuk kode unik: +Rp{uniqueCode} untuk rekonsiliasi)
+                    </div>
+                  )}
+                </div>
+
+                {/* Warning */}
+                <div className="mt-3 p-2.5 rounded-lg bg-amber-100 border border-amber-300 text-left">
+                  <div className="text-[11px] text-amber-900 font-semibold">⚠ Penting:</div>
+                  <div className="text-[11px] text-amber-800">Transfer nominal EXACT termasuk {uniqueCode} digit terakhir. Jika salah nominal atau kode unik, klik link di bawah untuk konfirmasi manual.</div>
+                </div>
               </div>
-              <p className="text-[11px] text-varena-taupe-dark">
-                Tekan tombol di bawah untuk menyimulasikan webhook pembayaran sukses. Sistem secara otomatis akan memproses mesin komisi (Direct Reward + 10-level Development Placement) dan mencatat mutasi ke Buku Besar (Double-Entry Ledger).
-              </p>
+
+              {/* Wrong transfer link */}
+              <div className="pt-2 border-t border-varena-gold/20 text-center">
+                <Link
+                  href={`/confirm-payment?orderNumber=${orderResult.orderNumber}`}
+                  className="text-[11px] text-varena-gold hover:underline font-semibold"
+                >
+                  Salah transfer? Klik di sini untuk konfirmasi manual →
+                </Link>
+              </div>
+
+              {/* Simulate payment button (sandbox only) */}
               <button
                 type="button"
                 onClick={handleSimulatePayment}
                 disabled={settling}
-                className="w-full py-3 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center justify-center gap-2 shadow"
+                className="w-full py-2.5 rounded-lg bg-varena-espresso/60 text-varena-gold-light/80 font-semibold text-xs hover:bg-varena-espresso transition flex items-center justify-center gap-2 border border-dashed border-varena-gold/30"
               >
-                {settling ? 'Menghitung Komisi & Buku Besar...' : 'Simulasikan Pembayaran Berhasil'}
+                {settling ? 'Memproses...' : '[DEV] Simulasikan Pembayaran Diterima'}
               </button>
             </div>
           ) : (

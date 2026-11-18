@@ -34,6 +34,7 @@ export default function MemberWalletPage() {
   // Withdrawal form
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uniqueCodeBalance, setUniqueCodeBalance] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -60,6 +61,12 @@ export default function MemberWalletPage() {
             setBindAccountHolder(data.wallet.bankInfo.legalName || data.wallet.bankInfo.displayName);
           }
         }
+        // Also fetch uniqueCodeBalance from member profile
+        const memberCode = code;
+        fetch(`/api/v1/member/profile?memberCode=${memberCode}`)
+          .then((r) => r.json())
+          .then((p) => { if (p.member) setUniqueCodeBalance(p.member.uniqueCodeBalance || 0); })
+          .catch(() => {});
       })
       .finally(() => setLoading(false));
   };
@@ -363,17 +370,48 @@ export default function MemberWalletPage() {
                   <Lock className="w-4 h-4 text-emerald-600" />
                 </div>
 
+                {/* Saldo Breakdown */}
+                <div className="p-3 rounded-lg bg-varena-ivory-light border border-varena-taupe/20 space-y-1.5 text-xs">
+                  <div className="font-semibold text-varena-espresso text-[11px] uppercase tracking-wide mb-2">Rincian Saldo Dapat Ditarik</div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-600">Saldo Bonus Komisi:</span>
+                    <span className="font-mono font-semibold text-varena-espresso">Rp{(wallet?.availableBalance || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-stone-600">Kode Unik Terkumpul:</span>
+                    <div className="text-right">
+                      <span className={`font-mono font-semibold ${uniqueCodeBalance >= 10000 ? 'text-emerald-700' : 'text-stone-400'}`}>
+                        Rp{uniqueCodeBalance.toLocaleString('id-ID')}
+                      </span>
+                      {uniqueCodeBalance < 10000 && uniqueCodeBalance > 0 && (
+                        <div className="text-[10px] text-stone-400">(min. Rp10.000 untuk eligible)</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="pt-1.5 border-t border-varena-taupe/20 flex justify-between font-bold">
+                    <span className="text-varena-espresso">Total Dapat Ditarik:</span>
+                    <span className="font-mono text-varena-espresso">
+                      Rp{((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  {uniqueCodeBalance >= 10000 && (
+                    <div className="text-[10px] text-emerald-700 font-semibold">
+                      ✓ Kode unik Rp{uniqueCodeBalance.toLocaleString('id-ID')} eligible untuk digabung dengan penarikan
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="font-semibold text-varena-espresso">Nominal Penarikan (Rp) *</label>
                     <span className="text-[10px] text-stone-500 font-mono">
-                      Maks: Rp{(wallet?.availableBalance || 0).toLocaleString('id-ID')}
+                      Maks: Rp{((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)).toLocaleString('id-ID')}
                     </span>
                   </div>
                   <input
                     type="number"
                     min="50000"
-                    max={wallet?.availableBalance || 0}
+                    max={((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0))}
                     step="10000"
                     required
                     suppressHydrationWarning
@@ -397,10 +435,10 @@ export default function MemberWalletPage() {
                       {(quickVal / 1000).toLocaleString('id-ID')}k
                     </button>
                   ))}
-                  {wallet?.availableBalance >= 50000 && (
+                  {((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)) >= 50000 && (
                     <button
                       type="button"
-                      onClick={() => setAmount(String(wallet.availableBalance))}
+                      onClick={() => setAmount(String((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)))}
                       className="px-2.5 py-1 text-[10px] font-bold rounded border border-varena-gold bg-varena-gold/10 text-varena-espresso hover:bg-varena-gold/20 transition"
                     >
                       Tarik Semua
@@ -415,7 +453,7 @@ export default function MemberWalletPage() {
 
                 <button
                   type="submit"
-                  disabled={submitting || (wallet?.availableBalance || 0) < 50000 || !amount || parseInt(amount, 10) < 50000}
+                  disabled={submitting || ((wallet?.availableBalance || 0) + (uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0)) < 50000 || !amount || parseInt(amount, 10) < 50000}
                   className="w-full py-3 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition disabled:opacity-50 flex items-center justify-center gap-2 shadow"
                 >
                   <Wallet className="w-4 h-4" />

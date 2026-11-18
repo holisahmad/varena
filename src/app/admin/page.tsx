@@ -78,6 +78,10 @@ export default function AdminPage() {
   const [bulkShipInput, setBulkShipInput] = useState('');
   const [bulkShipLoading, setBulkShipLoading] = useState(false);
 
+  // Payment confirmation state
+  const [paymentProofOrders, setPaymentProofOrders] = useState<any[]>([]);
+  const [rejectingPaymentId, setRejectingPaymentId] = useState<string | null>(null);
+
   // Placement transfer form
   const [transferMemberCode, setTransferMemberCode] = useState('');
   const [transferNewParentCode, setTransferNewParentCode] = useState('');
@@ -156,6 +160,7 @@ export default function AdminPage() {
         if (oData.orders) {
           setOrders(oData.orders);
           setOrdersSummary(oData.summary);
+          setPaymentProofOrders(oData.orders.filter((o: any) => o.paymentConfirmationStatus === 'SUBMITTED'));
         }
         if (lData.logs) {
           setAuditLogs(lData.logs);
@@ -179,6 +184,7 @@ export default function AdminPage() {
         if (data.orders) {
           setOrders(data.orders);
           setOrdersSummary(data.summary);
+          setPaymentProofOrders(data.orders.filter((o: any) => o.paymentConfirmationStatus === 'SUBMITTED'));
         }
       });
   };
@@ -1207,6 +1213,96 @@ export default function AdminPage() {
               <span>Bulk Resi Pengiriman</span>
             </button>
           </div>
+
+          {/* Payment Proof Review Section */}
+          {paymentProofOrders.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border-2 border-amber-300 space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <h3 className="font-serif font-bold text-amber-900">
+                  Konfirmasi Transfer Manual ({paymentProofOrders.length} pesanan)
+                </h3>
+              </div>
+              <p className="text-xs text-amber-800">
+                Pesanan berikut memiliki bukti transfer yang dikirim member dan menunggu verifikasi admin.
+              </p>
+              <div className="space-y-2">
+                {paymentProofOrders.map((o) => (
+                  <div key={o.id} className="p-3 rounded-lg bg-white border border-amber-200 space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="font-mono font-bold text-varena-espresso text-sm">{o.orderNumber}</div>
+                        <div className="text-xs text-varena-taupe">{o.buyerName} · Rp{o.total?.toLocaleString('id-ID')}</div>
+                        {o.senderBankName && (
+                          <div className="text-xs text-stone-600 mt-0.5">
+                            Bank: <strong>{o.senderBankName}</strong> · a.n. <strong>{o.senderAccountName}</strong> · Transfer: <strong>Rp{o.transferAmountPaid?.toLocaleString('id-ID')}</strong>
+                          </div>
+                        )}
+                        {o.transferNotes && (
+                          <div className="text-xs italic text-stone-500">Catatan: {o.transferNotes}</div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 flex-wrap items-center">
+                        {o.paymentProofUrl && (
+                          <a
+                            href={o.paymentProofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 text-[11px] rounded bg-blue-100 text-blue-800 font-semibold border border-blue-200 hover:bg-blue-200 transition"
+                          >
+                            Lihat Bukti Transfer
+                          </a>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Verifikasi & tandai lunas pesanan ${o.orderNumber}?`)) return;
+                            setActionLoading(true);
+                            try {
+                              const res = await fetch('/api/v1/admin/orders', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.userId || currentUser?.id || '' },
+                                body: JSON.stringify({ action: 'CONFIRM_PAYMENT', orderId: o.id, actorUserId: currentUser?.userId || currentUser?.id }),
+                              });
+                              const d = await res.json();
+                              if (!res.ok) throw new Error(d.error);
+                              alert('Pembayaran berhasil diverifikasi & komisi telah dihitung!');
+                              setPaymentProofOrders(prev => prev.filter(x => x.id !== o.id));
+                              loadFilteredOrders();
+                            } catch (e: any) { alert(e.message); } finally { setActionLoading(false); }
+                          }}
+                          disabled={actionLoading}
+                          className="px-2.5 py-1 text-[11px] rounded bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition"
+                        >
+                          ✓ Verifikasi & Lunas
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Tolak konfirmasi transfer pesanan ${o.orderNumber}? Member perlu mengulang konfirmasi.`)) return;
+                            setRejectingPaymentId(o.id);
+                            try {
+                              const res = await fetch('/api/v1/orders/confirm-payment', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: o.id, action: 'REJECT' }),
+                              });
+                              const d = await res.json();
+                              if (!res.ok) throw new Error(d.error);
+                              setPaymentProofOrders(prev => prev.filter(x => x.id !== o.id));
+                              loadFilteredOrders();
+                            } catch (e: any) { alert(e.message); } finally { setRejectingPaymentId(null); }
+                          }}
+                          disabled={rejectingPaymentId === o.id}
+                          className="px-2 py-1 text-[11px] rounded bg-rose-100 text-rose-800 font-semibold border border-rose-200 hover:bg-rose-200 transition"
+                        >
+                          ✗ Tolak
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Orders Table */}
           <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">

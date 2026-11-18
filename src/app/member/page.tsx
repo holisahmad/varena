@@ -21,6 +21,7 @@ import {
   AlertCircle,
   ExternalLink,
   ChevronRight,
+  Gift,
 } from 'lucide-react';
 
 export default function MemberDashboardPage() {
@@ -33,6 +34,7 @@ export default function MemberDashboardPage() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [memberProfile, setMemberProfile] = useState<any>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -54,12 +56,14 @@ export default function MemberDashboardPage() {
       fetch(`/api/v1/wallet?memberCode=${memberCode}`).then((r) => r.json()),
       fetch(`/api/v1/commission/summary?memberCode=${memberCode}`).then((r) => r.json()),
       fetch(`/api/v1/orders/my-orders?memberCode=${memberCode}&userId=${userId}`).then((r) => r.json()),
+      fetch(`/api/v1/member/profile?memberCode=${memberCode}&userId=${userId}`).then((r) => r.json()),
     ])
-      .then(([wData, cData, oData]) => {
+      .then(([wData, cData, oData, pData]) => {
         if (wData.wallet) setWallet(wData.wallet);
         if (cData.summary) setCommissionSummary(cData.summary);
         if (oData.personalOrders) setPersonalOrders(oData.personalOrders);
         if (oData.referralOrders) setReferralOrders(oData.referralOrders);
+        if (pData.member) setMemberProfile(pData.member);
       })
       .catch((e) => console.error('Dashboard load error:', e))
       .finally(() => setLoading(false));
@@ -294,6 +298,55 @@ export default function MemberDashboardPage() {
         </div>
       </div>
 
+      {/* Unique Code Balance Card - only show if member has uniqueCodeBalance */}
+      {memberProfile && (
+        <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-varena-taupe mb-1">
+                <Gift className="w-4 h-4 text-varena-gold" />
+                <span>Kode Unik Terkumpul</span>
+              </div>
+              <div className="font-serif text-2xl font-bold text-varena-espresso mt-1">
+                Rp{(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')}
+              </div>
+              <div className="text-[11px] text-varena-taupe mt-1">
+                {memberProfile.uniqueCodeBalance >= 10000
+                  ? '✓ Dapat ditarik — gabungkan dengan bonus komisi (min. total Rp50.000)'
+                  : `Terkumpul Rp${(memberProfile.uniqueCodeBalance || 0).toLocaleString('id-ID')} dari Rp10.000 minimum`}
+              </div>
+            </div>
+            <div className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+              memberProfile.uniqueCodeBalance >= 10000
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                : 'bg-stone-100 text-stone-600 border border-stone-200'
+            }`}>
+              {memberProfile.uniqueCodeBalance >= 10000 ? 'Eligible Tarik' : 'Belum Eligible'}
+            </div>
+          </div>
+          {memberProfile.uniqueCodeBalance > 0 && memberProfile.uniqueCodeBalance < 10000 && (
+            <div className="mt-3">
+              <div className="w-full bg-stone-100 rounded-full h-1.5">
+                <div
+                  className="bg-varena-gold h-1.5 rounded-full transition-all"
+                  style={{ width: `${Math.min(100, (memberProfile.uniqueCodeBalance / 10000) * 100)}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-varena-taupe mt-1 text-right">
+                {Math.round((memberProfile.uniqueCodeBalance / 10000) * 100)}% menuju threshold
+              </div>
+            </div>
+          )}
+          <Link
+            href="/member/wallet"
+            className="mt-3 pt-3 border-t border-varena-taupe/20 text-xs font-semibold text-varena-gold hover:text-varena-gold-hover flex items-center justify-between"
+          >
+            <span>Tarik Dana / Lihat Detail</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+
       {/* Section: Pesanan & Pengiriman Saya (Sinkronisasi Logistik) */}
       <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
@@ -414,6 +467,14 @@ export default function MemberDashboardPage() {
                           className="text-amber-800 font-semibold underline text-[11px]"
                         >
                           Bayar Sekarang
+                        </Link>
+                      )}
+                      {po.orderStatus === 'PENDING_PAYMENT' && po.uniqueCode > 0 && (
+                        <Link
+                          href={`/confirm-payment?orderNumber=${po.orderNumber}`}
+                          className="text-[11px] text-amber-700 hover:underline block mt-1"
+                        >
+                          Konfirmasi transfer salah →
                         </Link>
                       )}
                     </td>

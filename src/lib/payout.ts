@@ -40,11 +40,29 @@ export async function requestPayout(params: RequestPayoutParams) {
     );
   }
 
-  // Check current ledger balance
+  // Check current ledger balance and unique code accumulation
   const wallet = await getMemberWallet(member.memberCode);
-  if (wallet.availableBalance < amount) {
-    throw new Error(`Saldo tidak mencukupi. Saldo tersedia: Rp${wallet.availableBalance.toLocaleString('id-ID')}, diminta: Rp${amount.toLocaleString('id-ID')}`);
+  const bonusBalance = wallet.availableBalance;
+  const uniqueCodeBalance = member.uniqueCodeBalance || 0;
+
+  // Rule: Saldo kode unik hanya dapat diikutsertakan ditarik jika sudah terakumulasi minimal Rp10.000
+  const eligibleUniqueCode = uniqueCodeBalance >= 10000 ? uniqueCodeBalance : 0;
+  const totalWithdrawable = bonusBalance + eligibleUniqueCode;
+
+  if (amount > totalWithdrawable) {
+    if (uniqueCodeBalance > 0 && uniqueCodeBalance < 10000 && amount <= (bonusBalance + uniqueCodeBalance)) {
+      throw new Error(
+        `Saldo kode unik Anda (Rp${uniqueCodeBalance.toLocaleString('id-ID')}) belum mencapai batas minimal akumulasi Rp10.000 untuk dapat ditarik. Saldo yang dapat ditarik saat ini hanya bonus komisi: Rp${bonusBalance.toLocaleString('id-ID')}.`
+      );
+    }
+    throw new Error(
+      `Saldo tidak mencukupi. Total saldo dapat ditarik: Rp${totalWithdrawable.toLocaleString('id-ID')} (Bonus Komisi: Rp${bonusBalance.toLocaleString('id-ID')}, Kode Unik Terkumpul: Rp${eligibleUniqueCode.toLocaleString('id-ID')}), diminta: Rp${amount.toLocaleString('id-ID')}`
+    );
   }
+
+  // Calculate deduction split between bonus wallet and unique code balance
+  const fromBonus = Math.min(bonusBalance, amount);
+  const fromUniqueCode = amount - fromBonus;
 
   const fee = 5000; // Standar biaya transfer antar-bank
   const netAmount = amount - fee;
@@ -56,6 +74,14 @@ export async function requestPayout(params: RequestPayoutParams) {
     : '****' + cleanAcc.slice(-2);
 
   return withTransactionRetry(async (tx) => {
+    // If unique code balance is used in this withdrawal, decrement it
+    if (fromUniqueCode > 0) {
+      await tx.member.update({
+        where: { id: memberId },
+        data: { uniqueCodeBalance: { decrement: fromUniqueCode } },
+      });
+    }
+
     const withdrawal = await tx.withdrawalRequest.create({
       data: {
         memberId,

@@ -22,10 +22,17 @@ export interface CheckoutPayload {
   isStockistOrder?: boolean; // True jika pesanan stokis (bebas ongkir bagi stokis, ditanggung kantor)
   stockistMemberId?: string;
   fulfillmentSource?: string;
+  // Alamat Pengiriman Terstruktur
+  shippingProvince?: string;
+  shippingCity?: string;
+  shippingDistrict?: string;
+  shippingPostalCode?: string;
+  shippingNotes?: string;
+  uniqueCode?: number; // Kode unik 3 digit otomatis (100 - 999)
 }
 
 /**
- * Create Order with verified referral attribution, shipping policy, and price snapshots
+ * Create Order with verified referral attribution, shipping policy, unique code, and price snapshots
  */
 export async function createOrder(payload: CheckoutPayload) {
   const {
@@ -41,6 +48,12 @@ export async function createOrder(payload: CheckoutPayload) {
     isStockistOrder,
     stockistMemberId,
     fulfillmentSource,
+    shippingProvince,
+    shippingCity,
+    shippingDistrict,
+    shippingPostalCode,
+    shippingNotes,
+    uniqueCode: customUniqueCode,
   } = payload;
 
   if (!items || items.length === 0) {
@@ -123,7 +136,12 @@ export async function createOrder(payload: CheckoutPayload) {
       : 35000
     : 0;
 
-  const total = subtotal + shippingCost;
+  // Kode unik 3 digit acak (100 - 999) untuk rekonsiliasi transfer bank otomatis
+  const uniqueCode = customUniqueCode !== undefined
+    ? customUniqueCode
+    : Math.floor(100 + Math.random() * 900);
+
+  const total = subtotal + shippingCost + uniqueCode;
   const orderNumber = `VRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
 
   // 3. Persist Order in transaction
@@ -143,11 +161,33 @@ export async function createOrder(payload: CheckoutPayload) {
         discount: 0,
         shippingCost,
         shippingExpense,
+        uniqueCode,
         total,
         fulfillmentSource: isStockist ? 'REGIONAL_STOCKIST' : (fulfillmentSource || 'CENTRAL_WAREHOUSE'),
         stockistMemberId: resolvedStockistId,
+        shippingProvince: shippingProvince || null,
+        shippingCity: shippingCity || null,
+        shippingDistrict: shippingDistrict || null,
+        shippingPostalCode: shippingPostalCode || null,
+        shippingNotes: shippingNotes || null,
       },
     });
+
+    // Save default shipping address on member record if logged in
+    if (buyerUserId) {
+      await tx.member.updateMany({
+        where: { userId: buyerUserId },
+        data: {
+          recipientName: buyerName,
+          recipientPhone: buyerPhone,
+          province: shippingProvince || null,
+          city: shippingCity || null,
+          district: shippingDistrict || null,
+          postalCode: shippingPostalCode || null,
+          addressDetail: shippingAddress,
+        },
+      });
+    }
 
     for (const oi of orderItemsData) {
       await tx.orderItem.create({
@@ -164,7 +204,7 @@ export async function createOrder(payload: CheckoutPayload) {
       });
     }
 
-    // Create Initial Payment Record
+    // Create Initial Payment Record with exact total (including uniqueCode)
     await tx.payment.create({
       data: {
         orderId: order.id,
@@ -246,6 +286,16 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     });
   }
 
+  // Credit unique bank confirmation code as member deposit/inflow
+  if (order.uniqueCode > 0) {
+    ledgerEntries.push({
+      accountCode: 'ACC-COMP-OPS',
+      direction: 'CREDIT',
+      amount: order.uniqueCode,
+      memo: `Bank confirmation unique code inflow from ${order.orderNumber}`,
+    });
+  }
+
   // If this order is a stockist supply order where shipping is absorbed by company:
   // Post company operational freight expense:
   // DEBIT ACC-COMP-OPS (Freight Operating Expense)
@@ -272,6 +322,43 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     memo: `Payment Settlement & Ledger Posting for ${order.orderNumber}`,
     entries: ledgerEntries,
   });
+
+  // Credit uniqueCode directly to Member's uniqueCodeBalance so it never expires/disappears
+  if (order.uniqueCode > 0) {
+    let targetMember = null;
+    if (order.buyerUserId) {
+      targetMember = await prisma.member.findUnique({
+        where: { userId: order.buyerUserId },
+      });
+    } else if (order.buyerEmail) {
+      const u = await prisma.user.findUnique({
+        where: { email: order.buyerEmail },
+        include: { member: true },
+      });
+      targetMember = u?.member;
+    } else if (order.referralMemberId) {
+      targetMember = await prisma.member.findUnique({
+        where: { id: order.referralMemberId },
+      });
+    }
+
+    if (targetMember) {
+      await prisma.member.update({
+        where: { id: targetMember.id },
+        data: {
+          uniqueCodeBalance: { increment: order.uniqueCode },
+        },
+      });
+    }
+  }
+
+  // If order was manually confirmed via proof upload, mark verified
+  if (order.paymentConfirmationStatus === 'SUBMITTED') {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { paymentConfirmationStatus: 'VERIFIED' },
+    });
+  }
 
   // 3. Trigger Deterministic Commission Calculation & Ledger Posting
   const commissionResult = await calculateOrderCommissions(order.id);

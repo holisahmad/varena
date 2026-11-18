@@ -83,6 +83,18 @@ model Member {
   stockistCity         String?   // e.g. Surabaya, Medan, Makassar
   stockistInventory    Int       @default(0)      // Current box quota in stockist custody
 
+  // Alamat Pengiriman Tersimpan (Default Structured Shipping Address)
+  recipientName        String?
+  recipientPhone       String?
+  province             String?
+  city                 String?
+  district             String?   // Kecamatan
+  postalCode           String?
+  addressDetail        String?   // Jalan, RT/RW, No. Rumah
+
+  // Akumulasi Kode Unik Tersimpan (Dapat ditarik jika terkumpul minimal Rp10.000)
+  uniqueCodeBalance    Int       @default(0)
+
   joinedAt     DateTime  @default(now())
   activatedAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -213,6 +225,7 @@ model Order {
   discount               Int       @default(0)
   shippingCost           Int       @default(0)
   shippingExpense        Int       @default(0) // Biaya ongkir ditanggung kantor (misal pengiriman pasokan ke stokis)
+  uniqueCode             Int       @default(0) // Kode unik 3 digit (misal 100 - 999) untuk konfirmasi otomatis bank
   total                  Int
   currency               String    @default("IDR")
   marketingPlanVersionId String?
@@ -223,6 +236,22 @@ model Order {
   stockistMemberId       String?   // null if central warehouse, or memberId of the stockist hub
   shippedAt              DateTime?
   completedAt            DateTime?
+
+  // Alamat Pengiriman Terstruktur
+  shippingProvince       String?
+  shippingCity           String?
+  shippingDistrict       String?   // Kecamatan
+  shippingPostalCode     String?
+  shippingNotes          String?
+
+  // Konfirmasi Transfer Manual & Upload Bukti (jika salah transfer/salah kode unik)
+  paymentProofUrl             String?   // URL / base64 foto bukti transfer
+  senderBankName              String?   // Bank asal pengirim
+  senderAccountName           String?   // Nama pemilik rekening pengirim
+  transferAmountPaid          Int?      // Nominal riil yang ditransfer member
+  transferNotes               String?   // Catatan transfer dari member
+  paymentConfirmationStatus   String?   @default("NONE") // NONE, SUBMITTED, VERIFIED, REJECTED
+
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
