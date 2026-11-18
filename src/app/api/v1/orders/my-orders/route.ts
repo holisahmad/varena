@@ -98,6 +98,7 @@ export async function GET(req: Request) {
         orderStatus: o.orderStatus,
         orderType: o.orderType,
         total: o.total,
+        uniqueCode: o.uniqueCode,
         courierName: o.courierName,
         trackingNumber: o.trackingNumber,
         shippedAt: o.shippedAt,

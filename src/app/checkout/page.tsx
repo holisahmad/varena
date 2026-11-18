@@ -96,6 +96,20 @@ function CheckoutContent() {
         if (u.addressDetail) setAddressDetail(u.addressDetail);
       } catch (e) {}
     }
+
+    // 4. Load existing order details if orderNumber query param is present
+    const paramOrderNumber = searchParams?.get('orderNumber');
+    if (paramOrderNumber) {
+      fetch(`/api/v1/orders/detail?orderNumber=${encodeURIComponent(paramOrderNumber)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.order) {
+            setOrderResult(data.order);
+            setUniqueCode(data.order.uniqueCode || 0);
+          }
+        })
+        .catch((err) => console.error('Failed to load existing order:', err));
+    }
   }, [searchParams]);
 
   const validateReferral = async (code: string) => {
@@ -488,11 +502,26 @@ function CheckoutContent() {
             <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center mb-3">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <h2 className="font-serif text-2xl font-bold text-varena-espresso">Pesanan Berhasil Dibuat</h2>
+            <h2 className="font-serif text-2xl font-bold text-varena-espresso">
+              {orderResult.orderStatus === 'PAID' || orderResult.status === 'PAID'
+                ? 'Pesanan Telah Dibayar'
+                : 'Instruksi Pembayaran Pesanan'}
+            </h2>
             <p className="text-xs text-varena-taupe mt-1 font-mono">Nomor Pesanan: {orderResult.orderNumber}</p>
           </div>
 
           <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2 text-xs">
+            {orderResult.items && orderResult.items.length > 0 && (
+              <div className="pb-2 mb-2 border-b border-varena-taupe/20 space-y-1">
+                <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Produk yang Dipesan:</div>
+                {orderResult.items.map((it: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-varena-espresso font-medium">
+                    <span>{it.quantity}x {it.name}</span>
+                    <span className="font-mono">Rp{(it.lineTotal || it.price * it.quantity).toLocaleString('id-ID')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-varena-taupe">Total Tagihan:</span>
               <span className="font-bold text-varena-espresso text-sm">Rp{orderResult.total.toLocaleString('id-ID')}</span>
@@ -500,7 +529,7 @@ function CheckoutContent() {
             <div className="flex justify-between">
               <span className="text-varena-taupe">Status Pesanan:</span>
               <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold font-mono">
-                {orderResult.status}
+                {orderResult.orderStatus || orderResult.status}
               </span>
             </div>
           </div>
@@ -611,6 +640,25 @@ function CheckoutContent() {
               >
                 {settling ? 'Memproses...' : '[DEV] Simulasikan Pembayaran Diterima'}
               </button>
+
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs border-t border-varena-gold/20">
+                <Link
+                  href="/member"
+                  className="w-full sm:w-auto text-center py-2 px-3.5 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium"
+                >
+                  ← Kembali ke Dashboard Member
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrderResult(null);
+                    setSettleResult(null);
+                  }}
+                  className="w-full sm:w-auto text-center py-2 px-3 text-varena-taupe hover:text-varena-espresso transition"
+                >
+                  Buat Pesanan Baru
+                </button>
+              </div>
             </div>
           ) : (
             <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-4">
