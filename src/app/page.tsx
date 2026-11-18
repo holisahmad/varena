@@ -193,10 +193,10 @@ export default function HomePage() {
               <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl bg-gradient-to-br from-varena-espresso-dark to-varena-espresso p-6 flex flex-col items-center justify-center text-center shadow-xl border border-varena-gold/30">
                 <div className="w-24 h-24 relative mb-4">
                   <Image
-                    src="/brand/varena-connected-v-symbol.png"
-                    alt="VARENA Coffee Box"
+                    src="/brand/logo-square.png"
+                    alt="VARENA Luxury Emblem"
                     fill
-                    className="object-contain"
+                    className="object-contain drop-shadow-md"
                   />
                 </div>
                 <span className="font-serif text-2xl font-bold text-varena-gold-light">VARENA</span>

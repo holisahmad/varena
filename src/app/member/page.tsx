@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Wallet, GitFork, Share2, Copy, Check, ArrowUpRight, TrendingUp, Users, ShoppingBag } from 'lucide-react';
 
 export default function MemberDashboardPage() {
@@ -50,16 +51,27 @@ export default function MemberDashboardPage() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
       {/* Top Welcome Card */}
       <div className="bg-gradient-to-r from-varena-espresso-dark via-[#3A2C23] to-varena-espresso text-varena-ivory p-6 sm:p-8 rounded-2xl border border-varena-gold/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div>
-          <div className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-gold-light border border-varena-gold/30 mb-2">
-            Mitra Resmi VARENA
+        <div className="flex items-center gap-4">
+          <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-varena-gold/60 p-0.5 bg-varena-espresso-dark flex-shrink-0 shadow-md">
+            <Image
+              src="/brand/logo-circle.png"
+              alt="VARENA Luxury Emblem"
+              fill
+              className="object-contain"
+              priority
+            />
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-varena-ivory-light">
-            Halo, {user.displayName}
-          </h1>
-          <p className="text-xs text-varena-taupe-light mt-1 font-mono">
-            ID Mitra: <span className="text-varena-gold-light font-bold">{user.memberCode || 'VRN-0001'}</span>
-          </p>
+          <div>
+            <div className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-gold-light border border-varena-gold/30 mb-1">
+              Mitra Resmi VARENA
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-varena-ivory-light">
+              Halo, {user.displayName}
+            </h1>
+            <p className="text-xs text-varena-taupe-light mt-0.5 font-mono">
+              ID Mitra: <span className="text-varena-gold-light font-bold">{user.memberCode || 'VRN-0001'}</span>
+            </p>
+          </div>
         </div>
 
         {/* Referral Share Box */}

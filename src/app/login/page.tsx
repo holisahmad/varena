@@ -52,12 +52,13 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto px-4 py-12 w-full">
       <div className="bg-white border border-varena-taupe/20 rounded-2xl p-6 sm:p-8 shadow-sm">
         <div className="text-center mb-6">
-          <div className="relative w-16 h-16 mx-auto rounded-full overflow-hidden border border-varena-gold p-1 bg-varena-espresso-dark mb-3">
+          <div className="relative w-16 h-16 mx-auto rounded-full overflow-hidden border border-varena-gold p-0.5 bg-varena-espresso-dark mb-3 shadow-md">
             <Image
-              src="/brand/varena-connected-v-symbol.png"
-              alt="VARENA Logo"
+              src="/brand/logo-circle.png"
+              alt="VARENA Luxury Logo"
               fill
-              className="object-contain p-1"
+              className="object-contain"
+              priority
             />
           </div>
           <h1 className="font-serif text-2xl font-bold text-varena-espresso">Masuk ke Portal VARENA</h1>
