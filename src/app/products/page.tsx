@@ -106,7 +106,7 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center gap-4 text-[11px] text-varena-taupe">
+                <div className="pt-2 flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] text-varena-taupe">
                   <div className="flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5 text-varena-gold" />
                     <span>Halal Indonesia: {p.halalNumber}</span>

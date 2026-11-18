@@ -43,7 +43,7 @@ export default function HomePage() {
           </div>
 
           {/* Trust badges */}
-          <div className="mt-14 pt-8 border-t border-[#4A3B30] grid grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-4xl mx-auto text-xs text-varena-ivory/70">
+          <div className="mt-14 pt-8 border-t border-[#4A3B30] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-4xl mx-auto text-xs text-varena-ivory/70">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-5 h-5 text-varena-gold-light flex-shrink-0" />
               <span>Kepatuhan Permendag 70/2019</span>
@@ -173,7 +173,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="mt-8 flex items-center gap-4">
+              <div className="mt-8 flex flex-wrap items-center gap-4">
                 <Link
                   href="/checkout"
                   className="px-6 py-3 rounded-lg bg-varena-espresso text-varena-ivory font-semibold text-sm hover:bg-varena-espresso-dark transition"

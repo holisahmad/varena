@@ -217,22 +217,22 @@ function CheckoutContent() {
                         : 'border-varena-taupe/20 bg-white hover:border-varena-gold/50'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <input
                           type="radio"
                           name="variant"
                           value={v.id}
                           checked={selectedVariantId === v.id}
                           onChange={() => setSelectedVariantId(v.id)}
-                          className="w-4 h-4 text-varena-espresso focus:ring-varena-gold"
+                          className="w-4 h-4 text-varena-espresso focus:ring-varena-gold flex-shrink-0"
                         />
-                        <div>
-                          <div className="font-semibold text-sm text-varena-espresso">{v.name}</div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-varena-espresso truncate">{v.name}</div>
                           <div className="text-xs text-varena-taupe">Isi {v.packSize} sachet per {v.unit}</div>
                         </div>
                       </div>
-                      <div className="font-serif font-bold text-sm text-varena-espresso">
+                      <div className="font-serif font-bold text-sm text-varena-espresso whitespace-nowrap flex-shrink-0">
                         Rp{v.price.toLocaleString('id-ID')}
                       </div>
                     </div>
