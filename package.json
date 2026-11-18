@@ -4,7 +4,7 @@
   "private": true,
   "description": "VARENA Direct Selling & Multilevel Marketing Platform - Grow Together. Build Value.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
