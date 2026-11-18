@@ -125,7 +125,7 @@ export async function transferPlacement({
     throw new Error('Invalid placement: Node cannot be placed under its own downline (cycle detected).');
   }
 
-  return prisma.$transaction(async (tx) => {
+  const res = await prisma.$transaction(async (tx) => {
     const existing = await tx.placementRelationship.findUnique({
       where: { memberId },
     });

@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/request';
+import { NextResponse, type NextRequest } from 'next/server';
 
 // In-memory request counters for DDoS edge throttling
 const globalIpThrottle = new Map<string, { count: number; resetAt: number }>();

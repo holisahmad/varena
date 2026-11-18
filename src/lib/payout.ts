@@ -136,7 +136,13 @@ export async function approvePayout({
 }) {
   const withdrawal = await prisma.withdrawalRequest.findUnique({
     where: { id: withdrawalId },
-    include: { member: true },
+    include: {
+      member: {
+        include: {
+          user: { select: { phone: true } },
+        },
+      },
+    },
   });
 
   if (!withdrawal) {
@@ -206,9 +212,10 @@ export async function approvePayout({
   });
 
   // 4. Dispatch WhatsApp notification (Async/Non-blocking)
-  if (withdrawal.member?.phone) {
+  const phone = withdrawal.member?.user?.phone;
+  if (phone) {
     dispatchWaMessage({
-      recipientPhone: withdrawal.member.phone,
+      recipientPhone: phone,
       recipientName: withdrawal.member.displayName,
       templateType: 'PAYOUT_DISBURSED',
       message: templatePayoutDisbursed({
