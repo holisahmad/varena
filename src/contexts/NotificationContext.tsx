@@ -37,14 +37,25 @@ interface AdminBadge {
 
 type BadgeData = MemberBadge | AdminBadge | { role: 'guest'; total: 0; items?: [] } | null;
 
-// ─── Read Items Storage (localStorage) ──────────────────────────────────────
+// ─── User-Isolated Read Items Storage (localStorage) ────────────────────────
 
-const READ_ITEMS_KEY = 'varena_read_notif_ids';
+function getUserKey(): string {
+  if (typeof window === 'undefined') return 'guest';
+  try {
+    const stored = localStorage.getItem('varena_user');
+    if (!stored) return 'guest';
+    const parsed = JSON.parse(stored);
+    return parsed?.userId || parsed?.id || parsed?.email || 'guest';
+  } catch {
+    return 'guest';
+  }
+}
 
 function getReadIds(): string[] {
   if (typeof window === 'undefined') return [];
+  const key = `varena_read_notif_ids_${getUserKey()}`;
   try {
-    return JSON.parse(localStorage.getItem(READ_ITEMS_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(key) || '[]');
   } catch {
     return [];
   }
@@ -52,8 +63,9 @@ function getReadIds(): string[] {
 
 function saveReadIds(ids: string[]) {
   if (typeof window === 'undefined') return;
+  const key = `varena_read_notif_ids_${getUserKey()}`;
   try {
-    localStorage.setItem(READ_ITEMS_KEY, JSON.stringify(ids.slice(-100)));
+    localStorage.setItem(key, JSON.stringify(ids.slice(-100)));
   } catch {}
 }
 
@@ -100,27 +112,36 @@ const NotificationContext = createContext<NotificationContextValue>({
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [badge, setBadge] = useState<BadgeData>(null);
   const [readIds, setReadIds] = useState<string[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const pathname = usePathname();
 
-  // Initialize read IDs from localStorage
+  // Load read IDs isolated by current user session
   useEffect(() => {
     setReadIds(getReadIds());
-  }, []);
+  }, [pathname]);
 
   const fetchBadge = useCallback(async () => {
     if (typeof window === 'undefined') return;
     const stored = localStorage.getItem('varena_user');
+    if (!stored) {
+      setBadge({ role: 'guest', total: 0, items: [] });
+      return;
+    }
+
     let user: any = null;
-    if (stored) {
-      try {
-        user = JSON.parse(stored);
-      } catch {}
+    try {
+      user = JSON.parse(stored);
+    } catch {
+      setBadge({ role: 'guest', total: 0, items: [] });
+      return;
     }
 
     const userId = user?.userId || user?.id || '';
     const userEmail = user?.email || '';
+
+    if (!userId && !userEmail) {
+      setBadge({ role: 'guest', total: 0, items: [] });
+      return;
+    }
 
     try {
       const res = await fetch('/api/v1/notifications/badge', {
@@ -138,12 +159,40 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // Fetch on pathname change + 60s polling
+  // ── Realtime Synchronization: 4s polling + focus + visibility + storage ──
   useEffect(() => {
     fetchBadge();
-    intervalRef.current = setInterval(fetchBadge, 60_000);
+
+    // 1. Fast 4-second active polling (only when tab is open and visible)
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchBadge();
+      }
+    }, 4000);
+
+    // 2. Instant fetch on tab focus / visibility
+    const handleVisibility = () => {
+      if (!document.hidden) fetchBadge();
+    };
+    const handleFocus = () => fetchBadge();
+
+    // 3. Instant fetch when user login/logout happens
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'varena_user') {
+        fetchBadge();
+        setReadIds(getReadIds());
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('storage', handleStorage);
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('storage', handleStorage);
     };
   }, [pathname, fetchBadge]);
 

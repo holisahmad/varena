@@ -17,21 +17,12 @@ export async function GET(req: Request) {
     const userId = req.headers.get('x-user-id');
     const userEmail = req.headers.get('x-user-email');
 
+    // 1. Guest: if not logged in, return completely empty
     if (!userId && !userEmail) {
-      return NextResponse.json({
-        role: 'guest',
-        total: 1,
-        items: [
-          {
-            id: 'guest-welcome-notif',
-            type: 'ORDER_PENDING',
-            title: 'Masuk Mitra untuk Notifikasi',
-            message: 'Silakan masuk ke akun kemitraan Anda untuk memantau status pesanan, pengiriman resi, dan komisi secara real-time.',
-            url: '/login',
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
+      return NextResponse.json(
+        { role: 'guest', total: 0, items: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      );
     }
 
     // Resolve user & roles
@@ -49,20 +40,10 @@ export async function GET(req: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({
-        role: 'guest',
-        total: 1,
-        items: [
-          {
-            id: 'guest-welcome-notif',
-            type: 'ORDER_PENDING',
-            title: 'Masuk Mitra untuk Notifikasi',
-            message: 'Silakan masuk ke akun kemitraan Anda untuk memantau status pesanan, pengiriman resi, dan komisi secara real-time.',
-            url: '/login',
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
+      return NextResponse.json(
+        { role: 'guest', total: 0, items: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      );
     }
 
     const roleCodes = user.userRoles.map((ur) => ur.role.code.toLowerCase());
@@ -70,7 +51,7 @@ export async function GET(req: Request) {
       ['owner', 'operations', 'admin_1', 'admin_2', 'koperasi', 'auditor', 'superadmin'].includes(r)
     );
 
-    // ── ADMIN BADGES ───────────────────────────────────────────────
+    // ── ADMIN NOTIFICATIONS ───────────────────────────────────────────────
     if (isAdmin) {
       const [pendingPayment, needShipping, pendingPayout, recentPendingOrders, recentPaidOrders, recentPayouts] =
         await Promise.all([
@@ -89,7 +70,6 @@ export async function GET(req: Request) {
             _count: { id: true },
             _max: { requestedAt: true },
           }),
-          // Recent items for notification dropdown
           prisma.order.findMany({
             where: { orderStatus: 'PENDING_PAYMENT' },
             select: { id: true, orderNumber: true, total: true, buyerName: true, createdAt: true },
@@ -156,44 +136,47 @@ export async function GET(req: Request) {
 
       items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      return NextResponse.json({
-        role: 'admin',
-        orders: {
-          pendingPaymentCount,
-          needShippingCount,
-          totalCount: pendingPaymentCount + needShippingCount,
-          latestAt: latestOrderAt,
+      return NextResponse.json(
+        {
+          role: 'admin',
+          orders: {
+            pendingPaymentCount,
+            needShippingCount,
+            totalCount: pendingPaymentCount + needShippingCount,
+            latestAt: latestOrderAt,
+          },
+          payout: {
+            pendingCount: pendingPayoutCount,
+            latestAt: pendingPayout._max.requestedAt ?? null,
+          },
+          total: pendingPaymentCount + needShippingCount + pendingPayoutCount,
+          items: items.slice(0, 6),
         },
-        payout: {
-          pendingCount: pendingPayoutCount,
-          latestAt: pendingPayout._max.requestedAt ?? null,
-        },
-        total: pendingPaymentCount + needShippingCount + pendingPayoutCount,
-        items: items.slice(0, 6),
-      });
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      );
     }
 
-    // ── MEMBER BADGES ──────────────────────────────────────────────
+    // ── MEMBER NOTIFICATIONS (STRICTLY THIS USER ONLY) ───────────────────
     if (!user.member) {
-      return NextResponse.json({ role: 'guest', total: 0, items: [] });
+      return NextResponse.json(
+        { role: 'guest', total: 0, items: [] },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+      );
     }
 
     const memberId = user.member.id;
 
     const [actionOrders, recentCommissions, recentPayouts] = await Promise.all([
-      // Orders needing member action: pending payment or shipped (needs delivery confirm)
+      // Orders: strictly personal orders placed by this user
       prisma.order.findMany({
         where: {
-          OR: [
-            { buyerUserId: user.id },
-            ...(user.email ? [{ buyerEmail: user.email }] : []),
-          ],
+          buyerUserId: user.id,
           orderStatus: { in: ['PENDING_PAYMENT', 'SHIPPED'] },
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
-      // Recent commission items for this member
+      // Commissions: strictly earned by this member
       prisma.commissionItem.findMany({
         where: { beneficiaryMemberId: memberId },
         select: {
@@ -205,7 +188,7 @@ export async function GET(req: Request) {
         orderBy: { createdAt: 'desc' },
         take: 3,
       }),
-      // Recent payout status changes for this member
+      // Payout requests: strictly requested by this member
       prisma.withdrawalRequest.findMany({
         where: {
           memberId,
@@ -233,7 +216,7 @@ export async function GET(req: Request) {
       if (!latestOrderAt || t > latestOrderAt) latestOrderAt = t;
     }
 
-    // Latest wallet event (commission or payout status change)
+    // Latest wallet event
     const walletTimes: Date[] = [];
     if (recentCommissions[0]?.createdAt) walletTimes.push(recentCommissions[0].createdAt);
     if (recentPayouts[0]?.reviewedAt) walletTimes.push(recentPayouts[0].reviewedAt);
@@ -298,18 +281,21 @@ export async function GET(req: Request) {
 
     items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return NextResponse.json({
-      role: 'member',
-      orders: {
-        count: actionOrders.length,
-        latestAt: latestOrderAt,
+    return NextResponse.json(
+      {
+        role: 'member',
+        orders: {
+          count: actionOrders.length,
+          latestAt: latestOrderAt,
+        },
+        wallet: {
+          latestAt: latestWalletAt,
+        },
+        total: actionOrders.length,
+        items: items.slice(0, 6),
       },
-      wallet: {
-        latestAt: latestWalletAt,
-      },
-      total: actionOrders.length,
-      items: items.slice(0, 6),
-    });
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
