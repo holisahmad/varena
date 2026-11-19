@@ -96,6 +96,28 @@ export default function Navbar() {
                 >
                   Dompet &amp; Komisi
                 </Link>
+
+                {user.isAgent ? (
+                  <Link
+                    href="/agent"
+                    className={`transition px-2.5 py-1 rounded text-xs tracking-wider uppercase font-semibold ${
+                      pathname.startsWith('/agent')
+                        ? 'bg-amber-500 text-varena-espresso-dark font-bold'
+                        : 'bg-amber-950/80 text-amber-300 border border-amber-500/50 hover:bg-amber-900/80'
+                    }`}
+                  >
+                    Portal Agen
+                  </Link>
+                ) : (
+                  <Link
+                    href="/member/agent-register"
+                    className={`transition hover:text-varena-gold-light text-xs ${
+                      pathname.startsWith('/member/agent-register') ? 'text-varena-gold-light font-semibold' : 'text-varena-ivory/70'
+                    }`}
+                  >
+                    Daftar Agen
+                  </Link>
+                )}
               </>
             )}
 
@@ -258,6 +280,23 @@ export default function Navbar() {
               >
                 Dompet &amp; Komisi
               </Link>
+              {user.isAgent ? (
+                <Link
+                  href="/agent"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-sm text-amber-400 font-semibold"
+                >
+                  Portal Agen Resmi
+                </Link>
+              ) : (
+                <Link
+                  href="/member/agent-register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-sm text-varena-ivory/80 hover:text-varena-gold-light"
+                >
+                  Daftar Agen Resmi
+                </Link>
+              )}
               {user.roles.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'KOPERASI', 'AUDITOR'].includes(r)) && (
                 <Link
                   href="/admin"

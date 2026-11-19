@@ -30,6 +30,7 @@ import {
   MapPin,
   FileText,
   BadgeCheck,
+  Store,
 } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -313,6 +314,70 @@ export default function MemberDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Official Regional Agent Banner */}
+      {(memberProfile?.isAgent || user?.isAgent) ? (
+        <div className="bg-gradient-to-r from-[#2A1E17] to-varena-espresso p-4 sm:p-5 rounded-2xl border border-amber-500/40 text-varena-ivory-light flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
+              <Store className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-serif text-sm sm:text-base font-bold text-amber-300">
+                  Agen Resmi Wilayah: {memberProfile?.agentCity || user?.agentCity || 'Regional'}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  STOK: {memberProfile?.agentInventory || 0} BOX
+                </span>
+              </div>
+              <p className="text-xs text-varena-ivory/70 mt-0.5">
+                Restock grosir 100% bebas ongkir kantor, kelola distribusi pesanan regional, saldo deposit, dan reward agen.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/agent"
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-varena-espresso font-bold text-xs transition shadow shrink-0 flex items-center gap-1.5"
+          >
+            <span>Buka Portal Agen</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </Link>
+        </div>
+      ) : memberProfile?.agentStatus === 'APPLIED' ? (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center justify-between gap-4 text-xs text-blue-900">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Pengajuan Keagenan Resmi Anda untuk wilayah <strong>{memberProfile?.agentCity || 'terpilih'}</strong> sedang ditinjau kantor pusat.</span>
+          </div>
+          <Link href="/member/agent-register" className="text-blue-700 underline font-semibold hover:text-blue-800 shrink-0">
+            Lihat Status
+          </Link>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 sm:p-5 rounded-2xl border border-amber-200/80 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+              <Store className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-amber-900 block text-xs sm:text-sm">
+                Peluang Distribusi: Buka Keagenan Resmi VARENA di Kota Anda
+              </span>
+              <span className="text-amber-800/80 text-[11px]">
+                Fasilitas: Restock grosir 100% Bebas Biaya Ongkir, diskon agen, pengalihan pengiriman pesanan lokal, dan reward prestasi.
+              </span>
+            </div>
+          </div>
+          <Link
+            href="/member/agent-register"
+            className="px-4 py-2 rounded-xl bg-varena-espresso text-varena-gold font-bold text-xs hover:bg-varena-espresso-dark transition shadow shrink-0 flex items-center gap-1"
+          >
+            <span>Daftar Agen</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Financial Snapshot Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

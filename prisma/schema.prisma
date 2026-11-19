@@ -78,10 +78,23 @@ model Member {
   bankAccountHolder    String?
   bankLockedAt         DateTime?
 
-  // Regional Stockist Hub Support
+  // Regional Stockist Hub Support (Legacy)
   stockistType         String    @default("NONE") // NONE, MOBILE, MASTER
   stockistCity         String?   // e.g. Surabaya, Medan, Makassar
   stockistInventory    Int       @default(0)      // Current box quota in stockist custody
+
+  // Official Regional Agent (Direct Selling Keagenan Resmi)
+  isAgent                  Boolean   @default(false)
+  agentType                String    @default("NONE") // NONE, REGIONAL_AGENT, MASTER_AGENT
+  agentCity                String?
+  agentProvince            String?
+  agentAddress             String?
+  agentInventory           Int       @default(0)      // Kuota stok fisik box di tangan agen
+  agentDepositBalance      Int       @default(0)      // Saldo deposit kas agen
+  agentDiscountType        String    @default("PERCENTAGE") // PERCENTAGE or FLAT_PER_BOX
+  agentDiscountValue       Float     @default(15.0)   // Nilai diskon: 15% atau Rp50.000
+  agentStatus              String    @default("NONE") // NONE, APPLIED, ACTIVE, SUSPENDED
+  agentVerifiedAt          DateTime?
 
   // Alamat Pengiriman Tersimpan (Default Structured Shipping Address)
   recipientName        String?
@@ -109,14 +122,21 @@ model Member {
   placementRel          PlacementRelationship? @relation("PlacementSelf")
   placedChildren        PlacementRelationship[] @relation("PlacementParent")
   
-  placementHistories    PlacementHistory[]
-  commissionsEarned     CommissionItem[]       @relation("CommissionBeneficiary")
-  ledgerAccounts        LedgerAccount[]
-  withdrawalRequests    WithdrawalRequest[]
-  referredOrders        Order[]                @relation("ReferredOrders")
+  placementHistories       PlacementHistory[]
+  commissionsEarned        CommissionItem[]          @relation("CommissionBeneficiary")
+  ledgerAccounts           LedgerAccount[]
+  withdrawalRequests       WithdrawalRequest[]
+  referredOrders           Order[]                   @relation("ReferredOrders")
+  assignedAgentOrders      Order[]                   @relation("AssignedAgentOrders")
+  agentApplications        AgentApplication[]
+  agentDepositTransactions AgentDepositTransaction[]
+  agentStockMutations      AgentStockMutation[]
+  agentRewards             AgentReward[]
 
   @@index([memberStatus])
   @@index([stockistType])
+  @@index([isAgent])
+  @@index([agentCity])
   @@map("members")
 }
 
@@ -234,8 +254,15 @@ model Order {
   paidAt                 DateTime?
   courierName            String?   // e.g. JNE, J&T, SiCepat, Pos Indonesia
   trackingNumber         String?   // e.g. JNE-88291024-ID
-  fulfillmentSource      String    @default("CENTRAL_WAREHOUSE") // CENTRAL_WAREHOUSE, REGIONAL_STOCKIST
-  stockistMemberId       String?   // null if central warehouse, or memberId of the stockist hub
+  fulfillmentSource      String    @default("CENTRAL_WAREHOUSE") // CENTRAL_WAREHOUSE, REGIONAL_STOCKIST, REGIONAL_AGENT
+  stockistMemberId       String?   // (Legacy) null if central warehouse, or memberId of the stockist hub
+  
+  // Agent Routing & Regional Distribution
+  assignedAgentMemberId  String?   // ID Member Agent yang ditugaskan menangani pengiriman
+  fulfillmentMode        String?   @default("CENTRAL") // CENTRAL, ASSIGNED_AGENT, AGENT_DROPSHIP_REQUEST
+  agentDispatchStatus    String?   @default("NONE") // NONE, ASSIGNED, PACKING, DISPATCHED, COMPLETED
+  agentNote              String?   // Catatan koordinasi agen & kantor pusat
+
   shippedAt              DateTime?
   completedAt            DateTime?
 
@@ -257,14 +284,16 @@ model Order {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  buyerUser      User?           @relation(fields: [buyerUserId], references: [id], onDelete: SetNull)
-  referralMember Member?         @relation("ReferredOrders", fields: [referralMemberId], references: [id], onDelete: SetNull)
-  items          OrderItem[]
-  payments       Payment[]
-  commissionRuns CommissionRun[]
+  buyerUser           User?           @relation(fields: [buyerUserId], references: [id], onDelete: SetNull)
+  referralMember      Member?         @relation("ReferredOrders", fields: [referralMemberId], references: [id], onDelete: SetNull)
+  assignedAgentMember Member?         @relation("AssignedAgentOrders", fields: [assignedAgentMemberId], references: [id], onDelete: SetNull)
+  items               OrderItem[]
+  payments            Payment[]
+  commissionRuns      CommissionRun[]
 
   @@index([orderStatus, paidAt])
   @@index([referralMemberId])
+  @@index([assignedAgentMemberId])
   @@index([createdAt])
   @@index([buyerUserId, createdAt])
   @@index([paymentConfirmationStatus])
@@ -478,5 +507,100 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// -------------------------------------------------------------
+// 8. Official Regional Agent Hub (Direct Selling Distribution)
+// -------------------------------------------------------------
+
+model AgentApplication {
+  id               String    @id @default(uuid())
+  memberId         String
+  city             String
+  province         String
+  warehouseAddress String
+  storageCapacity  Int       @default(50) // Kapasitas tampung box
+  contactPhone     String
+  notes            String?
+  status           String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  rejectionReason  String?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([memberId])
+  @@map("agent_applications")
+}
+
+model AgentDepositTransaction {
+  id            String    @id @default(uuid())
+  memberId      String
+  type          String    // TOPUP_DEPOSIT, RESTOCK_PAYMENT, ADJUSTMENT_CREDIT, ADJUSTMENT_DEBIT
+  amount        Int       // Nominal IDR
+  balanceBefore Int       @default(0)
+  balanceAfter  Int       @default(0)
+  referenceId   String?   // orderNumber or bank reference
+  notes         String?
+  status        String    @default("COMPLETED") // PENDING, COMPLETED, REJECTED
+  proofUrl      String?   // Bukti transfer bank jika topup
+  approvedBy    String?   // User admin yang approve topup
+  createdAt     DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+  @@map("agent_deposit_transactions")
+}
+
+model AgentStockMutation {
+  id            String    @id @default(uuid())
+  memberId      String
+  type          String    // RESTOCK_FROM_CENTRAL, DISPATCHED_TO_MEMBER, CENTRAL_DROPSHIP, ADJUSTMENT
+  quantity      Int       // Box quantity (+/-)
+  balanceBefore Int       @default(0)
+  balanceAfter  Int       @default(0)
+  referenceId   String?   // orderNumber or doc reference
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+  @@map("agent_stock_mutations")
+}
+
+model AgentReward {
+  id               String    @id @default(uuid())
+  agentMemberId    String
+  rewardType       String    // CASH_BONUS, PHYSICAL_GOODS
+  title            String    // Judul reward e.g. "Bonus Penjualan Semester 1", "Motor Operasional", "Laptop"
+  cashAmount       Int       @default(0) // Nilai dana (jika CASH)
+  goodsDescription String?   // Rincian fisik barang & nomor seri aset
+  goodsValuation   Int       @default(0) // Valuasi perolehan barang untuk pembukuan
+  reasonNotes      String    // Alasan penilaian kantor atas kelayakan
+  deliveryStatus   String    @default("PENDING") // PENDING, TRANSFERRED, DELIVERED
+  awardedBy        String?   // Admin yang memberikan reward
+  awardedAt        DateTime  @default(now())
+  dispatchedAt     DateTime?
+
+  member Member @relation(fields: [agentMemberId], references: [id], onDelete: Cascade)
+
+  @@index([agentMemberId, awardedAt])
+  @@map("agent_rewards")
+}
+
+model AgentConfig {
+  id                   String   @id @default("default")
+  minimumRestockBox    Int      @default(10) // Minimal order pasokan grosir kantor (default 10 box)
+  defaultDiscountType  String   @default("PERCENTAGE") // PERCENTAGE or FLAT_PER_BOX
+  defaultDiscountValue Float    @default(15.0) // 15%
+  updatedAt            DateTime @updatedAt
+  updatedBy            String?
+
+  @@map("agent_configs")
 }
 

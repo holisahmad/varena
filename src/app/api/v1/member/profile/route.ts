@@ -35,6 +35,11 @@ export async function GET(req: Request) {
         bankAccountNumber: true,
         bankAccountHolder: true,
         bankLockedAt: true,
+        isAgent: true,
+        agentType: true,
+        agentStatus: true,
+        agentCity: true,
+        agentInventory: true,
         user: {
           select: {
             phone: true,

@@ -42,6 +42,11 @@ import {
   MessageSquare,
   Eye,
   Copy,
+  Store,
+  Award,
+  Sliders,
+  Gift,
+  Percent,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -157,13 +162,58 @@ export default function AdminPage() {
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchApproving, setBatchApproving] = useState(false);
 
-  // Regional Stockist Hubs State
+  // Regional Official Agents & Stockist State
   const [stockists, setStockists] = useState<any[]>([]);
   const [newStockistMemberCode, setNewStockistMemberCode] = useState('');
   const [newStockistType, setNewStockistType] = useState('MASTER');
   const [newStockistCity, setNewStockistCity] = useState('');
   const [newStockistQuota, setNewStockistQuota] = useState(100);
   const [stockistLoading, setStockistLoading] = useState(false);
+
+  // Modern Official Agent State
+  const [agents, setAgents] = useState<any[]>([]);
+  const [agentApplications, setAgentApplications] = useState<any[]>([]);
+  const [routableOrders, setRoutableOrders] = useState<any[]>([]);
+  const [agentConfig, setAgentConfig] = useState<any>({ minimumRestockBox: 10, defaultDiscountType: 'PERCENTAGE', defaultDiscountValue: 15.0 });
+  const [pendingAgentTopups, setPendingAgentTopups] = useState<any[]>([]);
+  const [agentSubTab, setAgentSubTab] = useState<'APPLICATIONS' | 'LIST' | 'APPOINT' | 'ROUTING' | 'TOPUP' | 'CONFIG'>('LIST');
+  const [agentLoading, setAgentLoading] = useState(false);
+
+  // Direct Appointment Form State
+  const [appointMemberCode, setAppointMemberCode] = useState('');
+  const [appointType, setAppointType] = useState('REGIONAL_AGENT');
+  const [appointCity, setAppointCity] = useState('');
+  const [appointProvince, setAppointProvince] = useState('');
+  const [appointAddress, setAppointAddress] = useState('');
+  const [appointInitialStock, setAppointInitialStock] = useState(20);
+  const [appointDiscountType, setAppointDiscountType] = useState('PERCENTAGE');
+  const [appointDiscountValue, setAppointDiscountValue] = useState(15);
+
+  // Approve Application Modal
+  const [approveAppModalOpen, setApproveAppModalOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [appInitialStock, setAppInitialStock] = useState(20);
+  const [appDiscountType, setAppDiscountType] = useState('PERCENTAGE');
+  const [appDiscountValue, setAppDiscountValue] = useState(15);
+
+  // Award Reward Modal
+  const [rewardModalOpen, setRewardModalOpen] = useState(false);
+  const [selectedRewardAgent, setSelectedRewardAgent] = useState<any>(null);
+  const [rewardType, setRewardType] = useState<'CASH_BONUS' | 'PHYSICAL_GOODS'>('CASH_BONUS');
+  const [rewardTitle, setRewardTitle] = useState('');
+  const [rewardValue, setRewardValue] = useState(1000000);
+  const [rewardDesc, setRewardDesc] = useState('');
+
+  // Order Routing Modal
+  const [routeOrderModalOpen, setRouteOrderModalOpen] = useState(false);
+  const [selectedRouteOrder, setSelectedRouteOrder] = useState<any>(null);
+  const [selectedRouteAgentId, setSelectedRouteAgentId] = useState('');
+  const [routeOrderNote, setRouteOrderNote] = useState('');
+
+  // Config Form State
+  const [configMoq, setConfigMoq] = useState(10);
+  const [configDiscountType, setConfigDiscountType] = useState('PERCENTAGE');
+  const [configDiscountValue, setConfigDiscountValue] = useState(15);
 
   // WhatsApp Outbox State
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
@@ -240,8 +290,9 @@ export default function AdminPage() {
       fetch('/api/v1/payout/admin?page=1&limit=15', { headers: authHeaders }).then(checkRes),
       fetch('/api/v1/admin/orders?page=1&limit=15', { headers: authHeaders }).then(checkRes),
       fetch(`/api/v1/admin/audit-logs?days=${logDays}&page=1&limit=20`, { headers: authHeaders }).then(checkRes),
+      fetch('/api/v1/admin/agents', { headers: authHeaders }).then(checkRes),
     ])
-      .then(([sData, wData, oData, lData]) => {
+      .then(([sData, wData, oData, lData, aData]) => {
         if (sData?.stats) setStats(sData.stats);
         if (wData?.withdrawals) {
           setWithdrawals(wData.withdrawals);
@@ -263,6 +314,19 @@ export default function AdminPage() {
           setLogPage(lData.pagination?.page || 1);
           setLogTotalPages(lData.pagination?.totalPages || 1);
           setLogTotal(lData.pagination?.total || lData.totalCount);
+        }
+        if (aData?.success) {
+          setAgents(aData.agents || []);
+          setAgentApplications(aData.applications || []);
+          setRoutableOrders(aData.routableOrders || []);
+          if (aData.config) {
+            setAgentConfig(aData.config);
+            setConfigMoq(aData.config.minimumRestockBox);
+            setConfigDiscountType(aData.config.defaultDiscountType);
+            setConfigDiscountValue(aData.config.defaultDiscountValue);
+          }
+          setPendingAgentTopups(aData.pendingTopups || []);
+          setStockists(aData.agents || []);
         }
       })
       .catch((e) => console.error('Admin data fetch error:', e))
@@ -618,51 +682,252 @@ export default function AdminPage() {
     }
   };
 
-  // Stockists Handlers
-  const loadStockists = async () => {
-    try {
-      const res = await fetch('/api/v1/stockists', {
-        headers: getAdminHeaders(),
-      });
-      const data = await res.json();
-      if (data.stockists) setStockists(data.stockists);
-    } catch (e) {
-      console.error('Failed to load stockists:', e);
-    }
-  };
-
-  const handleSaveStockist = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStockistMemberCode || !newStockistCity) {
-      alert('Lengkapi kode mitra dan kota wilayah stokis.');
-      return;
-    }
-    setStockistLoading(true);
+  // Official Regional Agents Handlers
+  const loadAgents = async () => {
+    setAgentLoading(true);
     const authHeaders = getAdminHeaders();
     try {
-      const res = await fetch('/api/v1/stockists', {
+      const res = await fetch('/api/v1/admin/agents', {
+        headers: authHeaders,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAgents(data.agents || []);
+        setAgentApplications(data.applications || []);
+        setRoutableOrders(data.routableOrders || []);
+        if (data.config) {
+          setAgentConfig(data.config);
+          setConfigMoq(data.config.minimumRestockBox);
+          setConfigDiscountType(data.config.defaultDiscountType);
+          setConfigDiscountValue(data.config.defaultDiscountValue);
+        }
+        setPendingAgentTopups(data.pendingTopups || []);
+        setStockists(data.agents || []);
+      }
+    } catch (e) {
+      console.error('Failed to load agents:', e);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+  const loadStockists = loadAgents;
+
+  const handleApproveApplication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedApp) return;
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
-          memberCode: newStockistMemberCode.trim().toUpperCase(),
-          stockistType: newStockistType,
-          stockistCity: newStockistCity.trim(),
-          quotaDelta: Number(newStockistQuota) || 0,
-          actorUserId: authHeaders['x-user-id'],
+          action: 'APPROVE_APPLICATION',
+          applicationId: selectedApp.id,
+          initialStockQuota: Number(appInitialStock) || 0,
+          discountType: appDiscountType,
+          discountValue: Number(appDiscountValue) || 15,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui stokis.');
-      alert(data.message || 'Data stokis berhasil disimpan!');
-      setNewStockistMemberCode('');
-      setNewStockistCity('');
-      loadStockists();
+      if (!res.ok) throw new Error(data.error || 'Gagal menyetujui pengajuan agen.');
+      alert(data.message || 'Pengajuan agen resmi disetujui!');
+      setApproveAppModalOpen(false);
+      setSelectedApp(null);
+      loadAgents();
     } catch (err: any) {
       alert(err.message);
     } finally {
-      setStockistLoading(false);
+      setAgentLoading(false);
     }
   };
+
+  const handleRejectApplication = async (appId: string) => {
+    const reason = prompt('Masukkan alasan penolakan pengajuan keagenan:', 'Persyaratan gudang atau kuota belum memenuhi kriteria.');
+    if (!reason) return;
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'REJECT_APPLICATION',
+          applicationId: appId,
+          rejectReason: reason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menolak pengajuan.');
+      alert(data.message || 'Pengajuan berhasil ditolak.');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleDirectAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appointMemberCode || !appointCity) {
+      alert('Lengkapi kode mitra dan kota wilayah keagenan.');
+      return;
+    }
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'DIRECT_APPOINTMENT',
+          memberCode: appointMemberCode.trim().toUpperCase(),
+          agentType: appointType,
+          city: appointCity.trim(),
+          province: appointProvince.trim() || '-',
+          address: appointAddress.trim() || '-',
+          initialStockQuota: Number(appointInitialStock) || 0,
+          discountType: appointDiscountType,
+          discountValue: Number(appointDiscountValue) || 15,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal mengangkat agen.');
+      alert(data.message || 'Mitra berhasil diangkat menjadi Agen Resmi!');
+      setAppointMemberCode('');
+      setAppointCity('');
+      setAppointProvince('');
+      setAppointAddress('');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleAssignOrderToAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRouteOrder || !selectedRouteAgentId) {
+      alert('Pilih agen regional tujuan.');
+      return;
+    }
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'ASSIGN_ORDER_TO_AGENT',
+          orderId: selectedRouteOrder.id,
+          agentMemberId: selectedRouteAgentId,
+          routingNote: routeOrderNote,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal mengalihkan pesanan.');
+      alert(data.message || 'Pesanan berhasil dialihkan ke Agen Regional!');
+      setRouteOrderModalOpen(false);
+      setSelectedRouteOrder(null);
+      setSelectedRouteAgentId('');
+      setRouteOrderNote('');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleUpdateAgentConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'UPDATE_CONFIG',
+          minimumRestockBox: Number(configMoq) || 10,
+          defaultDiscountType: configDiscountType,
+          defaultDiscountValue: Number(configDiscountValue) || 15,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menyimpan konfigurasi.');
+      alert(data.message || 'Konfigurasi keagenan berhasil diperbarui!');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleApproveDepositTopup = async (transactionId: string) => {
+    if (!confirm('Apakah Anda yakin menyetujui mutasi topup saldo deposit agen ini?')) return;
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'APPROVE_DEPOSIT_TOPUP',
+          transactionId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menyetujui topup deposit.');
+      alert(data.message || 'Topup saldo deposit agen berhasil disetujui!');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleAwardReward = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRewardAgent || !rewardTitle) {
+      alert('Lengkapi judul dan data reward.');
+      return;
+    }
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'AWARD_REWARD',
+          memberId: selectedRewardAgent.id,
+          rewardType,
+          rewardTitle,
+          rewardValue: Number(rewardValue) || 0,
+          description: rewardDesc,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memberikan reward.');
+      alert(data.message || 'Reward prestasi berhasil dicatat dan diberikan ke agen!');
+      setRewardModalOpen(false);
+      setSelectedRewardAgent(null);
+      setRewardTitle('');
+      setRewardDesc('');
+      loadAgents();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleSaveStockist = handleDirectAppointment;
 
   // WhatsApp Outbox Loader
   const loadWaOutbox = async () => {
@@ -757,11 +1022,11 @@ export default function AdminPage() {
     },
     {
       id: 'STOCKIST',
-      label: 'Pusat Stokis Hub',
-      icon: MapPin,
-      badge: null,
-      badgeColor: '',
-      onSelect: () => loadStockists(),
+      label: 'Keagenan Resmi',
+      icon: Store,
+      badge: agentApplications.filter((a) => a.status === 'PENDING').length > 0 ? `${agentApplications.filter((a) => a.status === 'PENDING').length}` : null,
+      badgeColor: 'bg-amber-600',
+      onSelect: () => loadAgents(),
     },
     {
       id: 'LOGS',
@@ -2691,185 +2956,883 @@ export default function AdminPage() {
           )}
 
           {/* ==================================================================== */}
-          {/* TAB 6: REGIONAL STOCKIST HUBS (MASTER & MOBILE STOKIS) */}
+          {/* TAB 6: KEAGENAN RESMI WILAYAH (REGIONAL AGENTS) */}
           {/* ==================================================================== */}
           {activeTab === 'STOCKIST' && (
             <div className="space-y-6">
-              {/* Stockist Overview Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              {/* Agent Overview Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
                 <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
-                  <span className="text-varena-taupe">Master Stokis Wilayah</span>
-                  <div className="font-serif text-2xl font-bold text-varena-gold-dark">
-                    {stockists.filter((s) => s.type === 'MASTER').length} Hub Utama
+                  <span className="text-varena-taupe">Total Agen Aktif</span>
+                  <div className="font-serif text-2xl font-bold text-varena-espresso">
+                    {agents.length} Titik Wilayah
                   </div>
-                  <div className="text-[10px] text-varena-taupe">Pusat logistik pengadaan regional per provinsi/kota besar</div>
+                  <div className="text-[10px] text-varena-taupe">Representasi penyaluran resmi terverifikasi</div>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
-                  <span className="text-varena-taupe">Mobile Stokis Jaringan</span>
-                  <div className="font-serif text-2xl font-bold text-blue-800">
-                    {stockists.filter((s) => s.type === 'MOBILE').length} Titik Distribusi
-                  </div>
-                  <div className="text-[10px] text-varena-taupe">Distribusi cepat tingkat kabupaten/kota untuk supply mitra</div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
-                  <span className="text-varena-taupe">Total Kuota Stok Wilayah</span>
+                  <span className="text-varena-taupe">Total Stok Gudang Agen</span>
                   <div className="font-serif text-2xl font-bold text-emerald-800">
-                    {stockists.reduce((sum, s) => sum + (s.inventory || 0), 0)} Box
+                    {agents.reduce((sum, a) => sum + (a.inventory || 0), 0)} Box
                   </div>
-                  <div className="text-[10px] text-varena-taupe">Total inventori fisik yang teralokasi di seluruh hub stokis</div>
+                  <div className="text-[10px] text-varena-taupe">Stok fisik tersebar di jaringan agen regional</div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
+                  <span className="text-varena-taupe">Pengajuan Menunggu Review</span>
+                  <div className="font-serif text-2xl font-bold text-amber-700">
+                    {agentApplications.filter((a) => a.status === 'PENDING').length} Pengajuan
+                  </div>
+                  <div className="text-[10px] text-varena-taupe">Mitra mengajukan permohonan keagenan</div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-varena-taupe/20 space-y-1">
+                  <span className="text-varena-taupe">Order Siap Dialihkan</span>
+                  <div className="font-serif text-2xl font-bold text-blue-800">
+                    {routableOrders.length} Pesanan
+                  </div>
+                  <div className="text-[10px] text-varena-taupe">Bisa dipenuhi gudang agen terdekat</div>
                 </div>
               </div>
 
-              {/* Form Penunjukan & Penyesuaian Kuota Stokis */}
-              <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-varena-gold" />
-                  <h3 className="font-serif text-base font-bold text-varena-espresso">
-                    Penunjukan Otoritas & Alokasi Kuota Stokis Regional
-                  </h3>
-                </div>
-                <p className="text-xs text-varena-taupe">
-                  Tetapkan mitra yang memenuhi kualifikasi sebagai Master Stokis atau Mobile Stokis untuk mempercepat rantai pasok produk di wilayah tertentu.
-                </p>
+              {/* Sub-Navigation Pills */}
+              <div className="bg-white p-2 rounded-2xl border border-varena-taupe/20 shadow-sm flex flex-wrap gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('LIST')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${
+                    agentSubTab === 'LIST'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  Daftar Agen Aktif ({agents.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('APPLICATIONS')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
+                    agentSubTab === 'APPLICATIONS'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  <span>Pengajuan Masuk</span>
+                  {agentApplications.filter((a) => a.status === 'PENDING').length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-red-500 text-white font-bold">
+                      {agentApplications.filter((a) => a.status === 'PENDING').length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('ROUTING')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
+                    agentSubTab === 'ROUTING'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  <span>Alihkan Pesanan ({routableOrders.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('TOPUP')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
+                    agentSubTab === 'TOPUP'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  <span>Topup Deposit</span>
+                  {pendingAgentTopups.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold">
+                      {pendingAgentTopups.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('APPOINT')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${
+                    agentSubTab === 'APPOINT'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  Penunjukan Langsung
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('CONFIG')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${
+                    agentSubTab === 'CONFIG'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                  }`}
+                >
+                  Aturan Keagenan (MOQ)
+                </button>
+              </div>
 
-                <form onSubmit={handleSaveStockist} className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <label className="block font-semibold text-varena-espresso mb-1">Kode ID Mitra *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newStockistMemberCode}
-                      onChange={(e) => setNewStockistMemberCode(e.target.value)}
-                      placeholder="Contoh: VRN-0002"
-                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 uppercase font-mono focus:outline-none focus:border-varena-gold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-varena-espresso mb-1">Tingkatan Stokis *</label>
-                    <select
-                      value={newStockistType}
-                      onChange={(e) => setNewStockistType(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white focus:outline-none focus:border-varena-gold"
-                    >
-                      <option value="MASTER">Master Stokis (Hub Utama)</option>
-                      <option value="MOBILE">Mobile Stokis (Sub-Hub)</option>
-                      <option value="NONE">Hapus Status Stokis</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-varena-espresso mb-1">Kota / Wilayah *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newStockistCity}
-                      onChange={(e) => setNewStockistCity(e.target.value)}
-                      placeholder="Contoh: Surabaya, Jawa Timur"
-                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-varena-espresso mb-1">Tambah/Set Kuota (Box) *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={newStockistQuota}
-                      onChange={(e) => setNewStockistQuota(parseInt(e.target.value, 10) || 0)}
-                      className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono focus:outline-none focus:border-varena-gold"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-4 pt-1">
+              {/* SUBTAB 1: DAFTAR AGEN AKTIF */}
+              {agentSubTab === 'LIST' && (
+                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
+                    <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                      <Store className="w-4 h-4 text-varena-gold" />
+                      <span>Daftar Agen Resmi VARENA Aktif</span>
+                    </h3>
                     <button
-                      type="submit"
-                      disabled={stockistLoading}
-                      className="py-2.5 px-6 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                      type="button"
+                      onClick={loadAgents}
+                      disabled={agentLoading}
+                      className="text-xs text-varena-taupe hover:text-varena-espresso font-semibold flex items-center gap-1"
                     >
-                      {stockistLoading ? 'Menyimpan...' : 'Simpan Otoritas Stokis'}
+                      <RefreshCw className={`w-3.5 h-3.5 ${agentLoading ? 'animate-spin' : ''}`} />
+                      <span>Segarkan</span>
                     </button>
                   </div>
-                </form>
-              </div>
 
-              {/* Tabel Daftar Stokis Regional */}
-              <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
-                  <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-varena-gold" />
-                    <span>Daftar Hub Master & Mobile Stokis Aktif</span>
-                  </h3>
-                  <button
-                    onClick={loadStockists}
-                    className="text-xs text-varena-taupe hover:text-varena-espresso font-semibold flex items-center gap-1"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Segarkan</span>
-                  </button>
-                </div>
-
-                {stockists.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left min-w-[600px]">
-                      <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                        <tr>
-                          <th className="py-2.5 px-3">Kode Mitra</th>
-                          <th className="py-2.5 px-3">Nama Stokis</th>
-                          <th className="py-2.5 px-3">Tingkatan Hub</th>
-                          <th className="py-2.5 px-3">Wilayah / Kota</th>
-                          <th className="py-2.5 px-3">Stok Box Tersedia</th>
-                          <th className="py-2.5 px-3">Kontak Terdaftar</th>
-                          <th className="py-2.5 px-3 text-right">Aksi Cepat</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-varena-taupe/10">
-                        {stockists.map((s: any) => (
-                          <tr key={s.id} className="hover:bg-varena-ivory-light/40">
-                            <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{s.memberCode}</td>
-                            <td className="py-2.5 px-3 font-semibold text-varena-espresso">{s.name}</td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${s.type === 'MASTER'
-                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                    : 'bg-blue-100 text-blue-900 border border-blue-300'
-                                  }`}
-                              >
-                                {s.type === 'MASTER' ? '⭐ MASTER STOKIS' : '📦 MOBILE STOKIS'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 font-medium text-slate-700">{s.city}</td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">{s.inventory} Box</td>
-                            <td className="py-2.5 px-3 font-mono text-varena-taupe">{s.phone || '-'}</td>
-                            <td className="py-2.5 px-3 text-right">
-                              {s.phone && (
-                                <a
-                                  href={`https://wa.me/${s.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
-                                    `Halo ${s.name} (${s.memberCode}), salam dari Manajemen Pusat VARENA terkait pengelolaan stok wilayah ${s.city}.`
-                                  )}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition inline-flex items-center gap-1 shadow-sm"
-                                >
-                                  <Send className="w-3 h-3" />
-                                  <span>Hubungi WA</span>
-                                </a>
-                              )}
-                            </td>
+                  {agents.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left min-w-[750px]">
+                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                          <tr>
+                            <th className="py-2.5 px-3">Kode Mitra</th>
+                            <th className="py-2.5 px-3">Nama Agen</th>
+                            <th className="py-2.5 px-3">Wilayah / Kota</th>
+                            <th className="py-2.5 px-3">Stok Gudang</th>
+                            <th className="py-2.5 px-3">Saldo Deposit</th>
+                            <th className="py-2.5 px-3">Diskon Agen</th>
+                            <th className="py-2.5 px-3 text-right">Aksi Manajemen</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-varena-taupe/10">
+                          {agents.map((a: any) => (
+                            <tr key={a.id} className="hover:bg-varena-ivory-light/40">
+                              <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{a.memberCode}</td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-semibold text-varena-espresso">{a.displayName}</div>
+                                <div className="text-[10px] text-varena-taupe font-mono">{a.phone || a.email || '-'}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-medium text-slate-700">
+                                <div>{a.city}</div>
+                                <div className="text-[10px] text-varena-taupe">{a.province}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">
+                                {a.inventory} Box
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-semibold text-varena-espresso">
+                                Rp{(a.depositBalance || 0).toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-amber-900 font-medium">
+                                {a.discountType === 'PERCENTAGE'
+                                  ? `${a.discountValue}%`
+                                  : `Rp${(a.discountValue || 0).toLocaleString('id-ID')}/box`}
+                              </td>
+                              <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRewardAgent(a);
+                                    setRewardTitle('');
+                                    setRewardDesc('');
+                                    setRewardValue(1000000);
+                                    setRewardModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-amber-600 text-white font-semibold text-[11px] hover:bg-amber-700 transition inline-flex items-center gap-1 shadow-xs"
+                                >
+                                  <Award className="w-3 h-3" />
+                                  <span>Beri Reward</span>
+                                </button>
+                                {a.phone && (
+                                  <a
+                                    href={`https://wa.me/${a.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
+                                      `Halo Agen ${a.displayName} (${a.memberCode}), salam dari Manajemen Pusat VARENA terkait wilayah keagenan ${a.city}.`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition inline-flex items-center gap-1 shadow-xs"
+                                  >
+                                    <Send className="w-3 h-3" />
+                                    <span>WA</span>
+                                  </a>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-xs text-varena-taupe">
+                      Belum ada agen resmi terdaftar. Anda dapat menyetujui pengajuan mitra atau menggunakan tab Penunjukan Langsung.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 2: PENGAJUAN MASUK (APPLICATIONS) */}
+              {agentSubTab === 'APPLICATIONS' && (
+                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                        <Store className="w-4 h-4 text-varena-gold" />
+                        <span>Pengajuan Permohonan Keagenan Masuk</span>
+                      </h3>
+                      <p className="text-xs text-varena-taupe mt-0.5">
+                        Tinjau permohonan dari mitra mandiri sebelum disetujui sebagai representasi agen resmi.
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-12 text-xs text-varena-taupe">
-                    Belum ada mitra yang ditunjuk sebagai Master atau Mobile Stokis.
+
+                  {agentApplications.length > 0 ? (
+                    <div className="divide-y divide-varena-taupe/10">
+                      {agentApplications.map((app: any) => (
+                        <div key={app.id} className="p-5 hover:bg-varena-ivory-light/30 transition space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-varena-espresso">
+                                  {app.member?.displayName || 'Mitra'}
+                                </span>
+                                <span className="font-mono text-xs text-varena-gold font-bold">
+                                  ({app.member?.memberCode})
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    app.status === 'APPROVED'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : app.status === 'REJECTED'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {app.status}
+                                </span>
+                              </div>
+                              <div className="text-xs text-varena-taupe mt-0.5">
+                                Diajukan pada {new Date(app.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </div>
+                            </div>
+
+                            {app.status === 'PENDING' && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedApp(app);
+                                    setAppInitialStock(20);
+                                    setAppDiscountType('PERCENTAGE');
+                                    setAppDiscountValue(15);
+                                    setApproveAppModalOpen(true);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-lg bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition shadow-xs flex items-center gap-1"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Setujui &amp; Angkat Agen</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectApplication(app.id)}
+                                  className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold text-xs transition"
+                                >
+                                  Tolak
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                            <div>
+                              <span className="text-varena-taupe block text-[11px]">Kota &amp; Provinsi Target</span>
+                              <span className="font-semibold text-slate-800">{app.city}, {app.province}</span>
+                            </div>
+                            <div>
+                              <span className="text-varena-taupe block text-[11px]">Kapasitas Gudang</span>
+                              <span className="font-semibold text-slate-800">{app.storageCapacity} Box</span>
+                            </div>
+                            <div>
+                              <span className="text-varena-taupe block text-[11px]">WhatsApp Pemohon</span>
+                              <span className="font-mono font-semibold text-slate-800">{app.contactPhone}</span>
+                            </div>
+                            <div className="sm:col-span-3">
+                              <span className="text-varena-taupe block text-[11px]">Alamat Lengkap Gudang/Toko</span>
+                              <span className="text-slate-800">{app.warehouseAddress}</span>
+                            </div>
+                            {app.notes && (
+                              <div className="sm:col-span-3 text-[11px] text-slate-600 italic">
+                                &quot;{app.notes}&quot;
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-xs text-varena-taupe">
+                      Tidak ada permohonan keagenan yang menunggu persetujuan.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 3: ALIKHAN PESANAN KE AGEN (ORDER ROUTING) */}
+              {agentSubTab === 'ROUTING' && (
+                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden space-y-4 p-5">
+                  <div>
+                    <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-varena-gold" />
+                      <span>Pengalihan Pesanan Regional ke Agen Terdekat</span>
+                    </h3>
+                    <p className="text-xs text-varena-taupe mt-1">
+                      Pesanan konsumen/mitra dari kota tertentu dapat dialihkan pemenuhannya ke agen setempat untuk menghemat ongkir, mempercepat kiriman lokal, dan memberi keuntungan kuantiti ke agen.
+                    </p>
                   </div>
-                )}
-              </div>
+
+                  {routableOrders.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left min-w-[700px]">
+                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                          <tr>
+                            <th className="py-2.5 px-3">No. Invoice</th>
+                            <th className="py-2.5 px-3">Pembeli &amp; Kota</th>
+                            <th className="py-2.5 px-3">Alamat Tujuan</th>
+                            <th className="py-2.5 px-3">Total Pesanan</th>
+                            <th className="py-2.5 px-3 text-right">Aksi Pengalihan</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-varena-taupe/10">
+                          {routableOrders.map((ord: any) => (
+                            <tr key={ord.id} className="hover:bg-varena-ivory-light/40">
+                              <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{ord.orderNumber}</td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-semibold text-slate-800">{ord.buyerName}</div>
+                                <div className="text-[10px] text-varena-gold font-bold">{ord.shippingCity || 'Kota belum diisi'}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 max-w-xs truncate">{ord.shippingAddress}</td>
+                              <td className="py-2.5 px-3 font-mono font-semibold text-varena-espresso">
+                                Rp{(ord.total || 0).toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRouteOrder(ord);
+                                    setSelectedRouteAgentId(agents[0]?.id || '');
+                                    setRouteOrderNote(`Pengalihan pengiriman lokal untuk tujuan kota ${ord.shippingCity || ''}`);
+                                    setRouteOrderModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-blue-700 text-white font-semibold text-xs hover:bg-blue-800 transition shadow-xs inline-flex items-center gap-1"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Alihkan ke Agen</span>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
+                      Tidak ada pesanan baru yang siap dialihkan saat ini.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 4: APPROVAL TOPUP DEPOSIT */}
+              {agentSubTab === 'TOPUP' && (
+                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden p-5 space-y-4">
+                  <div>
+                    <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-varena-gold" />
+                      <span>Verifikasi Pengajuan Topup Saldo Deposit Agen</span>
+                    </h3>
+                    <p className="text-xs text-varena-taupe mt-1">
+                      Agen menyetor dana via transfer bank untuk mengisi saldo kas deposit yang digunakan belanja restock grosir.
+                    </p>
+                  </div>
+
+                  {pendingAgentTopups.length > 0 ? (
+                    <div className="divide-y divide-varena-taupe/10">
+                      {pendingAgentTopups.map((topup: any) => (
+                        <div key={topup.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-varena-espresso">
+                                {topup.member?.displayName} ({topup.member?.memberCode})
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold font-mono">
+                                PENDING REVIEW
+                              </span>
+                            </div>
+                            <div className="text-xs text-varena-taupe mt-0.5">
+                              Diajukan: {new Date(topup.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · Bank Pengirim: <strong>{topup.bankName || '-'}</strong> (Rek: {topup.accountNumber || '-'})
+                            </div>
+                            {topup.notes && (
+                              <div className="text-[11px] text-slate-600 mt-1 font-mono">
+                                Ref: {topup.notes}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <span className="text-[11px] text-varena-taupe block">Nominal Topup</span>
+                              <span className="font-mono text-base font-bold text-emerald-800">
+                                Rp{(topup.amount || 0).toLocaleString('id-ID')}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleApproveDepositTopup(topup.id)}
+                              disabled={agentLoading}
+                              className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition shadow"
+                            >
+                              Setujui &amp; Tambah Saldo
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
+                      Tidak ada permintaan topup deposit agen yang pending saat ini.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBTAB 5: PENUNJUKAN LANGSUNG (DIRECT APPOINTMENT) */}
+              {agentSubTab === 'APPOINT' && (
+                <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Store className="w-5 h-5 text-varena-gold" />
+                    <h3 className="font-serif text-base font-bold text-varena-espresso">
+                      Penunjukan Langsung Mitra Sebagai Agen Resmi VARENA
+                    </h3>
+                  </div>
+                  <p className="text-xs text-varena-taupe">
+                    Manajemen kantor pusat dapat menunjuk mitra strategis secara langsung menjadi Agen Resmi Wilayah tanpa menunggu pengajuan mandiri.
+                  </p>
+
+                  <form onSubmit={handleDirectAppointment} className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-2">
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Kode ID Mitra Terdaftar *</label>
+                      <input
+                        type="text"
+                        required
+                        value={appointMemberCode}
+                        onChange={(e) => setAppointMemberCode(e.target.value)}
+                        placeholder="Contoh: VRN-0002"
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 uppercase font-mono focus:outline-none focus:border-varena-gold text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Tingkatan Agen *</label>
+                      <select
+                        value={appointType}
+                        onChange={(e) => setAppointType(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white focus:outline-none focus:border-varena-gold text-sm"
+                      >
+                        <option value="REGIONAL_AGENT">Agen Resmi Wilayah</option>
+                        <option value="MASTER_AGENT">Master Agen Regional (Provinsi)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Kota / Kabupaten *</label>
+                      <input
+                        type="text"
+                        required
+                        value={appointCity}
+                        onChange={(e) => setAppointCity(e.target.value)}
+                        placeholder="Contoh: Surabaya"
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Provinsi</label>
+                      <input
+                        type="text"
+                        value={appointProvince}
+                        onChange={(e) => setAppointProvince(e.target.value)}
+                        placeholder="Contoh: Jawa Timur"
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Alokasi Stok Awal (Box)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={appointInitialStock}
+                        onChange={(e) => setAppointInitialStock(parseInt(e.target.value, 10) || 0)}
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono focus:outline-none focus:border-varena-gold text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-varena-espresso mb-1">Besaran Diskon Agen</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={appointDiscountType}
+                          onChange={(e) => setAppointDiscountType(e.target.value)}
+                          className="w-1/2 px-2 py-2 rounded-lg border border-varena-taupe/30 bg-white text-xs"
+                        >
+                          <option value="PERCENTAGE">Persen (%)</option>
+                          <option value="NOMINAL">Nominal (Rp)</option>
+                        </select>
+                        <input
+                          type="number"
+                          value={appointDiscountValue}
+                          onChange={(e) => setAppointDiscountValue(parseFloat(e.target.value) || 0)}
+                          className="w-1/2 px-2 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <label className="block font-semibold text-varena-espresso mb-1">Alamat Titik Distribusi / Gudang</label>
+                      <textarea
+                        rows={2}
+                        value={appointAddress}
+                        onChange={(e) => setAppointAddress(e.target.value)}
+                        placeholder="Alamat ruko / rumah tempat operasional agen..."
+                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={agentLoading}
+                        className="py-2.5 px-6 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition shadow"
+                      >
+                        {agentLoading ? 'Memproses...' : 'Tetapkan Sebagai Agen Resmi'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* SUBTAB 6: KONFIGURASI KEAGENAN (MOQ & DISKON) */}
+              {agentSubTab === 'CONFIG' && (
+                <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4 max-w-2xl">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-5 h-5 text-varena-gold" />
+                    <h3 className="font-serif text-base font-bold text-varena-espresso">
+                      Konfigurasi Parameter Keagenan Resmi VARENA
+                    </h3>
+                  </div>
+                  <p className="text-xs text-varena-taupe">
+                    Atur batas minimum kuantiti order pasokan restock agen (MOQ) dan standar diskon yang berlaku secara dinamis.
+                  </p>
+
+                  <form onSubmit={handleUpdateAgentConfig} className="space-y-4 text-xs pt-2">
+                    <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200">
+                      <label className="block font-bold text-amber-950 mb-1">
+                        Minimal Pemesanan Restock Agen (MOQ Box) *
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={configMoq}
+                          onChange={(e) => setConfigMoq(parseInt(e.target.value, 10) || 1)}
+                          className="w-32 px-3 py-2 rounded-lg border border-amber-300 font-mono font-bold text-base focus:outline-none focus:border-varena-gold"
+                        />
+                        <span className="text-xs text-amber-900 font-medium">
+                          Box per sekali pemesanan (Saat ini diatur default 10 Box)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Tipe Diskon Default</label>
+                        <select
+                          value={configDiscountType}
+                          onChange={(e) => setConfigDiscountType(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white"
+                        >
+                          <option value="PERCENTAGE">Persentase (%)</option>
+                          <option value="NOMINAL">Nominal Potongan per Box (Rp)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Nilai Diskon Default</label>
+                        <input
+                          type="number"
+                          value={configDiscountValue}
+                          onChange={(e) => setConfigDiscountValue(parseFloat(e.target.value) || 0)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={agentLoading}
+                        className="py-2.5 px-6 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition shadow"
+                      >
+                        {agentLoading ? 'Menyimpan...' : 'Simpan Konfigurasi Aturan'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* MODAL: APPROVE APPLICATION */}
+              {approveAppModalOpen && selectedApp && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-varena-gold/40 space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                      <h4 className="font-serif text-base font-bold text-varena-espresso">
+                        Persetujuan Keagenan: {selectedApp.member?.displayName}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setApproveAppModalOpen(false)}
+                        className="text-varena-taupe hover:text-varena-espresso p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleApproveApplication} className="space-y-4">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="font-bold text-slate-800">Kota Target: {selectedApp.city}, {selectedApp.province}</div>
+                        <div className="text-[11px] text-slate-600 mt-0.5">Alamat Gudang: {selectedApp.warehouseAddress}</div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Alokasi Stok Fisik Awal (Box)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={appInitialStock}
+                          onChange={(e) => setAppInitialStock(parseInt(e.target.value, 10) || 0)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-varena-espresso mb-1">Tipe Diskon Agen</label>
+                          <select
+                            value={appDiscountType}
+                            onChange={(e) => setAppDiscountType(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white"
+                          >
+                            <option value="PERCENTAGE">Persen (%)</option>
+                            <option value="NOMINAL">Nominal (Rp/box)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-varena-espresso mb-1">Nilai Diskon</label>
+                          <input
+                            type="number"
+                            value={appDiscountValue}
+                            onChange={(e) => setAppDiscountValue(parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setApproveAppModalOpen(false)}
+                          className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-slate-700"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={agentLoading}
+                          className="px-5 py-2 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-800 shadow"
+                        >
+                          {agentLoading ? 'Menyetujui...' : 'Setujui & Terbitkan Hak Agen'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: AWARD REWARD */}
+              {rewardModalOpen && selectedRewardAgent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-varena-gold/40 space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                      <h4 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                        <Award className="w-5 h-5 text-amber-600" />
+                        <span>Beri Reward Prestasi Agen: {selectedRewardAgent.displayName}</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setRewardModalOpen(false)}
+                        className="text-varena-taupe hover:text-varena-espresso p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAwardReward} className="space-y-4">
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Bentuk Penghargaan / Reward *</label>
+                        <select
+                          value={rewardType}
+                          onChange={(e: any) => setRewardType(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white"
+                        >
+                          <option value="CASH_BONUS">Bonus Tunai (Kredit ke Saldo Deposit Agen)</option>
+                          <option value="PHYSICAL_GOODS">Barang / Aset Fisik (Sepeda Motor, Logam Mulia Emas, dll)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Judul / Nama Reward *</label>
+                        <input
+                          type="text"
+                          required
+                          value={rewardTitle}
+                          onChange={(e) => setRewardTitle(e.target.value)}
+                          placeholder="Contoh: Reward Target Q1 / 1 Unit Yamaha NMAX"
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Nilai Nominal Valuasi (Rp) *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          value={rewardValue}
+                          onChange={(e) => setRewardValue(parseInt(e.target.value, 10) || 0)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                        />
+                        <span className="text-[10px] text-varena-taupe mt-0.5 block">
+                          Tercatat dalam buku besar akuntansi sebagai beban apresiasi keagenan.
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Keterangan / Berita Acara</label>
+                        <textarea
+                          rows={2}
+                          value={rewardDesc}
+                          onChange={(e) => setRewardDesc(e.target.value)}
+                          placeholder="Alasan apresiasi dan catatan serah terima..."
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 text-sm"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setRewardModalOpen(false)}
+                          className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-slate-700"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={agentLoading}
+                          className="px-5 py-2 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 shadow"
+                        >
+                          {agentLoading ? 'Menyimpan...' : 'Terbitkan Reward Resmi'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: ORDER ROUTING */}
+              {routeOrderModalOpen && selectedRouteOrder && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                  <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-varena-gold/40 space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                      <h4 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-blue-600" />
+                        <span>Alihkan Pesanan #{selectedRouteOrder.orderNumber}</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setRouteOrderModalOpen(false)}
+                        className="text-varena-taupe hover:text-varena-espresso p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAssignOrderToAgent} className="space-y-4">
+                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+                        <div>Pembeli: <strong>{selectedRouteOrder.buyerName}</strong> ({selectedRouteOrder.shippingCity || '-'})</div>
+                        <div className="text-[11px] mt-0.5">{selectedRouteOrder.shippingAddress}</div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Pilih Agen Regional Pelaksana *</label>
+                        <select
+                          required
+                          value={selectedRouteAgentId}
+                          onChange={(e) => setSelectedRouteAgentId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white text-sm"
+                        >
+                          <option value="">-- Pilih Agen Regional --</option>
+                          {agents.map((ag) => (
+                            <option key={ag.id} value={ag.id}>
+                              {ag.displayName} ({ag.city}) - Stok: {ag.inventory} Box
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Catatan Pengalihan untuk Agen</label>
+                        <textarea
+                          rows={2}
+                          value={routeOrderNote}
+                          onChange={(e) => setRouteOrderNote(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 text-sm"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setRouteOrderModalOpen(false)}
+                          className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-slate-700"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={agentLoading}
+                          className="px-5 py-2 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-800 shadow"
+                        >
+                          {agentLoading ? 'Mengalihkan...' : 'Konfirmasi Alihkan Pengiriman'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

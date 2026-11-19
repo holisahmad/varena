@@ -8,6 +8,9 @@ export interface AuthSession {
   roles: string[];
   memberId?: string;
   memberCode?: string;
+  isAgent?: boolean;
+  agentStatus?: string;
+  agentCity?: string;
 }
 
 // In-memory or header-based token helper for modular monolith
@@ -37,6 +40,12 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
     data: { lastLoginAt: new Date() },
   });
 
+  const isAgent = Boolean(
+    user.member?.isAgent ||
+    ['MASTER_AGENT', 'REGIONAL_AGENT'].includes(user.member?.agentType || '') ||
+    ['MASTER', 'MOBILE'].includes(user.member?.stockistType || '')
+  );
+
   return {
     userId: user.id,
     email: user.email,
@@ -44,6 +53,9 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
     roles: user.userRoles.map((ur) => ur.role.code),
     memberId: user.member?.id,
     memberCode: user.member?.memberCode,
+    isAgent,
+    agentStatus: user.member?.agentStatus || (isAgent ? 'ACTIVE' : undefined),
+    agentCity: user.member?.agentCity || user.member?.stockistCity || undefined,
   };
 }
 
