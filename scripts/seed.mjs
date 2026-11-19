@@ -348,45 +348,49 @@ async function main() {
     });
   }
 
-  // 5. Products & Product Variants (Updated HPP values: Rp25.000 / sachet, Rp250.000 / box)
+  // 5. Products & Product Variants — Kopi Matahari (Robusta Fermentasi Premium)
   const product = await prisma.product.create({
     data: {
-      name: 'VARENA Kopi Sehat Premium Herbal',
-      slug: 'varena-kopi-sehat',
-      description: 'Minuman kopi herbal premium racikan biji kopi pilihan dengan ekstrak herba alami untuk stamina, vitalitas prima, dan daya tahan tubuh.',
-      category: 'HERBAL_BEVERAGE',
+      name: 'Kopi Matahari',
+      slug: 'kopi-matahari',
+      description:
+        'Kopi Matahari adalah kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan. ' +
+        'Cara Penyajian: Tuangkan 10gr (1 sendok makan muncung) kopi ke dalam gelas, tambahkan air mendidih ±150cc, aduk rata dan diamkan 5–7 menit, lalu nikmati selagi hangat. ' +
+        'Waktu terbaik: pagi hari untuk energi & kesegaran sepanjang hari. ' +
+        'Tagline: "Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh".',
+      category: 'PREMIUM_COFFEE',
       status: 'ACTIVE',
-      bpomNumber: 'MD 867028001234',
+      bpomNumber: 'P-IRT 2083404061840-31',
       halalNumber: 'ID00110000234560124',
-      imageUrl: '/brand/logo-square.png',
+      imageUrl: '/brand/kopi-matahari.jpeg',
     },
   });
 
-  // Variant 1: First Pack Box (10 sachet @ Rp500.000, HPP Rp250.000)
+  // Variant 1: Box (10 sachet @ Rp500.000, HPP Rp250.000)
   const boxVariant = await prisma.productVariant.create({
     data: {
       productId: product.id,
-      sku: 'VRN-KOP-BOX10',
-      name: 'Paket Perdana Box (10 Sachet)',
+      sku: 'KM-BOX10',
+      name: 'Kopi Matahari Box (10 Sachet)',
       packSize: 10,
       unit: 'box',
       price: 500000,
-      hpp: 250000, // Updated HPP
+      hpp: 250000,
       stockQuantity: 1000,
       status: 'ACTIVE',
     },
   });
 
-  // Variant 2: Repeat Purchase Sachet (1 sachet @ Rp45.000, HPP Rp25.000)
+  // Variant 2: Sachet satuan @ Rp45.000, HPP Rp25.000
   const sachetVariant = await prisma.productVariant.create({
     data: {
       productId: product.id,
-      sku: 'VRN-KOP-SCH01',
-      name: 'Eceran Sachet Satuan',
+      sku: 'KM-SCH01',
+      name: 'Kopi Matahari Sachet Satuan',
       packSize: 1,
       unit: 'sachet',
       price: 45000,
-      hpp: 25000, // Updated HPP
+      hpp: 25000,
       stockQuantity: 5000,
       status: 'ACTIVE',
     },

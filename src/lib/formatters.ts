@@ -43,10 +43,12 @@ export function formatOrderType(type?: string | null): string {
 
 // 3. Kategori Produk (Product Category)
 export const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  PREMIUM_COFFEE: 'Kopi Robusta Premium',
+  COFFEE_BEVERAGE: 'Minuman Kopi',
   HERBAL_BEVERAGE: 'Minuman Herbal Alami',
   SUPPLEMENT: 'Suplemen Kesehatan',
   COSMETIC: 'Perawatan & Kosmetik',
-  FOOD_BEVERAGE: 'Makanan & Minuman Sehat',
+  FOOD_BEVERAGE: 'Makanan & Minuman',
 };
 
 export function formatProductCategory(category?: string | null): string {

@@ -27,7 +27,7 @@ export default function ProductsPage() {
           Katalog Produk Resmi
         </h1>
         <p className="text-sm text-varena-taupe-dark mt-2">
-          Produk herbal berkhasiat dengan izin BPOM dan jaminan keaslian mutu 100%.
+          Kopi Robusta fermentasi premium dengan izin P-IRT resmi dan jaminan keaslian mutu 100%.
         </p>
       </div>
 
@@ -43,17 +43,17 @@ export default function ProductsPage() {
               className="bg-white border border-varena-taupe/20 rounded-2xl p-6 sm:p-8 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-8 items-center"
             >
               <div className="md:col-span-4 flex justify-center">
-                <div className="w-56 h-56 rounded-xl bg-varena-espresso-dark p-6 flex flex-col items-center justify-center text-center relative border border-varena-gold/30">
-                  <div className="w-20 h-20 relative mb-3">
-                    <Image
-                      src={p.imageUrl || '/brand/varena-connected-v-symbol.png'}
-                      alt={p.name}
-                      fill
-                      className="object-contain"
-                    />
+                <div className="w-56 h-56 rounded-xl overflow-hidden relative border border-varena-gold/30 shadow-md">
+                  <Image
+                    src={p.imageUrl || '/brand/kopi-matahari.jpeg'}
+                    alt={p.name}
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/90 to-transparent p-3 text-center">
+                    <span className="font-serif text-sm font-bold text-varena-gold-light block">{p.name}</span>
+                    <span className="text-[10px] text-varena-ivory/80 uppercase">{p.bpomNumber?.startsWith('P-IRT') ? p.bpomNumber : `BPOM ${p.bpomNumber}`}</span>
                   </div>
-                  <span className="font-serif text-xl font-bold text-varena-gold-light">{p.name}</span>
-                  <span className="text-[10px] text-varena-ivory/70 uppercase mt-1">BPOM {p.bpomNumber}</span>
                 </div>
               </div>
 
@@ -109,11 +109,15 @@ export default function ProductsPage() {
                 <div className="pt-2 flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] text-varena-taupe">
                   <div className="flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5 text-varena-gold" />
+                    <span>{p.bpomNumber?.startsWith('P-IRT') ? p.bpomNumber : `Izin BPOM: ${p.bpomNumber}`}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-varena-gold" />
                     <span>Halal Indonesia: {p.halalNumber}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Shield className="w-3.5 h-3.5 text-varena-gold" />
-                    <span>Garansi Keaslian Pabrik</span>
+                    <span>Robusta Fermentasi Premium 100% Asli</span>
                   </div>
                 </div>
               </div>

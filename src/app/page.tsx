@@ -9,7 +9,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="relative bg-varena-espresso text-varena-ivory overflow-hidden py-16 sm:py-24 border-b border-[#4A3B30]">
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#B18A55_1px,transparent_1px)] [background-size:16px_16px]"></div>
-        
+
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-varena-gold/40 bg-varena-espresso-dark/60 text-varena-gold-light text-xs tracking-widest uppercase mb-6 font-medium">
             <Sparkles className="w-3.5 h-3.5 text-varena-gold" />
@@ -85,7 +85,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-serif text-xl font-bold text-varena-espresso">VARENA Market</h3>
                 <p className="text-xs text-varena-taupe mt-2 leading-relaxed">
-                  Katalog resmi dan pembelian produk retail kopi herbal bagi konsumen langsung maupun mitra.
+                  Katalog resmi dan pembelian produk Kopi Matahari — Kopi Robusta Fermentasi Premium bagi konsumen langsung maupun mitra.
                 </p>
               </div>
               <Link href="/products" className="mt-6 text-xs font-semibold text-varena-gold hover:text-varena-gold-hover inline-flex items-center gap-1">
@@ -152,24 +152,27 @@ export default function HomePage() {
             <div>
               <span className="text-xs font-semibold tracking-wider text-varena-gold uppercase">Produk Unggulan</span>
               <h2 className="font-serif text-3xl sm:text-4xl font-bold text-varena-espresso mt-2">
-                VARENA Kopi Sehat Premium Herbal
+                Kopi Matahari
               </h2>
+              <p className="text-xs text-varena-gold font-semibold tracking-wide mt-1 italic">
+                "Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh"
+              </p>
               <p className="text-sm text-varena-taupe-dark mt-4 leading-relaxed">
-                Diformulasikan secara ilmiah dari biji kopi arabika pilihan dengan paduan ekstrak purwoceng, ginseng, dan herba Nusantara. Memberikan stamina tahan lama tanpa debar jantung berlebih.
+                Kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan. Cocok dinikmati sebagai bagian dari rutinitas harian yang produktif.
               </p>
 
               <div className="mt-6 space-y-2 text-xs text-varena-espresso font-medium">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Legalitas BPOM RI MD 867028001234 & Sertifikasi Halal Resmi</span>
+                  <span>Izin Edar Resmi P-IRT 2083404061840-31 & Sertifikasi Halal</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Tersedia Paket Perdana Box (10 Sachet @ Rp500.000)</span>
+                  <span>Tersedia Paket Box (10 Sachet @ Rp500.000)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Tersedia Eceran Repeat Purchase Satuan (Rp45.000 / sachet)</span>
+                  <span>Tersedia Sachet Satuan (Rp45.000 / sachet)</span>
                 </div>
               </div>
 
@@ -190,19 +193,19 @@ export default function HomePage() {
             </div>
 
             <div className="flex justify-center">
-              <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl bg-gradient-to-br from-varena-espresso-dark to-varena-espresso p-6 flex flex-col items-center justify-center text-center shadow-xl border border-varena-gold/30">
-                <div className="w-24 h-24 relative mb-4">
-                  <Image
-                    src="/brand/logo-square.png"
-                    alt="VARENA Luxury Emblem"
-                    fill
-                    className="object-contain drop-shadow-md"
-                  />
-                </div>
-                <span className="font-serif text-2xl font-bold text-varena-gold-light">VARENA</span>
-                <span className="text-xs text-varena-ivory/80 tracking-widest uppercase mt-1">Kopi Sehat Herbal</span>
-                <div className="mt-4 px-3 py-1 rounded bg-varena-gold/20 text-varena-gold-light text-xs font-semibold">
-                  Box 10 Sachet · Rp500.000
+              <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden shadow-xl border border-varena-gold/30">
+                <Image
+                  src="/brand/kopi-matahari.jpeg"
+                  alt="Kopi Matahari — Robusta Fermentasi Premium"
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/90 to-transparent px-4 py-4 text-center">
+                  <span className="font-serif text-lg font-bold text-varena-gold-light block">Kopi Matahari</span>
+                  <span className="text-xs text-varena-ivory/80 tracking-widest uppercase">Kopi Robusta Premium</span>
+                  <div className="mt-2 inline-block px-3 py-1 rounded bg-varena-gold/20 text-varena-gold-light text-xs font-semibold">
+                    Box 10 Sachet · Rp500.000
+                  </div>
                 </div>
               </div>
             </div>

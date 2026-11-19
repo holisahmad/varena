@@ -53,7 +53,7 @@ export function templateOrderInvoice(params: {
   return (
     `*PESANAN VARENA TELAH DITERIMA*\n\n` +
     `Halo *${params.buyerName}*,\n` +
-    `Terima kasih telah memesan produk herbal premium VARENA.\n\n` +
+    `Terima kasih telah memesan Kopi Matahari — Kopi Robusta Fermentasi Premium VARENA.\n\n` +
     `📦 *Nomor Pesanan*: \`${params.orderNumber}\`\n` +
     `🛍️ *Produk*: ${params.itemsSummary}\n` +
     `💰 *Total Pembayaran*: *Rp${params.total.toLocaleString('id-ID')}*\n\n` +
