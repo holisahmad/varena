@@ -57,7 +57,13 @@ function CheckoutContent() {
         if (data.products && data.products.length > 0) {
           const allVariants: any[] = [];
           data.products.forEach((p: any) => {
-            p.variants.forEach((v: any) => allVariants.push(v));
+            p.variants.forEach((v: any) =>
+              allVariants.push({
+                ...v,
+                productName: p.name,
+                category: p.category,
+              })
+            );
           });
           setVariants(allVariants);
 
@@ -259,7 +265,9 @@ function CheckoutContent() {
                         />
                         <div className="min-w-0">
                           <div className="font-semibold text-sm text-varena-espresso truncate">{v.name}</div>
-                          <div className="text-xs text-varena-taupe">Isi {v.packSize} sachet per {v.unit}</div>
+                          <div className="text-xs text-varena-taupe">
+                            {v.productName ? `${v.productName} · ` : ''}Isi {v.packSize} {v.unit}
+                          </div>
                         </div>
                       </div>
                       <div className="font-serif font-bold text-sm text-varena-espresso whitespace-nowrap flex-shrink-0">

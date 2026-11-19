@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
 import ConfirmDialog, { DialogVariant } from '@/components/ui/ConfirmDialog';
 import Toast from '@/components/ui/Toast';
+import ProductManagementTab from '@/components/admin/ProductManagementTab';
+import SystemSettingsTab from '@/components/admin/SystemSettingsTab';
 import {
   formatOrderStatus,
   formatOrderType,
@@ -64,6 +66,7 @@ import {
   Sliders,
   Gift,
   Percent,
+  Tag,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -71,7 +74,7 @@ export default function AdminPage() {
   const { adminOrdersBadge, adminPayoutBadge, ackAdminOrders, ackAdminPayout } = useNotifications();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'SETTINGS' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
 
   // Sidebar State (Expanded vs Collapsed & Mobile Drawer)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -254,7 +257,7 @@ export default function AdminPage() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   const [toast, setToast] = useState<{
@@ -1102,6 +1105,13 @@ export default function AdminPage() {
       badgeColor: '',
     },
     {
+      id: 'PRODUCTS',
+      label: 'Master Produk',
+      icon: Tag,
+      badge: null,
+      badgeColor: '',
+    },
+    {
       id: 'ORDERS',
       label: 'Pesanan & Logistik',
       icon: Package,
@@ -1133,6 +1143,13 @@ export default function AdminPage() {
       badge: agentApplications.filter((a) => a.status === 'PENDING').length > 0 ? `${agentApplications.filter((a) => a.status === 'PENDING').length}` : null,
       badgeColor: 'bg-amber-600',
       onSelect: () => loadAgents(),
+    },
+    {
+      id: 'SETTINGS',
+      label: 'Pengaturan Sistem',
+      icon: Sliders,
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'LOGS',
@@ -1688,6 +1705,17 @@ export default function AdminPage() {
           )}
 
           {/* ==================================================================== */}
+          {/* TAB: MASTER PRODUK & SKEMA PENJUALAN DINAMIS */}
+          {/* ==================================================================== */}
+          {activeTab === 'PRODUCTS' && (
+            <ProductManagementTab
+              authHeaders={getAdminHeaders()}
+              showToast={showToast}
+              showConfirm={showConfirm}
+            />
+          )}
+
+          {/* ==================================================================== */}
           {/* TAB 2: ORDER MANAGEMENT & LOGISTICS (ADMIN PENJUALAN) */}
           {/* ==================================================================== */}
           {activeTab === 'ORDERS' && (
@@ -1700,8 +1728,8 @@ export default function AdminPage() {
                     loadFilteredOrders('ALL', orderSearchQuery);
                   }}
                   className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'ALL'
-                      ? 'border-varena-gold bg-varena-espresso text-varena-gold-light font-semibold'
-                      : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-varena-gold'
+                    ? 'border-varena-gold bg-varena-espresso text-varena-gold-light font-semibold'
+                    : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-varena-gold'
                     }`}
                 >
                   <div className="text-[10px] uppercase">Semua Pesanan</div>
@@ -1714,8 +1742,8 @@ export default function AdminPage() {
                     loadFilteredOrders('PENDING_PAYMENT', orderSearchQuery);
                   }}
                   className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'PENDING_PAYMENT'
-                      ? 'border-amber-400 bg-amber-900 text-amber-200 font-semibold'
-                      : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-amber-400'
+                    ? 'border-amber-400 bg-amber-900 text-amber-200 font-semibold'
+                    : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-amber-400'
                     }`}
                 >
                   <div className="text-[10px] uppercase">Menunggu Bayar</div>
@@ -1728,8 +1756,8 @@ export default function AdminPage() {
                     loadFilteredOrders('PAID', orderSearchQuery);
                   }}
                   className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'PAID'
-                      ? 'border-emerald-500 bg-emerald-900 text-emerald-200 font-semibold'
-                      : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-emerald-500'
+                    ? 'border-emerald-500 bg-emerald-900 text-emerald-200 font-semibold'
+                    : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-emerald-500'
                     }`}
                 >
                   <div className="text-[10px] uppercase">Dibayar / Perlu Kirim</div>
@@ -1742,8 +1770,8 @@ export default function AdminPage() {
                     loadFilteredOrders('SHIPPED', orderSearchQuery);
                   }}
                   className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'SHIPPED'
-                      ? 'border-blue-500 bg-blue-900 text-blue-200 font-semibold'
-                      : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-blue-500'
+                    ? 'border-blue-500 bg-blue-900 text-blue-200 font-semibold'
+                    : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-blue-500'
                     }`}
                 >
                   <div className="text-[10px] uppercase">Dalam Pengiriman</div>
@@ -1756,8 +1784,8 @@ export default function AdminPage() {
                     loadFilteredOrders('COMPLETED', orderSearchQuery);
                   }}
                   className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'COMPLETED'
-                      ? 'border-varena-espresso bg-varena-espresso text-varena-gold-light font-semibold'
-                      : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-varena-espresso'
+                    ? 'border-varena-espresso bg-varena-espresso text-varena-gold-light font-semibold'
+                    : 'border-varena-taupe/20 bg-white text-varena-taupe hover:border-varena-espresso'
                     }`}
                 >
                   <div className="text-[10px] uppercase">Selesai / Diterima</div>
@@ -1926,149 +1954,146 @@ export default function AdminPage() {
                 {orders.length > 0 ? (
                   <>
                     <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left min-w-[900px]">
-                      <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                        <tr>
-                          <th className="py-2.5 px-3">No. Order / Tanggal</th>
-                          <th className="py-2.5 px-3">Pembeli & Alamat</th>
-                          <th className="py-2.5 px-3">Item Produk</th>
-                          <th className="py-2.5 px-3">Total Belanja</th>
-                          <th className="py-2.5 px-3">Referral Sponsor</th>
-                          <th className="py-2.5 px-3">Status & Logistik</th>
-                          <th className="py-2.5 px-3 text-right">Aksi Alur Order</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-varena-taupe/10">
-                        {orders.map((o) => (
-                          <tr key={o.id} className="hover:bg-varena-ivory-light/40">
-                            <td className="py-2.5 px-3">
-                              <button
-                                type="button"
-                                onClick={() => setViewOrderDetail(o)}
-                                className="text-left group cursor-pointer"
-                                title="Klik untuk lihat detail transaksi lengkap"
-                              >
-                                <div className="font-mono font-bold text-varena-espresso group-hover:text-amber-800 flex items-center gap-1 transition">
-                                  <span>{o.orderNumber}</span>
-                                  <Eye className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-800 transition" />
-                                </div>
-                                <div className="text-[10px] text-varena-taupe">
-                                  {new Date(o.createdAt).toLocaleDateString('id-ID', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </div>
-                              </button>
-                            </td>
-                            <td className="py-2.5 px-3 max-w-[200px]">
-                              <div className="font-semibold text-varena-espresso">{o.buyerName}</div>
-                              <div className="text-[10px] text-varena-taupe font-mono">{o.buyerPhone}</div>
-                              <div className="text-[10px] text-varena-taupe truncate" title={o.shippingAddress}>
-                                {o.shippingAddress}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {o.items?.map((it: any) => (
-                                <div key={it.id} className="text-[11px]">
-                                  <span className="font-semibold text-varena-espresso">{it.quantity}x</span> {it.nameSnapshot}
-                                </div>
-                              ))}
-                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
-                                {formatOrderType(o.orderType)}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
-                              Rp{o.total.toLocaleString('id-ID')}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {o.referralMember ? (
-                                <div>
-                                  <div className="font-semibold text-varena-espresso">{o.referralMember.displayName}</div>
-                                  <div className="text-[10px] text-varena-taupe font-mono">{o.referralMember.memberCode}</div>
-                                </div>
-                              ) : (
-                                <span className="text-varena-taupe text-[10px] italic">Organik / Non-Referral</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold block w-fit mb-1 border ${
-                                  ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-stone-50'
-                                } ${
-                                  ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-stone-800'
-                                } ${
-                                  ORDER_STATUS_BADGES[o.orderStatus]?.border || 'border-stone-200'
-                                }`}
-                              >
-                                {formatOrderStatus(o.orderStatus)}
-                              </span>
-                              {o.trackingNumber && (
-                                <div className="text-[10px] font-mono text-varena-taupe">
-                                  {o.courierName}: <strong>{o.trackingNumber}</strong>
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              {/* Alur Aksi Berdasarkan Status */}
-                              {o.orderStatus === 'PENDING_PAYMENT' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleConfirmOrderPayment(o.id, o.orderNumber)}
-                                  disabled={actionLoading}
-                                  className="px-2.5 py-1.5 rounded bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition shadow-sm whitespace-nowrap"
-                                >
-                                  Konfirmasi Bayar
-                                </button>
-                              )}
-
-                              {o.orderStatus === 'PAID' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setShippingModalOrder(o);
-                                    setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition shadow-sm flex items-center gap-1.5 ml-auto whitespace-nowrap"
-                                >
-                                  <Truck className="w-3.5 h-3.5" />
-                                  <span>Input Resi & Kirim</span>
-                                </button>
-                              )}
-
-                              {o.orderStatus === 'SHIPPED' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCompleteOrder(o.id, o.orderNumber)}
-                                  disabled={actionLoading}
-                                  className="px-2.5 py-1.5 rounded border border-emerald-600 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition shadow-sm whitespace-nowrap"
-                                >
-                                  Tandai Diterima
-                                </button>
-                              )}
-
-                              {o.orderStatus === 'COMPLETED' && (
-                                <span className="text-[10px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Selesai</span>
-                                </span>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => setViewOrderDetail(o)}
-                                className="text-[10px] text-stone-500 hover:text-varena-espresso underline block mt-1 ml-auto"
-                              >
-                                Detail Transaksi →
-                              </button>
-                            </td>
+                      <table className="w-full text-xs text-left min-w-[900px]">
+                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                          <tr>
+                            <th className="py-2.5 px-3">No. Order / Tanggal</th>
+                            <th className="py-2.5 px-3">Pembeli & Alamat</th>
+                            <th className="py-2.5 px-3">Item Produk</th>
+                            <th className="py-2.5 px-3">Total Belanja</th>
+                            <th className="py-2.5 px-3">Referral Sponsor</th>
+                            <th className="py-2.5 px-3">Status & Logistik</th>
+                            <th className="py-2.5 px-3 text-right">Aksi Alur Order</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-varena-taupe/10">
+                          {orders.map((o) => (
+                            <tr key={o.id} className="hover:bg-varena-ivory-light/40">
+                              <td className="py-2.5 px-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setViewOrderDetail(o)}
+                                  className="text-left group cursor-pointer"
+                                  title="Klik untuk lihat detail transaksi lengkap"
+                                >
+                                  <div className="font-mono font-bold text-varena-espresso group-hover:text-amber-800 flex items-center gap-1 transition">
+                                    <span>{o.orderNumber}</span>
+                                    <Eye className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-800 transition" />
+                                  </div>
+                                  <div className="text-[10px] text-varena-taupe">
+                                    {new Date(o.createdAt).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                </button>
+                              </td>
+                              <td className="py-2.5 px-3 max-w-[200px]">
+                                <div className="font-semibold text-varena-espresso">{o.buyerName}</div>
+                                <div className="text-[10px] text-varena-taupe font-mono">{o.buyerPhone}</div>
+                                <div className="text-[10px] text-varena-taupe truncate" title={o.shippingAddress}>
+                                  {o.shippingAddress}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {o.items?.map((it: any) => (
+                                  <div key={it.id} className="text-[11px]">
+                                    <span className="font-semibold text-varena-espresso">{it.quantity}x</span> {it.nameSnapshot}
+                                  </div>
+                                ))}
+                                <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
+                                  {formatOrderType(o.orderType)}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
+                                Rp{o.total.toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {o.referralMember ? (
+                                  <div>
+                                    <div className="font-semibold text-varena-espresso">{o.referralMember.displayName}</div>
+                                    <div className="text-[10px] text-varena-taupe font-mono">{o.referralMember.memberCode}</div>
+                                  </div>
+                                ) : (
+                                  <span className="text-varena-taupe text-[10px] italic">Organik / Non-Referral</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold block w-fit mb-1 border ${ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-stone-50'
+                                    } ${ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-stone-800'
+                                    } ${ORDER_STATUS_BADGES[o.orderStatus]?.border || 'border-stone-200'
+                                    }`}
+                                >
+                                  {formatOrderStatus(o.orderStatus)}
+                                </span>
+                                {o.trackingNumber && (
+                                  <div className="text-[10px] font-mono text-varena-taupe">
+                                    {o.courierName}: <strong>{o.trackingNumber}</strong>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                {/* Alur Aksi Berdasarkan Status */}
+                                {o.orderStatus === 'PENDING_PAYMENT' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmOrderPayment(o.id, o.orderNumber)}
+                                    disabled={actionLoading}
+                                    className="px-2.5 py-1.5 rounded bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition shadow-sm whitespace-nowrap"
+                                  >
+                                    Konfirmasi Bayar
+                                  </button>
+                                )}
+
+                                {o.orderStatus === 'PAID' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShippingModalOrder(o);
+                                      setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
+                                    }}
+                                    className="px-2.5 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition shadow-sm flex items-center gap-1.5 ml-auto whitespace-nowrap"
+                                  >
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>Input Resi & Kirim</span>
+                                  </button>
+                                )}
+
+                                {o.orderStatus === 'SHIPPED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCompleteOrder(o.id, o.orderNumber)}
+                                    disabled={actionLoading}
+                                    className="px-2.5 py-1.5 rounded border border-emerald-600 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition shadow-sm whitespace-nowrap"
+                                  >
+                                    Tandai Diterima
+                                  </button>
+                                )}
+
+                                {o.orderStatus === 'COMPLETED' && (
+                                  <span className="text-[10px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Selesai</span>
+                                  </span>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => setViewOrderDetail(o)}
+                                  className="text-[10px] text-stone-500 hover:text-varena-espresso underline block mt-1 ml-auto"
+                                >
+                                  Detail Transaksi →
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
                     <div className="p-3 border-t border-varena-taupe/15">
                       <Pagination
@@ -2542,115 +2567,115 @@ export default function AdminPage() {
                 {withdrawals.length > 0 ? (
                   <>
                     <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left min-w-[950px]">
-                      <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                        <tr>
-                          <th className="py-2.5 px-3 w-8">#</th>
-                          <th className="py-2.5 px-3">Tanggal</th>
-                          <th className="py-2.5 px-3">Mitra Pemohon</th>
-                          <th className="py-2.5 px-3">Nominal Diminta</th>
-                          <th className="py-2.5 px-3">Potongan Admin</th>
-                          <th className="py-2.5 px-3">Bersih Ditransfer</th>
-                          <th className="py-2.5 px-3">Rekening Bank Tujuan</th>
-                          <th className="py-2.5 px-3">Status Finance</th>
-                          <th className="py-2.5 px-3 text-right">Aksi Persetujuan</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-varena-taupe/10">
-                        {withdrawals.map((w: any) => (
-                          <tr key={w.id} className="hover:bg-varena-ivory-light/40">
-                            <td className="py-2.5 px-3">
-                              {w.status === 'REQUESTED' ? (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedPayouts.includes(w.id)}
-                                  onChange={() => handleTogglePayout(w.id)}
-                                  className="rounded border-varena-taupe/40 cursor-pointer"
-                                />
-                              ) : (
-                                <span className="text-slate-300 text-xs">-</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
-                              {new Date(w.requestedAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-bold text-varena-espresso">{w.member?.displayName}</div>
-                              <div className="text-[10px] text-varena-taupe font-mono">{w.member?.memberCode}</div>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono font-semibold">Rp{w.amount.toLocaleString('id-ID')}</td>
-                            <td className="py-2.5 px-3 text-varena-taupe font-mono">Rp{w.fee.toLocaleString('id-ID')}</td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
-                              Rp{w.netAmount.toLocaleString('id-ID')}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-semibold text-varena-espresso">{w.bankName} - {w.accountNumberMasked}</div>
-                              <div className="text-[10px] text-varena-taupe">a.n. {w.accountHolder}</div>
-                            </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-semibold ${w.status === 'PAID' || w.status === 'APPROVED'
+                      <table className="w-full text-xs text-left min-w-[950px]">
+                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                          <tr>
+                            <th className="py-2.5 px-3 w-8">#</th>
+                            <th className="py-2.5 px-3">Tanggal</th>
+                            <th className="py-2.5 px-3">Mitra Pemohon</th>
+                            <th className="py-2.5 px-3">Nominal Diminta</th>
+                            <th className="py-2.5 px-3">Potongan Admin</th>
+                            <th className="py-2.5 px-3">Bersih Ditransfer</th>
+                            <th className="py-2.5 px-3">Rekening Bank Tujuan</th>
+                            <th className="py-2.5 px-3">Status Finance</th>
+                            <th className="py-2.5 px-3 text-right">Aksi Persetujuan</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-varena-taupe/10">
+                          {withdrawals.map((w: any) => (
+                            <tr key={w.id} className="hover:bg-varena-ivory-light/40">
+                              <td className="py-2.5 px-3">
+                                {w.status === 'REQUESTED' ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPayouts.includes(w.id)}
+                                    onChange={() => handleTogglePayout(w.id)}
+                                    className="rounded border-varena-taupe/40 cursor-pointer"
+                                  />
+                                ) : (
+                                  <span className="text-slate-300 text-xs">-</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
+                                {new Date(w.requestedAt).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-varena-espresso">{w.member?.displayName}</div>
+                                <div className="text-[10px] text-varena-taupe font-mono">{w.member?.memberCode}</div>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-semibold">Rp{w.amount.toLocaleString('id-ID')}</td>
+                              <td className="py-2.5 px-3 text-varena-taupe font-mono">Rp{w.fee.toLocaleString('id-ID')}</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
+                                Rp{w.netAmount.toLocaleString('id-ID')}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-semibold text-varena-espresso">{w.bankName} - {w.accountNumberMasked}</div>
+                                <div className="text-[10px] text-varena-taupe">a.n. {w.accountHolder}</div>
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${w.status === 'PAID' || w.status === 'APPROVED'
                                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                     : w.status === 'REQUESTED' || w.status === 'UNDER_REVIEW'
                                       ? 'bg-amber-100 text-amber-800 border border-amber-300'
                                       : 'bg-rose-100 text-rose-800'
-                                  }`}
-                              >
-                                {formatPayoutStatus(w.status)}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                              {w.status === 'REQUESTED' ? (
-                                approvingId === w.id ? (
-                                  <div className="flex items-center gap-1.5 justify-end">
-                                    <input
-                                      type="text"
-                                      value={transferRef}
-                                      onChange={(e) => setTransferRef(e.target.value)}
-                                      placeholder="No. Ref Transfer"
-                                      className="px-2 py-1 rounded border border-varena-taupe/40 text-xs w-36 uppercase font-mono"
-                                    />
-                                    <button
-                                      onClick={() => handleApproveWithdrawal(w.id)}
-                                      disabled={actionLoading}
-                                      className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition shadow"
-                                    >
-                                      Approve
-                                    </button>
-                                    <button
-                                      onClick={() => setApprovingId(null)}
-                                      className="px-1.5 py-1 text-varena-taupe hover:text-varena-espresso"
-                                    >
-                                      Batal
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      setApprovingId(w.id);
-                                      setTransferRef(`TRF-${Date.now().toString().slice(-6)}`);
-                                    }}
-                                    className="px-3 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
-                                  >
-                                    Setujui Payout
-                                  </button>
-                                )
-                              ) : (
-                                <span className="text-[10px] font-mono text-varena-taupe">
-                                  Ref: {w.providerReference || '-'}
+                                    }`}
+                                >
+                                  {formatPayoutStatus(w.status)}
                                 </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                {w.status === 'REQUESTED' ? (
+                                  approvingId === w.id ? (
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                      <input
+                                        type="text"
+                                        value={transferRef}
+                                        onChange={(e) => setTransferRef(e.target.value)}
+                                        placeholder="No. Ref Transfer"
+                                        className="px-2 py-1 rounded border border-varena-taupe/40 text-xs w-36 uppercase font-mono"
+                                      />
+                                      <button
+                                        onClick={() => handleApproveWithdrawal(w.id)}
+                                        disabled={actionLoading}
+                                        className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition shadow"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button
+                                        onClick={() => setApprovingId(null)}
+                                        className="px-1.5 py-1 text-varena-taupe hover:text-varena-espresso"
+                                      >
+                                        Batal
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        setApprovingId(w.id);
+                                        setTransferRef(`TRF-${Date.now().toString().slice(-6)}`);
+                                      }}
+                                      className="px-3 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                                    >
+                                      Setujui Payout
+                                    </button>
+                                  )
+                                ) : (
+                                  <span className="text-[10px] font-mono text-varena-taupe">
+                                    Ref: {w.providerReference || '-'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
                     <div className="p-3 border-t border-varena-taupe/15">
                       <Pagination
@@ -2935,8 +2960,8 @@ export default function AdminPage() {
                 {transferStatus && (
                   <div
                     className={`p-3 rounded-lg text-xs flex items-center gap-2 ${transferStatus.type === 'success'
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : 'bg-red-50 text-red-700 border border-red-200'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
                       }`}
                   >
                     {transferStatus.type === 'success' ? (
@@ -3051,62 +3076,62 @@ export default function AdminPage() {
                 {auditLogs.length > 0 ? (
                   <>
                     <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left min-w-[600px]">
-                      <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                        <tr>
-                          <th className="py-2.5 px-3">Waktu Kejadian</th>
-                          <th className="py-2.5 px-3">Aktor Pelaksana</th>
-                          <th className="py-2.5 px-3">Aksi / Operasi</th>
-                          <th className="py-2.5 px-3">Entitas Terkait</th>
-                          <th className="py-2.5 px-3">Alasan / Catatan Sistem</th>
-                          <th className="py-2.5 px-3">Rincian Perubahan Data</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-varena-taupe/10">
-                        {auditLogs.map((log: any) => (
-                          <tr key={log.id} className="hover:bg-varena-ivory-light/40">
-                            <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
-                              {new Date(log.createdAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="font-semibold text-varena-espresso">{log.actor?.displayName}</div>
-                              <div className="text-[10px] text-varena-gold font-mono">{log.actor?.role}</div>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30 block w-fit">
-                                {formatAuditAction(log.action)}
-                              </span>
-                              <span className="text-[9px] text-stone-400 font-mono mt-0.5 block">
-                                {log.action}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-[11px]">
-                              <span className="font-semibold text-varena-espresso block">{formatEntityType(log.entityType)}</span>
-                              <span className="text-varena-taupe font-mono block text-[10px] truncate max-w-[120px]" title={log.entityId}>
-                                {log.entityId}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 max-w-[200px] text-varena-taupe-dark">
-                              {log.reason || '-'}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-[10px] max-w-[220px]">
-                              {log.afterJson && (
-                                <div className="p-1.5 rounded bg-slate-50 border border-slate-200 text-slate-800 break-words">
-                                  {log.afterJson}
-                                </div>
-                              )}
-                            </td>
+                      <table className="w-full text-xs text-left min-w-[600px]">
+                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                          <tr>
+                            <th className="py-2.5 px-3">Waktu Kejadian</th>
+                            <th className="py-2.5 px-3">Aktor Pelaksana</th>
+                            <th className="py-2.5 px-3">Aksi / Operasi</th>
+                            <th className="py-2.5 px-3">Entitas Terkait</th>
+                            <th className="py-2.5 px-3">Alasan / Catatan Sistem</th>
+                            <th className="py-2.5 px-3">Rincian Perubahan Data</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-varena-taupe/10">
+                          {auditLogs.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-varena-ivory-light/40">
+                              <td className="py-2.5 px-3 text-varena-taupe whitespace-nowrap">
+                                {new Date(log.createdAt).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-semibold text-varena-espresso">{log.actor?.displayName}</div>
+                                <div className="text-[10px] text-varena-gold font-mono">{log.actor?.role}</div>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30 block w-fit">
+                                  {formatAuditAction(log.action)}
+                                </span>
+                                <span className="text-[9px] text-stone-400 font-mono mt-0.5 block">
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px]">
+                                <span className="font-semibold text-varena-espresso block">{formatEntityType(log.entityType)}</span>
+                                <span className="text-varena-taupe font-mono block text-[10px] truncate max-w-[120px]" title={log.entityId}>
+                                  {log.entityId}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 max-w-[200px] text-varena-taupe-dark">
+                                {log.reason || '-'}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-[10px] max-w-[220px]">
+                                {log.afterJson && (
+                                  <div className="p-1.5 rounded bg-slate-50 border border-slate-200 text-slate-800 break-words">
+                                    {log.afterJson}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
                     <div className="p-3 border-t border-varena-taupe/15">
                       <Pagination
@@ -3171,22 +3196,20 @@ export default function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('LIST')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition ${
-                    agentSubTab === 'LIST'
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${agentSubTab === 'LIST'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   Daftar Agen Aktif ({agents.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('APPLICATIONS')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
-                    agentSubTab === 'APPLICATIONS'
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${agentSubTab === 'APPLICATIONS'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   <span>Pengajuan Masuk</span>
                   {agentApplications.filter((a) => a.status === 'PENDING').length > 0 && (
@@ -3198,22 +3221,20 @@ export default function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('ROUTING')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
-                    agentSubTab === 'ROUTING'
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${agentSubTab === 'ROUTING'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   <span>Alihkan Pesanan ({routableOrders.length})</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('TOPUP')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${
-                    agentSubTab === 'TOPUP'
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${agentSubTab === 'TOPUP'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   <span>Topup Deposit</span>
                   {pendingAgentTopups.length > 0 && (
@@ -3225,22 +3246,20 @@ export default function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('APPOINT')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition ${
-                    agentSubTab === 'APPOINT'
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${agentSubTab === 'APPOINT'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   Penunjukan Langsung
                 </button>
                 <button
                   type="button"
                   onClick={() => setAgentSubTab('CONFIG')}
-                  className={`px-4 py-2 rounded-xl font-semibold transition ${
-                    agentSubTab === 'CONFIG'
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${agentSubTab === 'CONFIG'
                       ? 'bg-varena-espresso text-varena-gold shadow'
                       : 'text-slate-600 hover:bg-varena-ivory-light'
-                  }`}
+                    }`}
                 >
                   Aturan Keagenan (MOQ)
                 </button>
@@ -3373,13 +3392,12 @@ export default function AdminPage() {
                                   ({app.member?.memberCode})
                                 </span>
                                 <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    app.status === 'APPROVED'
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${app.status === 'APPROVED'
                                       ? 'bg-emerald-100 text-emerald-800'
                                       : app.status === 'REJECTED'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-amber-100 text-amber-800'
-                                  }`}
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
                                 >
                                   {app.status === 'APPROVED' ? 'Disetujui' : app.status === 'REJECTED' ? 'Ditolak' : 'Menunggu Verifikasi'}
                                 </span>
@@ -4008,6 +4026,17 @@ export default function AdminPage() {
           )}
 
           {/* ==================================================================== */}
+          {/* TAB: PENGATURAN SISTEM DINAMIS */}
+          {/* ==================================================================== */}
+          {activeTab === 'SETTINGS' && (
+            <SystemSettingsTab
+              authHeaders={getAdminHeaders()}
+              showToast={showToast}
+              showConfirm={showConfirm}
+            />
+          )}
+
+          {/* ==================================================================== */}
           {/* TAB 7: WHATSAPP GATEWAY OUTBOX MONITOR */}
           {/* ==================================================================== */}
           {activeTab === 'OUTBOX' && (
@@ -4075,10 +4104,10 @@ export default function AdminPage() {
                                 {msg.templateType === 'ORDER_INVOICE'
                                   ? 'Invoice Pesanan'
                                   : msg.templateType === 'ORDER_SHIPPED'
-                                  ? 'Notifikasi Pengiriman'
-                                  : msg.templateType === 'PAYOUT_COMPLETED'
-                                  ? 'Konfirmasi Pencairan'
-                                  : msg.templateType?.replace(/_/g, ' ')}
+                                    ? 'Notifikasi Pengiriman'
+                                    : msg.templateType === 'PAYOUT_COMPLETED'
+                                      ? 'Konfirmasi Pencairan'
+                                      : msg.templateType?.replace(/_/g, ' ')}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 max-w-[320px] font-mono text-[11px]">

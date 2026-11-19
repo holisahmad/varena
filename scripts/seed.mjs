@@ -82,6 +82,11 @@ async function main() {
   await prisma.member.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.systemSetting.deleteMany();
+  await prisma.agentReward.deleteMany();
+  await prisma.agentStockMutation.deleteMany();
+  await prisma.agentDepositTransaction.deleteMany();
+  await prisma.agentApplication.deleteMany();
   await prisma.productVariant.deleteMany();
   await prisma.product.deleteMany();
   await prisma.marketingPlan.deleteMany();
@@ -354,15 +359,16 @@ async function main() {
       name: 'Kopi Matahari',
       slug: 'kopi-matahari',
       description:
-        'Kopi Matahari adalah kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan. ' +
-        'Cara Penyajian: Tuangkan 10gr (1 sendok makan muncung) kopi ke dalam gelas, tambahkan air mendidih ±150cc, aduk rata dan diamkan 5–7 menit, lalu nikmati selagi hangat. ' +
-        'Waktu terbaik: pagi hari untuk energi & kesegaran sepanjang hari. ' +
-        'Tagline: "Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh".',
+        'Kopi Matahari adalah kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan.',
+      tagline: 'Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh',
+      servingSuggestion: 'Tuangkan 10gr (1 sendok makan muncung) kopi ke dalam gelas, tambahkan air mendidih ±150cc, aduk rata dan diamkan 5–7 menit, lalu nikmati selagi hangat di pagi hari.',
       category: 'PREMIUM_COFFEE',
       status: 'ACTIVE',
+      isFeatured: true,
       bpomNumber: 'P-IRT 2083404061840-31',
       halalNumber: 'ID00110000234560124',
       imageUrl: '/brand/kopi-matahari.jpeg',
+      launchedAt: new Date(),
     },
   });
 
@@ -372,12 +378,19 @@ async function main() {
       productId: product.id,
       sku: 'KM-BOX10',
       name: 'Kopi Matahari Box (10 Sachet)',
+      variantType: 'PACK',
       packSize: 10,
       unit: 'box',
       price: 500000,
       hpp: 250000,
       stockQuantity: 1000,
       status: 'ACTIVE',
+      allowFirstPack: true,
+      allowRepeatOrder: true,
+      allowAgentStock: true,
+      sponsorReward: 50000,
+      uplineRewardPerLevel: 10000,
+      maxCommissionLevels: 10,
     },
   });
 
@@ -387,14 +400,76 @@ async function main() {
       productId: product.id,
       sku: 'KM-SCH01',
       name: 'Kopi Matahari Sachet Satuan',
+      variantType: 'SINGLE',
       packSize: 1,
       unit: 'sachet',
       price: 45000,
       hpp: 25000,
       stockQuantity: 5000,
       status: 'ACTIVE',
+      allowFirstPack: false,
+      allowRepeatOrder: true,
+      allowAgentStock: true,
+      sponsorReward: 0,
+      uplineRewardPerLevel: 2000,
+      maxCommissionLevels: 10,
     },
   });
+
+  // Second Product: Teh Celup Herbal Nusantara (Skema Produk Berbeda)
+  const productTea = await prisma.product.create({
+    data: {
+      name: 'Teh Celup Herbal Nusantara',
+      slug: 'teh-herbal-nusantara',
+      description:
+        'Racikan daun teh pilihan berpadu dengan jahe merah, serai wangi, dan kayu manis alami khas Nusantara. Memberikan kehangatan alami, rasa nyaman di lambung, dan kesegaran tubuh.',
+      tagline: 'Kehangatan Alami, Menyehatkan Tubuh Setiap Hari',
+      servingSuggestion: 'Seduh 1 kantong teh dalam 200ml air panas mendidih selama 3–5 menit. Nikmati hangat.',
+      category: 'HERBAL_BEVERAGE',
+      status: 'ACTIVE',
+      isFeatured: false,
+      bpomNumber: 'P-IRT 2083404061841-32',
+      halalNumber: 'ID00110000234560125',
+      imageUrl: '/brand/kopi-matahari.jpeg',
+      launchedAt: new Date(),
+    },
+  });
+
+  await prisma.productVariant.create({
+    data: {
+      productId: productTea.id,
+      sku: 'THN-BOX20',
+      name: 'Teh Herbal Box (20 Kantong Celup)',
+      variantType: 'PACK',
+      packSize: 20,
+      unit: 'box',
+      price: 350000,
+      hpp: 175000,
+      stockQuantity: 800,
+      status: 'ACTIVE',
+      allowFirstPack: true,
+      allowRepeatOrder: true,
+      allowAgentStock: true,
+      sponsorReward: 35000,
+      uplineRewardPerLevel: 7000,
+      maxCommissionLevels: 10,
+    },
+  });
+
+  // Seed Default System Settings
+  const defaultSettings = [
+    { key: 'PRIMARY_BANK_NAME', value: 'BCA', group: 'FINANCIAL', description: 'Bank operasional penerima utama' },
+    { key: 'PRIMARY_BANK_ACCOUNT', value: '8830192831', group: 'FINANCIAL', description: 'Nomor rekening operasional resmi' },
+    { key: 'PRIMARY_BANK_HOLDER', value: 'PT VARENA BINA NUSANTARA', group: 'FINANCIAL', description: 'Atas nama rekening korporasi' },
+    { key: 'MIN_PAYOUT_AMOUNT', value: '50000', group: 'FINANCIAL', description: 'Batas minimal penarikan saldo dompet mitra' },
+    { key: 'DEFAULT_AGENT_MOQ', value: '10', group: 'AGENT', description: 'Minimal pembelian pasokan stokis/agen (box)' },
+    { key: 'DEFAULT_AGENT_DISCOUNT', value: '15.0', group: 'AGENT', description: 'Persentase diskon pembelian grosir agen' },
+    { key: 'FREE_SHIPPING_SUBSIDY_AGENT', value: 'true', group: 'LOGISTICS', description: 'Ongkos kirim dari kantor ke agen ditanggung kantor' },
+  ];
+
+  for (const s of defaultSettings) {
+    await prisma.systemSetting.create({ data: s });
+  }
 
   // 6. Marketing Plan v1.0 (Updated repeatDevReward: Rp2.000 / level)
   const plan = await prisma.marketingPlan.create({

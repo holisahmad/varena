@@ -98,8 +98,10 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
 
   // A. Check Order Type & Calculate
   // Is this First Pack or Repeat Purchase?
-  const hasFirstPack = order.items.some((it) => it.variant.packSize >= 10);
-  const totalSachets = order.items.reduce((acc, it) => acc + (it.variant.packSize === 1 ? it.quantity : 0), 0);
+  const packItems = order.items.filter((it) => it.variant.packSize >= 10 || it.variant.allowFirstPack);
+  const hasFirstPack = packItems.length > 0;
+  const singleItems = order.items.filter((it) => it.variant.packSize === 1);
+  const totalSachets = singleItems.reduce((acc, it) => acc + it.quantity, 0);
 
   // --- REWARD 1: DIRECT SPONSOR REWARD ---
   if (hasFirstPack) {
@@ -107,23 +109,37 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
     const directSponsor = await getDirectSponsor(referralMember.id);
     const sponsorBeneficiary = directSponsor || referralMember;
 
+    // Use variant-specific sponsorReward or fallback to marketing plan
+    const firstPackItem = packItems[0];
+    const sponsorRewardAmount =
+      firstPackItem?.variant?.sponsorReward !== undefined && firstPackItem?.variant?.sponsorReward > 0
+        ? firstPackItem.variant.sponsorReward
+        : plan.firstPackDirectReward; // Rp50.000
+
     itemsToCreate.push({
       beneficiaryId: sponsorBeneficiary.id,
       beneficiaryCode: sponsorBeneficiary.memberCode,
       rewardType: 'DIRECT_SPONSOR',
       levelNumber: 0,
-      amount: plan.firstPackDirectReward, // Rp50.000
+      amount: sponsorRewardAmount,
       reasonCode: `DIRECT_SPONSOR_BONUS_FROM_${order.orderNumber}`,
     });
-    totalDistributed += plan.firstPackDirectReward;
+    totalDistributed += sponsorRewardAmount;
   }
 
   // --- REWARD 2: DEVELOPMENT PLACEMENT REWARD (Up to 10 Levels Upline) ---
-  const maxLevels = plan.firstPackDevMaxLevels; // 10
+  const firstPackItem = packItems[0];
+  const maxLevels =
+    firstPackItem?.variant?.maxCommissionLevels && firstPackItem.variant.maxCommissionLevels > 0
+      ? firstPackItem.variant.maxCommissionLevels
+      : plan.firstPackDevMaxLevels; // 10
   const uplines = await getPlacementUplines(referralMember.id, maxLevels);
 
   if (hasFirstPack) {
-    const devAmountPerLevel = plan.firstPackDevReward; // Rp10.000
+    const devAmountPerLevel =
+      firstPackItem?.variant?.uplineRewardPerLevel !== undefined && firstPackItem?.variant?.uplineRewardPerLevel > 0
+        ? firstPackItem.variant.uplineRewardPerLevel
+        : plan.firstPackDevReward; // Rp10.000
     for (let lvl = 1; lvl <= maxLevels; lvl++) {
       const uplineAtLevel = uplines.find((u) => u.level === lvl);
       if (uplineAtLevel && uplineAtLevel.memberStatus === 'ACTIVE') {
@@ -152,7 +168,12 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
 
   // --- REWARD 3: REPEAT PURCHASE DEV REWARD ---
   if (totalSachets > 0) {
-    const devSachetPerLevel = plan.repeatDevReward * totalSachets; // Rp2.000 * qty
+    const sampleSingle = singleItems[0];
+    const ratePerSachet =
+      sampleSingle?.variant?.uplineRewardPerLevel !== undefined && sampleSingle?.variant?.uplineRewardPerLevel > 0
+        ? sampleSingle.variant.uplineRewardPerLevel
+        : plan.repeatDevReward; // Rp2.000 baseline
+    const devSachetPerLevel = ratePerSachet * totalSachets;
     for (let lvl = 1; lvl <= maxLevels; lvl++) {
       const uplineAtLevel = uplines.find((u) => u.level === lvl);
       if (uplineAtLevel && uplineAtLevel.memberStatus === 'ACTIVE') {
