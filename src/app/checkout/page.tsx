@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingBag, CheckCircle, ShieldCheck, CreditCard, ArrowRight, Sparkles, Copy, Check } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
+import { formatOrderStatus } from '@/lib/formatters';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -526,10 +527,10 @@ function CheckoutContent() {
               <span className="text-varena-taupe">Total Tagihan:</span>
               <span className="font-bold text-varena-espresso text-sm">Rp{orderResult.total.toLocaleString('id-ID')}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-varena-taupe">Status Pesanan:</span>
-              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold font-mono">
-                {orderResult.orderStatus || orderResult.status}
+              <span className="px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold text-xs">
+                {formatOrderStatus(orderResult.orderStatus || orderResult.status)}
               </span>
             </div>
           </div>

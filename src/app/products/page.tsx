@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingBag, CheckCircle, Shield, Award } from 'lucide-react';
+import { formatProductCategory } from '@/lib/formatters';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -60,7 +61,7 @@ export default function ProductsPage() {
               <div className="md:col-span-8 space-y-4">
                 <div>
                   <div className="inline-block px-2.5 py-0.5 rounded text-[10px] font-semibold bg-varena-ivory text-varena-taupe-dark border border-varena-taupe/30 mb-2">
-                    {p.category}
+                    {formatProductCategory(p.category)}
                   </div>
                   <h2 className="font-serif text-2xl font-bold text-varena-espresso">{p.name}</h2>
                   <p className="text-xs sm:text-sm text-varena-taupe-dark mt-2 leading-relaxed">

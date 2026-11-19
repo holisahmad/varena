@@ -4071,8 +4071,14 @@ export default function AdminPage() {
                               <div className="text-[10px] text-varena-taupe font-mono">{msg.recipientPhone}</div>
                             </td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30">
-                                {msg.templateType}
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30">
+                                {msg.templateType === 'ORDER_INVOICE'
+                                  ? 'Invoice Pesanan'
+                                  : msg.templateType === 'ORDER_SHIPPED'
+                                  ? 'Notifikasi Pengiriman'
+                                  : msg.templateType === 'PAYOUT_COMPLETED'
+                                  ? 'Konfirmasi Pencairan'
+                                  : msg.templateType?.replace(/_/g, ' ')}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 max-w-[320px] font-mono text-[11px]">
@@ -4082,7 +4088,7 @@ export default function AdminPage() {
                             </td>
                             <td className="py-2.5 px-3 whitespace-nowrap">
                               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                {msg.status}
+                                {msg.status === 'SENT' ? 'Terkirim' : msg.status === 'FAILED' ? 'Gagal Kirim' : msg.status}
                               </span>
                             </td>
                           </tr>

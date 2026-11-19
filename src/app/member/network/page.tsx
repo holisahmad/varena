@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { GitFork, Users, Search, ChevronRight, ArrowLeft, Shield, CheckCircle2 } from 'lucide-react';
+import { formatMemberStatus } from '@/lib/formatters';
 
 export default function MemberNetworkPage() {
   const router = useRouter();
@@ -180,7 +181,7 @@ export default function MemberNetworkPage() {
                       {treeNode.name}
                     </div>
                     <div className="text-xs text-varena-taupe-light font-mono mt-1">
-                      ID: <span className="text-varena-gold-light font-bold">{treeNode.code}</span> · Status: {treeNode.status}
+                      ID: <span className="text-varena-gold-light font-bold">{treeNode.code}</span> · Status: {formatMemberStatus(treeNode.status)}
                     </div>
                   </div>
 
@@ -285,7 +286,7 @@ export default function MemberNetworkPage() {
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                          {m.status}
+                          {formatMemberStatus(m.status)}
                         </span>
                       </td>
                     </tr>

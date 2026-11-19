@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { formatPayoutStatus } from '@/lib/formatters';
 import {
   Wallet,
   ArrowDownRight,
@@ -584,11 +585,7 @@ export default function MemberWalletPage() {
                                 : 'bg-rose-100 text-rose-800'
                             }`}
                           >
-                            {w.status === 'REQUESTED'
-                              ? 'Menunggu Review Finance'
-                              : w.status === 'APPROVED' || w.status === 'PAID'
-                              ? 'Selesai Dicairkan'
-                              : w.status}
+                            {formatPayoutStatus(w.status)}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono text-[10px] text-varena-taupe whitespace-nowrap">
