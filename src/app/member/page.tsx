@@ -5,6 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import Pagination from '@/components/ui/Pagination';
+import ConfirmDialog, { DialogVariant } from '@/components/ui/ConfirmDialog';
+import Toast from '@/components/ui/Toast';
+import {
+  formatOrderStatus,
+  formatOrderType,
+  formatFulfillmentSource,
+  ORDER_STATUS_BADGES,
+} from '@/lib/formatters';
 import {
   Wallet,
   GitFork,
@@ -62,6 +70,82 @@ export default function MemberDashboardPage() {
   const [copiedOrderNumberModal, setCopiedOrderNumberModal] = useState(false);
   const [modalSettling, setModalSettling] = useState(false);
 
+  // Elegant Confirmation Dialog & Toast State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    detail?: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: DialogVariant;
+    icon?: 'check' | 'warning' | 'info' | 'shield' | 'question';
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [toast, setToast] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'info';
+    title?: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'success',
+    message: '',
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', title?: string) => {
+    setToast({ isOpen: true, message, type, title });
+  };
+
+  const showConfirm = ({
+    title,
+    message,
+    detail,
+    confirmText = 'Konfirmasi',
+    cancelText = 'Batal',
+    variant = 'emerald',
+    icon = 'check',
+    onConfirm,
+  }: {
+    title: string;
+    message: string;
+    detail?: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: DialogVariant;
+    icon?: 'check' | 'warning' | 'info' | 'shield' | 'question';
+    onConfirm: () => void | Promise<void>;
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      detail,
+      confirmText,
+      cancelText,
+      variant,
+      icon,
+      isLoading: false,
+      onConfirm: async () => {
+        try {
+          setConfirmModal((prev) => ({ ...prev, isLoading: true }));
+          await onConfirm();
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        } catch (err: any) {
+          setConfirmModal((prev) => ({ ...prev, isLoading: false }));
+          showToast(err.message || 'Terjadi kesalahan sistem.', 'error');
+        }
+      },
+    });
+  };
+
   const copyNominal = (amount: number, orderId: string) => {
     navigator.clipboard?.writeText(String(amount));
     setCopiedOrderId(orderId);
@@ -105,10 +189,10 @@ export default function MemberDashboardPage() {
           loadDashboard(user.memberCode || 'VRN-0001', user.userId || user.id);
         }
       } else {
-        alert(data.error || 'Gagal memproses pembayaran.');
+        showToast(data.error || 'Gagal memproses pembayaran.', 'error');
       }
     } catch (e: any) {
-      alert(e.message || 'Terjadi kesalahan sistem.');
+      showToast(e.message || 'Terjadi kesalahan sistem.', 'error');
     } finally {
       setModalSettling(false);
     }
@@ -205,34 +289,44 @@ export default function MemberDashboardPage() {
   };
 
   // Buyer confirms order received
-  const handleConfirmReceived = async (orderId: string) => {
-    if (!confirm('Konfirmasi bahwa barang pesanan Anda telah sampai dengan baik?')) {
-      return;
-    }
-    setActionLoadingId(orderId);
-    try {
-      const res = await fetch('/api/v1/orders/confirm-delivery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          userId: user?.userId || user?.id,
-        }),
-      });
+  const handleConfirmReceived = (orderId: string, orderNumber?: string) => {
+    showConfirm({
+      title: 'Konfirmasi Paket Diterima',
+      message: `Konfirmasi bahwa paket barang pesanan ${orderNumber || ''} telah Anda terima dengan baik?`,
+      detail: (
+        <div className="text-xs text-stone-600">
+          Setelah konfirmasi, status pesanan akan diperbarui menjadi <strong>Selesai</strong> dan komisi jaringan dibukukan permanen.
+        </div>
+      ),
+      variant: 'emerald',
+      icon: 'check',
+      confirmText: 'Ya, Paket Diterima',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        setActionLoadingId(orderId);
+        try {
+          const res = await fetch('/api/v1/orders/confirm-delivery', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId,
+              userId: user?.userId || user?.id,
+            }),
+          });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal mengonfirmasi penerimaan.');
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Gagal mengonfirmasi penerimaan.');
 
-      alert('Terima kasih! Pesanan Anda telah ditandai selesai.');
-      setSelectedOrder((prev: any) =>
-        prev && prev.id === orderId ? { ...prev, orderStatus: 'COMPLETED', completedAt: new Date().toISOString() } : prev
-      );
-      loadDashboard(user?.memberCode || 'VRN-0001', user?.userId || user?.id);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoadingId(null);
-    }
+          showToast('Terima kasih! Pesanan Anda telah ditandai selesai.', 'success');
+          setSelectedOrder((prev: any) =>
+            prev && prev.id === orderId ? { ...prev, orderStatus: 'COMPLETED', completedAt: new Date().toISOString() } : prev
+          );
+          loadDashboard(user?.memberCode || 'VRN-0001', user?.userId || user?.id);
+        } finally {
+          setActionLoadingId(null);
+        }
+      },
+    });
   };
 
   if (!user) return null;
@@ -774,8 +868,8 @@ export default function MemberDashboardPage() {
                     <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{ro.orderNumber}</td>
                     <td className="py-2.5 px-3 font-medium text-varena-espresso">{ro.buyerName}</td>
                     <td className="py-2.5 px-3">
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-varena-ivory border border-varena-taupe/20">
-                        {ro.orderType}
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
+                        {formatOrderType(ro.orderType)}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 font-mono">Rp{ro.total.toLocaleString('id-ID')}</td>
@@ -787,7 +881,7 @@ export default function MemberDashboardPage() {
                             : 'bg-amber-100 text-amber-800'
                         }`}
                       >
-                        {ro.orderStatus}
+                        {formatOrderStatus(ro.orderStatus)}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
@@ -1090,8 +1184,8 @@ export default function MemberDashboardPage() {
                     <ShoppingBag className="w-4 h-4 text-varena-gold" />
                     <span>Daftar Produk ({selectedOrder.items?.length || 0} Item)</span>
                   </div>
-                  <span className="text-[10px] font-mono text-varena-taupe uppercase">
-                    Tipe: {selectedOrder.orderType === 'FIRST_PACK' ? 'Paket Kemitraan' : 'Repeat Purchase'}
+                  <span className="text-[10px] text-varena-taupe font-medium">
+                    Tipe: {formatOrderType(selectedOrder.orderType)}
                   </span>
                 </div>
                 <div className="divide-y divide-varena-taupe/10">
@@ -1372,6 +1466,29 @@ export default function MemberDashboardPage() {
           </div>
         </div>
       )}
+      {/* Reusable Luxury Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        detail={confirmModal.detail}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        variant={confirmModal.variant}
+        icon={confirmModal.icon}
+        isLoading={confirmModal.isLoading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Reusable Toast Notification */}
+      <Toast
+        isOpen={toast.isOpen}
+        type={toast.type}
+        title={toast.title}
+        message={toast.message}
+        onClose={() => setToast((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

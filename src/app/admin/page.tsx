@@ -3,6 +3,23 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
+import ConfirmDialog, { DialogVariant } from '@/components/ui/ConfirmDialog';
+import Toast from '@/components/ui/Toast';
+import {
+  formatOrderStatus,
+  formatOrderType,
+  formatAuditAction,
+  formatEntityType,
+  formatReferenceType,
+  formatProductCategory,
+  formatFulfillmentSource,
+  formatPaymentConfirmationStatus,
+  formatPayoutStatus,
+  formatMemberStatus,
+  formatAgentStatus,
+  formatAgentType,
+  ORDER_STATUS_BADGES,
+} from '@/lib/formatters';
 import { useNotifications } from '@/contexts/NotificationContext';
 import {
   Building2,
@@ -221,6 +238,82 @@ export default function AdminPage() {
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
   const [waOutboxLoading, setWaOutboxLoading] = useState(false);
 
+  // Elegant Confirmation Dialog & Toast Notification State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    detail?: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: DialogVariant;
+    icon?: 'check' | 'warning' | 'info' | 'shield' | 'question';
+    isLoading?: boolean;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [toast, setToast] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'info';
+    title?: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'success',
+    message: '',
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', title?: string) => {
+    setToast({ isOpen: true, message, type, title });
+  };
+
+  const showConfirm = ({
+    title,
+    message,
+    detail,
+    confirmText = 'Konfirmasi',
+    cancelText = 'Batal',
+    variant = 'emerald',
+    icon = 'check',
+    onConfirm,
+  }: {
+    title: string;
+    message: string;
+    detail?: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: DialogVariant;
+    icon?: 'check' | 'warning' | 'info' | 'shield' | 'question';
+    onConfirm: () => void | Promise<void>;
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      detail,
+      confirmText,
+      cancelText,
+      variant,
+      icon,
+      isLoading: false,
+      onConfirm: async () => {
+        try {
+          setConfirmModal((prev) => ({ ...prev, isLoading: true }));
+          await onConfirm();
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        } catch (err: any) {
+          setConfirmModal((prev) => ({ ...prev, isLoading: false }));
+          showToast(err.message || 'Terjadi kesalahan sistem.', 'error');
+        }
+      },
+    });
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
@@ -398,7 +491,7 @@ export default function AdminPage() {
   // Approve Payout Action
   const handleApproveWithdrawal = async (withdrawalId: string) => {
     if (!transferRef) {
-      alert('Masukkan nomor referensi transfer bank terlebih dahulu.');
+      showToast('Masukkan nomor referensi transfer bank terlebih dahulu.', 'error');
       return;
     }
     setActionLoading(true);
@@ -420,56 +513,57 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menyetujui payout.');
 
-      alert('Payout berhasil disetujui dan mutasi buku besar telah diposting!');
+      showToast('Payout berhasil disetujui dan mutasi buku besar telah diposting!', 'success');
       setApprovingId(null);
       setTransferRef('');
       loadDashboardData();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal menyetujui payout.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   // Confirm Manual Order Payment
-  const handleConfirmOrderPayment = async (orderId: string) => {
-    if (!confirm('Konfirmasi bahwa pembayaran pesanan ini telah diterima di rekening perusahaan? Komisi jaringan akan otomatis dialokasikan ke buku besar.')) {
-      return;
-    }
-    const authHeaders = getAdminHeaders();
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/v1/admin/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({
-          action: 'CONFIRM_PAYMENT',
-          orderId,
-          providerReference: `MANUAL-BCA-${Date.now().toString().slice(-6)}`,
-          actorUserId: authHeaders['x-user-id'],
-        }),
-      });
+  const handleConfirmOrderPayment = (orderId: string, orderNumber?: string) => {
+    showConfirm({
+      title: 'Konfirmasi Pembayaran Pesanan',
+      message: `Konfirmasi bahwa pembayaran pesanan ${orderNumber || orderId} telah diterima di rekening perusahaan? Komisi jaringan akan langsung dialokasikan ke buku besar.`,
+      variant: 'emerald',
+      icon: 'shield',
+      confirmText: 'Ya, Konfirmasi Lunas',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        const authHeaders = getAdminHeaders();
+        const res = await fetch('/api/v1/admin/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            action: 'CONFIRM_PAYMENT',
+            orderId,
+            providerReference: `MANUAL-BCA-${Date.now().toString().slice(-6)}`,
+            actorUserId: authHeaders['x-user-id'],
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal konfirmasi pembayaran.');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal konfirmasi pembayaran.');
 
-      alert('Pembayaran pesanan berhasil dikonfirmasi! Komisi jaringan dan buku besar telah diposting.');
-      loadDashboardData();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
+        showToast('Pembayaran pesanan berhasil dikonfirmasi! Komisi jaringan dan buku besar telah diposting.', 'success');
+        loadDashboardData();
+        loadFilteredOrders();
+      },
+    });
   };
 
   // Process Shipment (Input Courier & Tracking Number)
   const handleShipOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shippingModalOrder || !trackingNumber.trim()) {
-      alert('Mohon isi nomor resi pengiriman.');
+      showToast('Mohon isi nomor resi pengiriman.', 'error');
       return;
     }
     const authHeaders = getAdminHeaders();
@@ -495,50 +589,52 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman.');
 
-      alert(`Pesanan ${shippingModalOrder.orderNumber} berhasil diperbarui menjadi TERKIRIM (${courierName} - ${trackingNumber}) dari ${warehouseOriginName}.`);
+      showToast(`Pesanan ${shippingModalOrder.orderNumber} berhasil diperbarui menjadi TERKIRIM (${courierName} - ${trackingNumber}) dari ${warehouseOriginName}.`, 'success');
       setShippingModalOrder(null);
       setTrackingNumber('');
       setWarehouseOriginName('Gudang Pusat VARENA');
       setWarehouseOriginCity('Jakarta');
       loadDashboardData();
+      loadFilteredOrders();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal memproses pengiriman.', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   // Complete Order
-  const handleCompleteOrder = async (orderId: string) => {
-    if (!confirm('Tandai pesanan ini telah selesai dan paket telah sampai di tangan pembeli?')) {
-      return;
-    }
-    const authHeaders = getAdminHeaders();
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/v1/admin/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({
-          action: 'COMPLETE_ORDER',
-          orderId,
-          actorUserId: authHeaders['x-user-id'],
-        }),
-      });
+  const handleCompleteOrder = (orderId: string, orderNumber?: string) => {
+    showConfirm({
+      title: 'Tandai Pesanan Selesai',
+      message: `Tandai pesanan ${orderNumber || orderId} telah selesai dan paket telah sampai dengan baik di tangan pembeli?`,
+      variant: 'emerald',
+      icon: 'check',
+      confirmText: 'Ya, Tandai Selesai',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        const authHeaders = getAdminHeaders();
+        const res = await fetch('/api/v1/admin/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            action: 'COMPLETE_ORDER',
+            orderId,
+            actorUserId: authHeaders['x-user-id'],
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menyelesaikan pesanan.');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal menyelesaikan pesanan.');
 
-      alert('Pesanan telah ditandai SELESAI.');
-      loadDashboardData();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setActionLoading(false);
-    }
+        showToast('Pesanan telah berhasil ditandai SELESAI.', 'success');
+        loadDashboardData();
+        loadFilteredOrders();
+      },
+    });
   };
 
   // Placement Transfer
@@ -615,7 +711,7 @@ export default function AdminPage() {
 
   const handleBatchApprovePayouts = async () => {
     if (selectedPayouts.length === 0) {
-      alert('Pilih minimal satu permohonan penarikan dana.');
+      showToast('Pilih minimal satu permohonan penarikan dana.', 'error');
       return;
     }
     const authHeaders = getAdminHeaders();
@@ -632,13 +728,13 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menyetujui massal.');
-      alert(data.message || 'Persetujuan massal berhasil dieksekusi!');
+      showToast(data.message || 'Persetujuan massal berhasil dieksekusi!', 'success');
       setBatchModalOpen(false);
       setSelectedPayouts([]);
       setBatchRef('');
       loadDashboardData();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal mengeksekusi persetujuan massal.', 'error');
     } finally {
       setBatchApproving(false);
     }
@@ -648,7 +744,7 @@ export default function AdminPage() {
   const handleBulkShipSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkShipInput.trim()) {
-      alert('Masukkan daftar resi pengiriman.');
+      showToast('Masukkan daftar resi pengiriman.', 'error');
       return;
     }
     const lines = bulkShipInput.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -664,7 +760,7 @@ export default function AdminPage() {
       }
     }
     if (shipments.length === 0) {
-      alert('Format input tidak valid. Gunakan format baris: NO_ORDER, KURIR, NO_RESI');
+      showToast('Format input tidak valid. Gunakan format baris: NO_ORDER, KURIR, NO_RESI', 'error');
       return;
     }
     setBulkShipLoading(true);
@@ -677,12 +773,13 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman massal.');
-      alert(data.message || 'Pengiriman massal berhasil diproses!');
+      showToast(data.message || 'Pengiriman massal berhasil diproses!', 'success');
       setBulkShipModalOpen(false);
       setBulkShipInput('');
       loadDashboardData();
+      loadFilteredOrders();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal memproses pengiriman massal.', 'error');
     } finally {
       setBulkShipLoading(false);
     }
@@ -737,47 +834,48 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menyetujui pengajuan agen.');
-      alert(data.message || 'Pengajuan agen resmi disetujui!');
+      showToast(data.message || 'Pengajuan agen resmi disetujui!', 'success');
       setApproveAppModalOpen(false);
       setSelectedApp(null);
       loadAgents();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal menyetujui pengajuan agen.', 'error');
     } finally {
       setAgentLoading(false);
     }
   };
 
-  const handleRejectApplication = async (appId: string) => {
-    const reason = prompt('Masukkan alasan penolakan pengajuan keagenan:', 'Persyaratan gudang atau kuota belum memenuhi kriteria.');
-    if (!reason) return;
-    setAgentLoading(true);
-    const authHeaders = getAdminHeaders();
-    try {
-      const res = await fetch('/api/v1/admin/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          action: 'REJECT_APPLICATION',
-          applicationId: appId,
-          rejectReason: reason,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menolak pengajuan.');
-      alert(data.message || 'Pengajuan berhasil ditolak.');
-      loadAgents();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setAgentLoading(false);
-    }
+  const handleRejectApplication = (appId: string) => {
+    showConfirm({
+      title: 'Tolak Pengajuan Keagenan',
+      message: 'Apakah Anda yakin ingin menolak pengajuan keagenan resmi ini? Status pengajuan akan diubah menjadi Ditolak.',
+      variant: 'rose',
+      icon: 'warning',
+      confirmText: 'Ya, Tolak Pengajuan',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        const authHeaders = getAdminHeaders();
+        const res = await fetch('/api/v1/admin/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({
+            action: 'REJECT_APPLICATION',
+            applicationId: appId,
+            rejectReason: 'Persyaratan gudang atau kuota belum memenuhi kriteria.',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal menolak pengajuan.');
+        showToast(data.message || 'Pengajuan berhasil ditolak.', 'info');
+        loadAgents();
+      },
+    });
   };
 
   const handleDirectAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appointMemberCode || !appointCity) {
-      alert('Lengkapi kode mitra dan kota wilayah keagenan.');
+      showToast('Lengkapi kode mitra dan kota wilayah keagenan.', 'error');
       return;
     }
     setAgentLoading(true);
@@ -800,14 +898,14 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal mengangkat agen.');
-      alert(data.message || 'Mitra berhasil diangkat menjadi Agen Resmi!');
+      showToast(data.message || 'Mitra berhasil diangkat menjadi Agen Resmi!', 'success');
       setAppointMemberCode('');
       setAppointCity('');
       setAppointProvince('');
       setAppointAddress('');
       loadAgents();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal mengangkat agen.', 'error');
     } finally {
       setAgentLoading(false);
     }
@@ -816,7 +914,7 @@ export default function AdminPage() {
   const handleAssignOrderToAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRouteOrder || !selectedRouteAgentId) {
-      alert('Pilih agen regional tujuan.');
+      showToast('Pilih agen regional tujuan.', 'error');
       return;
     }
     setAgentLoading(true);
@@ -834,14 +932,14 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal mengalihkan pesanan.');
-      alert(data.message || 'Pesanan berhasil dialihkan ke Agen Regional!');
+      showToast(data.message || 'Pesanan berhasil dialihkan ke Agen Regional!', 'success');
       setRouteOrderModalOpen(false);
       setSelectedRouteOrder(null);
       setSelectedRouteAgentId('');
       setRouteOrderNote('');
       loadAgents();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal mengalihkan pesanan.', 'error');
     } finally {
       setAgentLoading(false);
     }
@@ -864,43 +962,45 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menyimpan konfigurasi.');
-      alert(data.message || 'Konfigurasi keagenan berhasil diperbarui!');
+      showToast(data.message || 'Konfigurasi keagenan berhasil diperbarui!', 'success');
       loadAgents();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal menyimpan konfigurasi.', 'error');
     } finally {
       setAgentLoading(false);
     }
   };
 
-  const handleApproveDepositTopup = async (transactionId: string) => {
-    if (!confirm('Apakah Anda yakin menyetujui mutasi topup saldo deposit agen ini?')) return;
-    setAgentLoading(true);
-    const authHeaders = getAdminHeaders();
-    try {
-      const res = await fetch('/api/v1/admin/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          action: 'APPROVE_DEPOSIT_TOPUP',
-          transactionId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menyetujui topup deposit.');
-      alert(data.message || 'Topup saldo deposit agen berhasil disetujui!');
-      loadAgents();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setAgentLoading(false);
-    }
+  const handleApproveDepositTopup = (transactionId: string) => {
+    showConfirm({
+      title: 'Setujui Topup Deposit Agen',
+      message: 'Apakah Anda yakin ingin menyetujui mutasi topup saldo deposit agen ini? Saldo deposit agen akan ditambahkan ke akun agen.',
+      variant: 'emerald',
+      icon: 'shield',
+      confirmText: 'Ya, Setujui Topup',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        const authHeaders = getAdminHeaders();
+        const res = await fetch('/api/v1/admin/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({
+            action: 'APPROVE_DEPOSIT_TOPUP',
+            transactionId,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal menyetujui topup deposit.');
+        showToast(data.message || 'Topup saldo deposit agen berhasil disetujui!', 'success');
+        loadAgents();
+      },
+    });
   };
 
   const handleAwardReward = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRewardAgent || !rewardTitle) {
-      alert('Lengkapi judul dan data reward.');
+      showToast('Lengkapi judul dan data reward.', 'error');
       return;
     }
     setAgentLoading(true);
@@ -920,14 +1020,14 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memberikan reward.');
-      alert(data.message || 'Reward prestasi berhasil dicatat dan diberikan ke agen!');
+      showToast(data.message || 'Reward prestasi berhasil dicatat dan diberikan ke agen!', 'success');
       setRewardModalOpen(false);
       setSelectedRewardAgent(null);
       setRewardTitle('');
       setRewardDesc('');
       loadAgents();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal memberikan reward prestasi.', 'error');
     } finally {
       setAgentLoading(false);
     }
@@ -1269,7 +1369,7 @@ export default function AdminPage() {
                             <div className="text-[10px] text-varena-taupe">{m.user?.phone || m.user?.email || '-'}</div>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m.memberStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {m.memberStatus}
+                            {formatMemberStatus(m.memberStatus)}
                           </span>
                         </div>
                       ))}
@@ -1302,8 +1402,8 @@ export default function AdminPage() {
                               <div className="text-[10px] text-blue-700 font-mono">Resi: {o.trackingNumber} ({o.courierName})</div>
                             )}
                           </div>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-800">
-                            {o.orderStatus}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-slate-100'} ${ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-slate-800'}`}>
+                            {formatOrderStatus(o.orderStatus)}
                           </span>
                         </div>
                       ))}
@@ -1333,7 +1433,7 @@ export default function AdminPage() {
                             <div className="text-[10px] text-varena-taupe">{p.bankName} - {p.accountNumberMasked} (a.n {p.accountHolder})</div>
                           </div>
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
-                            {p.status}
+                            {formatPayoutStatus(p.status)}
                           </span>
                         </div>
                       ))}
@@ -1352,7 +1452,7 @@ export default function AdminPage() {
                       {omniResults.ledger.map((l: any) => (
                         <div key={l.id} className="p-2 rounded bg-slate-50 border border-slate-200 flex justify-between items-center">
                           <div>
-                            <span className="font-mono font-bold text-varena-espresso">{l.referenceType}</span>
+                            <span className="font-bold text-varena-espresso">{formatReferenceType(l.referenceType)}</span>
                             <div className="text-[10px] text-varena-taupe">{l.memo}</div>
                           </div>
                           <span className="font-mono text-[10px] text-varena-taupe">{new Date(l.createdAt).toLocaleDateString('id-ID')}</span>
@@ -1735,22 +1835,39 @@ export default function AdminPage() {
                               </a>
                             )}
                             <button
-                              onClick={async () => {
-                                if (!confirm(`Verifikasi & tandai lunas pesanan ${o.orderNumber}?`)) return;
-                                setActionLoading(true);
-                                try {
-                                  const authHeaders = getAdminHeaders();
-                                  const res = await fetch('/api/v1/admin/orders', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', ...authHeaders },
-                                    body: JSON.stringify({ action: 'CONFIRM_PAYMENT', orderId: o.id, actorUserId: authHeaders['x-user-id'] }),
-                                  });
-                                  const d = await res.json();
-                                  if (!res.ok) throw new Error(d.error);
-                                  alert('Pembayaran berhasil diverifikasi & komisi telah dihitung!');
-                                  setPaymentProofOrders(prev => prev.filter(x => x.id !== o.id));
-                                  loadFilteredOrders();
-                                } catch (e: any) { alert(e.message); } finally { setActionLoading(false); }
+                              type="button"
+                              onClick={() => {
+                                showConfirm({
+                                  title: 'Verifikasi Pembayaran Manual',
+                                  message: `Verifikasi bahwa bukti transfer untuk pesanan ${o.orderNumber} telah valid dan dana telah masuk ke rekening perusahaan?`,
+                                  detail: (
+                                    <div className="space-y-1 text-xs">
+                                      <div><span className="text-stone-500">No. Pesanan:</span> <strong className="font-mono">{o.orderNumber}</strong></div>
+                                      <div><span className="text-stone-500">Nama Pembeli:</span> <strong>{o.buyerName}</strong></div>
+                                      <div><span className="text-stone-500">Bank Pengirim:</span> <strong>{o.senderBankName || '-'}</strong> a.n <strong>{o.senderAccountName || '-'}</strong></div>
+                                      <div><span className="text-stone-500">Nominal Transfer:</span> <strong className="text-emerald-800 font-mono">Rp{(o.transferAmountPaid || o.total).toLocaleString('id-ID')}</strong></div>
+                                      {o.transferNotes && <div className="text-stone-500 italic">Catatan: {o.transferNotes}</div>}
+                                    </div>
+                                  ),
+                                  variant: 'emerald',
+                                  icon: 'shield',
+                                  confirmText: 'Ya, Verifikasi & Tandai Lunas',
+                                  cancelText: 'Batal',
+                                  onConfirm: async () => {
+                                    const authHeaders = getAdminHeaders();
+                                    const res = await fetch('/api/v1/admin/orders', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', ...authHeaders },
+                                      body: JSON.stringify({ action: 'CONFIRM_PAYMENT', orderId: o.id, actorUserId: authHeaders['x-user-id'] }),
+                                    });
+                                    const d = await res.json();
+                                    if (!res.ok) throw new Error(d.error);
+                                    showToast('Pembayaran berhasil diverifikasi dan komisi telah dihitung!', 'success');
+                                    setPaymentProofOrders((prev) => prev.filter((x) => x.id !== o.id));
+                                    loadFilteredOrders();
+                                    loadDashboardData();
+                                  },
+                                });
                               }}
                               disabled={actionLoading}
                               className="px-2.5 py-1 text-[11px] rounded bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition"
@@ -1758,20 +1875,28 @@ export default function AdminPage() {
                               ✓ Verifikasi & Lunas
                             </button>
                             <button
-                              onClick={async () => {
-                                if (!confirm(`Tolak konfirmasi transfer pesanan ${o.orderNumber}? Member perlu mengulang konfirmasi.`)) return;
-                                setRejectingPaymentId(o.id);
-                                try {
-                                  const res = await fetch('/api/v1/orders/confirm-payment', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ orderId: o.id, action: 'REJECT' }),
-                                  });
-                                  const d = await res.json();
-                                  if (!res.ok) throw new Error(d.error);
-                                  setPaymentProofOrders(prev => prev.filter(x => x.id !== o.id));
-                                  loadFilteredOrders();
-                                } catch (e: any) { alert(e.message); } finally { setRejectingPaymentId(null); }
+                              type="button"
+                              onClick={() => {
+                                showConfirm({
+                                  title: 'Tolak Konfirmasi Transfer',
+                                  message: `Apakah Anda yakin ingin menolak konfirmasi transfer untuk pesanan ${o.orderNumber}? Pembeli akan diminta mengunggah ulang bukti transfer yang valid.`,
+                                  variant: 'rose',
+                                  icon: 'warning',
+                                  confirmText: 'Ya, Tolak Konfirmasi',
+                                  cancelText: 'Batal',
+                                  onConfirm: async () => {
+                                    const res = await fetch('/api/v1/orders/confirm-payment', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ orderId: o.id, action: 'REJECT' }),
+                                    });
+                                    const d = await res.json();
+                                    if (!res.ok) throw new Error(d.error);
+                                    showToast('Konfirmasi transfer berhasil ditolak.', 'info');
+                                    setPaymentProofOrders((prev) => prev.filter((x) => x.id !== o.id));
+                                    loadFilteredOrders();
+                                  },
+                                });
                               }}
                               disabled={rejectingPaymentId === o.id}
                               className="px-2 py-1 text-[11px] rounded bg-rose-100 text-rose-800 font-semibold border border-rose-200 hover:bg-rose-200 transition"
@@ -1851,8 +1976,8 @@ export default function AdminPage() {
                                   <span className="font-semibold text-varena-espresso">{it.quantity}x</span> {it.nameSnapshot}
                                 </div>
                               ))}
-                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono bg-varena-ivory text-varena-taupe border border-varena-taupe/20">
-                                {o.orderType}
+                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
+                                {formatOrderType(o.orderType)}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso whitespace-nowrap">
@@ -1870,24 +1995,15 @@ export default function AdminPage() {
                             </td>
                             <td className="py-2.5 px-3">
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-semibold block w-fit mb-1 ${o.orderStatus === 'COMPLETED'
-                                    ? 'bg-slate-100 text-slate-800 border border-slate-300'
-                                    : o.orderStatus === 'SHIPPED'
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                      : o.orderStatus === 'PAID'
-                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                        : 'bg-amber-100 text-amber-800 border border-amber-300'
-                                  }`}
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold block w-fit mb-1 border ${
+                                  ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-stone-50'
+                                } ${
+                                  ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-stone-800'
+                                } ${
+                                  ORDER_STATUS_BADGES[o.orderStatus]?.border || 'border-stone-200'
+                                }`}
                               >
-                                {o.orderStatus === 'PENDING_PAYMENT'
-                                  ? 'MENUNGGU PEMBAYARAN'
-                                  : o.orderStatus === 'PAID'
-                                    ? 'DIBAYAR (PERLU KIRIM)'
-                                    : o.orderStatus === 'SHIPPED'
-                                      ? 'DALAM PENGIRIMAN'
-                                      : o.orderStatus === 'COMPLETED'
-                                        ? 'SELESAI DITERIMA'
-                                        : o.orderStatus}
+                                {formatOrderStatus(o.orderStatus)}
                               </span>
                               {o.trackingNumber && (
                                 <div className="text-[10px] font-mono text-varena-taupe">
@@ -1899,7 +2015,8 @@ export default function AdminPage() {
                               {/* Alur Aksi Berdasarkan Status */}
                               {o.orderStatus === 'PENDING_PAYMENT' && (
                                 <button
-                                  onClick={() => handleConfirmOrderPayment(o.id)}
+                                  type="button"
+                                  onClick={() => handleConfirmOrderPayment(o.id, o.orderNumber)}
                                   disabled={actionLoading}
                                   className="px-2.5 py-1.5 rounded bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition shadow-sm whitespace-nowrap"
                                 >
@@ -1909,6 +2026,7 @@ export default function AdminPage() {
 
                               {o.orderStatus === 'PAID' && (
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setShippingModalOrder(o);
                                     setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
@@ -1922,7 +2040,8 @@ export default function AdminPage() {
 
                               {o.orderStatus === 'SHIPPED' && (
                                 <button
-                                  onClick={() => handleCompleteOrder(o.id)}
+                                  type="button"
+                                  onClick={() => handleCompleteOrder(o.id, o.orderNumber)}
                                   disabled={actionLoading}
                                   className="px-2.5 py-1.5 rounded border border-emerald-600 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition shadow-sm whitespace-nowrap"
                                 >
@@ -1999,11 +2118,11 @@ export default function AdminPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                         <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
                           <div className="text-[10px] text-stone-500 uppercase font-bold">Status Pesanan</div>
-                          <div className="font-bold text-xs mt-1 text-varena-espresso">{viewOrderDetail.orderStatus}</div>
+                          <div className="font-bold text-xs mt-1 text-varena-espresso">{formatOrderStatus(viewOrderDetail.orderStatus)}</div>
                         </div>
                         <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
                           <div className="text-[10px] text-stone-500 uppercase font-bold">Tipe Order</div>
-                          <div className="font-bold text-xs mt-1 text-varena-espresso">{viewOrderDetail.orderType}</div>
+                          <div className="font-bold text-xs mt-1 text-varena-espresso">{formatOrderType(viewOrderDetail.orderType)}</div>
                         </div>
                         <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
                           <div className="text-[10px] text-stone-500 uppercase font-bold">Total Nilai</div>
@@ -2084,7 +2203,7 @@ export default function AdminPage() {
                           </div>
                           <div>
                             <div className="text-stone-500">Sumber Pemenuhan:</div>
-                            <div className="font-medium text-varena-espresso">{viewOrderDetail.fulfillmentSource}</div>
+                            <div className="font-medium text-varena-espresso">{formatFulfillmentSource(viewOrderDetail.fulfillmentSource)}</div>
                           </div>
                         </div>
                       </div>
@@ -2100,7 +2219,7 @@ export default function AdminPage() {
                             <div>Bank Asal: <strong>{viewOrderDetail.senderBankName || '-'}</strong></div>
                             <div>Nama Pemilik: <strong>{viewOrderDetail.senderAccountName || '-'}</strong></div>
                             <div>Nominal Ditransfer: <strong className="font-mono">Rp{viewOrderDetail.transferAmountPaid?.toLocaleString('id-ID') || '-'}</strong></div>
-                            <div>Status Konfirmasi: <strong className="text-amber-800">{viewOrderDetail.paymentConfirmationStatus}</strong></div>
+                            <div>Status Konfirmasi: <strong className="text-amber-800">{formatPaymentConfirmationStatus(viewOrderDetail.paymentConfirmationStatus)}</strong></div>
                           </div>
                           {viewOrderDetail.transferNotes && (
                             <div className="text-[11px] text-stone-600 italic">Catatan: {viewOrderDetail.transferNotes}</div>
@@ -2405,7 +2524,7 @@ export default function AdminPage() {
                       type="button"
                       onClick={() => {
                         if (selectedPayouts.length === 0) {
-                          alert('Pilih minimal satu permohonan penarikan.');
+                          showToast('Pilih minimal satu permohonan penarikan.', 'error');
                           return;
                         }
                         setBatchRef(`BATCH-BCA-${Date.now().toString().slice(-6)}`);
@@ -2482,11 +2601,7 @@ export default function AdminPage() {
                                       : 'bg-rose-100 text-rose-800'
                                   }`}
                               >
-                                {w.status === 'REQUESTED'
-                                  ? 'MENUNGGU VERIFIKASI'
-                                  : w.status === 'APPROVED' || w.status === 'PAID'
-                                    ? 'SELESAI DICAIRKAN'
-                                    : w.status}
+                                {formatPayoutStatus(w.status)}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-right whitespace-nowrap">
@@ -2964,13 +3079,16 @@ export default function AdminPage() {
                               <div className="text-[10px] text-varena-gold font-mono">{log.actor?.role}</div>
                             </td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-varena-ivory text-varena-espresso border border-varena-taupe/30 block w-fit">
+                                {formatAuditAction(log.action)}
+                              </span>
+                              <span className="text-[9px] text-stone-400 font-mono mt-0.5 block">
                                 {log.action}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-[11px]">
-                              <span className="font-bold text-varena-espresso">{log.entityType}</span>
-                              <span className="text-varena-taupe block text-[10px] truncate max-w-[120px]" title={log.entityId}>
+                            <td className="py-2.5 px-3 text-[11px]">
+                              <span className="font-semibold text-varena-espresso block">{formatEntityType(log.entityType)}</span>
+                              <span className="text-varena-taupe font-mono block text-[10px] truncate max-w-[120px]" title={log.entityId}>
                                 {log.entityId}
                               </span>
                             </td>
@@ -3263,7 +3381,7 @@ export default function AdminPage() {
                                       : 'bg-amber-100 text-amber-800'
                                   }`}
                                 >
-                                  {app.status}
+                                  {app.status === 'APPROVED' ? 'Disetujui' : app.status === 'REJECTED' ? 'Ditolak' : 'Menunggu Verifikasi'}
                                 </span>
                               </div>
                               <div className="text-xs text-varena-taupe mt-0.5">
@@ -3982,6 +4100,30 @@ export default function AdminPage() {
           )}
         </main>
       </div>
+
+      {/* Reusable Luxury Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        detail={confirmModal.detail}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        variant={confirmModal.variant}
+        icon={confirmModal.icon}
+        isLoading={confirmModal.isLoading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Reusable Toast Notification */}
+      <Toast
+        isOpen={toast.isOpen}
+        type={toast.type}
+        title={toast.title}
+        message={toast.message}
+        onClose={() => setToast((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
