@@ -432,11 +432,15 @@ export async function shipOrder({
   orderId,
   courierName,
   trackingNumber,
+  warehouseOriginName,
+  warehouseOriginCity,
   actorUserId,
 }: {
   orderId: string;
   courierName: string;
   trackingNumber: string;
+  warehouseOriginName?: string;
+  warehouseOriginCity?: string;
   actorUserId?: string | null;
 }) {
   const order = await prisma.order.findUnique({
@@ -458,6 +462,8 @@ export async function shipOrder({
         orderStatus: 'SHIPPED',
         courierName: courierName.trim(),
         trackingNumber: trackingNumber.trim(),
+        warehouseOriginName: warehouseOriginName || 'Gudang Pusat VARENA',
+        warehouseOriginCity: warehouseOriginCity || 'Jakarta',
         shippedAt: new Date(),
       },
     });
@@ -473,8 +479,10 @@ export async function shipOrder({
           orderStatus: 'SHIPPED',
           courierName: courierName.trim(),
           trackingNumber: trackingNumber.trim(),
+          warehouseOriginName: warehouseOriginName || 'Gudang Pusat VARENA',
+          warehouseOriginCity: warehouseOriginCity || 'Jakarta',
         }),
-        reason: `Pengiriman pesanan via ${courierName} no. resi ${trackingNumber}`,
+        reason: `Pengiriman pesanan via ${courierName} no. resi ${trackingNumber} dari ${warehouseOriginName || 'Gudang Pusat VARENA'}`,
       },
     });
 

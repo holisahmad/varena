@@ -114,7 +114,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, orderId, providerReference, courierName, trackingNumber, actorUserId } = body;
+    const { action, orderId, providerReference, courierName, trackingNumber, warehouseOriginName, warehouseOriginCity, actorUserId } = body;
 
     const actor = authUser.id;
 
@@ -154,6 +154,8 @@ export async function POST(req: Request) {
         orderId,
         courierName,
         trackingNumber,
+        warehouseOriginName,
+        warehouseOriginCity,
         actorUserId: actor,
       });
 

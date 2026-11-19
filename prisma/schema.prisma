@@ -254,6 +254,8 @@ model Order {
   paidAt                 DateTime?
   courierName            String?   // e.g. JNE, J&T, SiCepat, Pos Indonesia
   trackingNumber         String?   // e.g. JNE-88291024-ID
+  warehouseOriginName    String?   @default("Gudang Pusat VARENA") // Nama gudang pengirim
+  warehouseOriginCity    String?   @default("Jakarta")             // Kota gudang pengirim
   fulfillmentSource      String    @default("CENTRAL_WAREHOUSE") // CENTRAL_WAREHOUSE, REGIONAL_STOCKIST, REGIONAL_AGENT
   stockistMemberId       String?   // (Legacy) null if central warehouse, or memberId of the stockist hub
   

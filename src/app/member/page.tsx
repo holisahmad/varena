@@ -906,142 +906,182 @@ export default function MemberDashboardPage() {
 
             {/* Modal Body (Scrollable) */}
             <div className="p-4 sm:p-6 space-y-4 overflow-y-auto text-xs">
-              {/* Marketplace Stepper Progress Bar */}
+              {/* Marketplace-Style Vertical Shipping Timeline */}
               <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20">
-                <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider mb-3">
-                  Status Transaksi Marketplace:
+                <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider mb-4">
+                  Riwayat Status Pengiriman:
                 </div>
-                <div className="relative flex items-center justify-between">
-                  {/* Background Track Line */}
-                  <div className="absolute left-3 right-3 top-3.5 h-0.5 bg-stone-200 -z-0" />
-                  {/* Active Colored Track Line */}
-                  <div
-                    className="absolute left-3 top-3.5 h-0.5 bg-emerald-600 transition-all duration-300 -z-0"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, ((getOrderStatusStep(selectedOrder.orderStatus) - 1) / 4) * 100))}%`,
-                    }}
-                  />
+                <div className="relative space-y-0">
+                  {/* Vertical line */}
+                  <div className="absolute left-3.5 top-3.5 bottom-3.5 w-0.5 bg-stone-200" />
 
-                  {/* Step 1: Dipesan */}
-                  <div className="flex flex-col items-center relative z-10">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
-                        getOrderStatusStep(selectedOrder.orderStatus) >= 1
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-stone-200 text-stone-600'
-                      }`}
-                    >
-                      ✓
+                  {/* Event: Pesanan Selesai */}
+                  {selectedOrder.orderStatus === 'COMPLETED' && (
+                    <div className="relative flex gap-3 pb-4">
+                      <div className="relative z-10 w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="pt-0.5 pb-1 flex-1">
+                        <div className="font-bold text-xs text-emerald-800">Paket Diterima — Transaksi Selesai</div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Paket telah sampai. Komisi jaringan telah dibukukan secara permanen.
+                        </div>
+                        {selectedOrder.completedAt && (
+                          <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                            {new Date(selectedOrder.completedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dipesan</span>
-                  </div>
+                  )}
 
-                  {/* Step 2: Dibayar */}
-                  <div className="flex flex-col items-center relative z-10">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
-                        getOrderStatusStep(selectedOrder.orderStatus) >= 2
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-stone-200 text-stone-600'
-                      }`}
-                    >
-                      {getOrderStatusStep(selectedOrder.orderStatus) >= 2 ? '✓' : '2'}
+                  {/* Event: Paket Dalam Pengiriman */}
+                  {(selectedOrder.orderStatus === 'SHIPPED' || selectedOrder.orderStatus === 'COMPLETED') && (
+                    <div className="relative flex gap-3 pb-4">
+                      <div className="relative z-10 w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Truck className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="pt-0.5 pb-1 flex-1">
+                        <div className="font-bold text-xs text-indigo-800">Paket Dalam Pengiriman Kurir</div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Paket dikirim dari <span className="font-semibold">{selectedOrder.warehouseOriginCity || 'Jakarta'}</span> ke <span className="font-semibold">{selectedOrder.shippingCity || 'kota tujuan'}</span> via {selectedOrder.courierName}.
+                          Gunakan No. Resi di bawah untuk melacak via aplikasi kurir.
+                        </div>
+                        {selectedOrder.shippedAt && (
+                          <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                            {new Date(selectedOrder.shippedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dibayar</span>
-                  </div>
+                  )}
 
-                  {/* Step 3: Dikemas */}
-                  <div className="flex flex-col items-center relative z-10">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
-                        getOrderStatusStep(selectedOrder.orderStatus) >= 3
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-stone-200 text-stone-600'
-                      }`}
-                    >
-                      {getOrderStatusStep(selectedOrder.orderStatus) >= 3 ? '✓' : '3'}
+                  {/* Event: Paket Keluar Gudang & Diserahkan ke Kurir */}
+                  {(selectedOrder.orderStatus === 'SHIPPED' || selectedOrder.orderStatus === 'COMPLETED') && (
+                    <div className="relative flex gap-3 pb-4">
+                      <div className="relative z-10 w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Package className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="pt-0.5 pb-1 flex-1">
+                        <div className="font-bold text-xs text-blue-800">Paket Keluar Gudang & Diserahkan ke Kurir</div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Paket telah dikemas di <span className="font-semibold">{selectedOrder.warehouseOriginName || 'Gudang Pusat VARENA'}</span> dan diserahkan ke ekspedisi.
+                        </div>
+                        {selectedOrder.trackingNumber && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-semibold text-stone-500">No. Resi:</span>
+                            <span className="font-mono bg-white border border-stone-200 px-2 py-0.5 rounded text-xs font-bold text-varena-espresso">
+                              {selectedOrder.trackingNumber}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(selectedOrder.trackingNumber);
+                                setCopiedResiModal(true);
+                                setTimeout(() => setCopiedResiModal(false), 2000);
+                              }}
+                              className="text-[10px] bg-stone-100 hover:bg-stone-200 px-2 py-0.5 rounded transition text-varena-espresso inline-flex items-center gap-0.5 border border-stone-200"
+                            >
+                              {copiedResiModal ? (
+                                <><Check className="w-3 h-3 text-emerald-600" /><span className="text-emerald-700">Tersalin</span></>
+                              ) : (
+                                <><Copy className="w-3 h-3" /><span>Salin</span></>
+                              )}
+                            </button>
+                            <a
+                              href={`https://cekresi.com/?noresi=${selectedOrder.trackingNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-indigo-600 hover:text-indigo-800 underline inline-flex items-center gap-0.5"
+                            >
+                              Lacak via cekresi.com ↗
+                            </a>
+                          </div>
+                        )}
+                        {selectedOrder.shippedAt && (
+                          <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                            {new Date(selectedOrder.shippedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dikemas</span>
-                  </div>
+                  )}
 
-                  {/* Step 4: Dikirim */}
-                  <div className="flex flex-col items-center relative z-10">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
-                        getOrderStatusStep(selectedOrder.orderStatus) >= 4
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-stone-200 text-stone-600'
-                      }`}
-                    >
-                      {getOrderStatusStep(selectedOrder.orderStatus) >= 4 ? '✓' : '4'}
+                  {/* Event: Paket Sedang Dikemas */}
+                  {(selectedOrder.orderStatus === 'PAID' || selectedOrder.orderStatus === 'PROCESSING' || selectedOrder.orderStatus === 'SHIPPED' || selectedOrder.orderStatus === 'COMPLETED') && (
+                    <div className="relative flex gap-3 pb-4">
+                      <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                        selectedOrder.orderStatus === 'PAID' || selectedOrder.orderStatus === 'PROCESSING'
+                          ? 'bg-blue-500 ring-2 ring-blue-300 ring-offset-1 animate-pulse'
+                          : 'bg-blue-400'
+                      }`}>
+                        <Package className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="pt-0.5 pb-1 flex-1">
+                        <div className="font-bold text-xs text-blue-800">
+                          Paket Sedang Dikemas
+                          {(selectedOrder.orderStatus === 'PAID' || selectedOrder.orderStatus === 'PROCESSING') && (
+                            <span className="ml-1.5 text-[10px] font-normal bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Proses saat ini</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Tim logistik gudang sedang menyiapkan paket di <span className="font-semibold">{selectedOrder.warehouseOriginName || 'Gudang Pusat VARENA'}</span>.
+                        </div>
+                        {selectedOrder.paidAt && (
+                          <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                            {new Date(selectedOrder.paidAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Dikirim</span>
-                  </div>
+                  )}
 
-                  {/* Step 5: Selesai */}
-                  <div className="flex flex-col items-center relative z-10">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition ${
-                        getOrderStatusStep(selectedOrder.orderStatus) >= 5
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-stone-200 text-stone-600'
-                      }`}
-                    >
-                      {getOrderStatusStep(selectedOrder.orderStatus) >= 5 ? '✓' : '5'}
+                  {/* Event: Pembayaran Dikonfirmasi */}
+                  {(selectedOrder.orderStatus === 'PAID' || selectedOrder.orderStatus === 'PROCESSING' || selectedOrder.orderStatus === 'SHIPPED' || selectedOrder.orderStatus === 'COMPLETED') && (
+                    <div className="relative flex gap-3 pb-4">
+                      <div className="relative z-10 w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="pt-0.5 pb-1 flex-1">
+                        <div className="font-bold text-xs text-emerald-800">Pembayaran Dikonfirmasi</div>
+                        <div className="text-[11px] text-stone-600 mt-0.5">
+                          Dana diterima dan diverifikasi sistem VARENA. Pesanan diteruskan ke tim gudang.
+                        </div>
+                        {selectedOrder.paidAt && (
+                          <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                            {new Date(selectedOrder.paidAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] font-semibold text-varena-espresso mt-1.5">Selesai</span>
+                  )}
+
+                  {/* Event: Pesanan Dibuat (always shown) */}
+                  <div className="relative flex gap-3">
+                    <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
+                      selectedOrder.orderStatus === 'PENDING_PAYMENT'
+                        ? 'bg-amber-500 ring-2 ring-amber-300 ring-offset-1 animate-pulse'
+                        : 'bg-stone-400'
+                    }`}>
+                      <ShoppingBag className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <div className="pt-0.5 flex-1">
+                      <div className="font-bold text-xs text-stone-700">
+                        Pesanan Dibuat
+                        {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+                          <span className="ml-1.5 text-[10px] font-normal bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Menunggu Pembayaran</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-stone-500 mt-0.5">
+                        No. Pesanan: <span className="font-mono font-semibold">{selectedOrder.orderNumber}</span>
+                      </div>
+                      <div className="text-[10px] text-varena-taupe mt-1 font-mono">
+                        {new Date(selectedOrder.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Status Banner Card */}
-              {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-xs text-amber-950">Menunggu Pembayaran</div>
-                    <div className="text-[11px] text-amber-800 mt-0.5">
-                      Silakan selesaikan pembayaran sesuai nominal exact ke rekening resmi di bawah agar pesanan segera dikemas oleh gudang.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedOrder.orderStatus === 'PAID' && (
-                <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-300 text-blue-900 flex items-start gap-3">
-                  <Package className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-xs text-blue-950">Pembayaran Terverifikasi — Sedang Dikemas</div>
-                    <div className="text-[11px] text-blue-800 mt-0.5">
-                      Dana pembayaran telah diterima di rekening operasional. Tim logistik gudang VARENA sedang menyiapkan dan mengemas paket herbal Anda.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedOrder.orderStatus === 'SHIPPED' && (
-                <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-300 text-indigo-900 flex items-start gap-3">
-                  <Truck className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-xs text-indigo-950">Paket Sedang Dalam Pengiriman Kurir</div>
-                    <div className="text-[11px] text-indigo-800 mt-0.5">
-                      Pesanan Anda telah diserahkan ke pihak ekspedisi ({selectedOrder.courierName}). Segera periksa paket setelah tiba dan lakukan konfirmasi penerimaan.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedOrder.orderStatus === 'COMPLETED' && (
-                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-bold text-xs text-emerald-950">Pesanan Selesai</div>
-                    <div className="text-[11px] text-emerald-800 mt-0.5">
-                      Paket telah diterima dengan baik. Seluruh komisi jaringan dan mutasi buku besar telah dibukukan secara permanen.
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Rincian Produk yang Dibeli */}
               <div className="p-4 rounded-xl bg-white border border-varena-taupe/20 space-y-3">
@@ -1082,37 +1122,53 @@ export default function MemberDashboardPage() {
                   <Truck className="w-4 h-4 text-varena-gold" />
                   <span>Informasi Logistik & Pengiriman</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="space-y-3 text-xs">
+                  {/* Dikirim dari */}
+                  <div>
+                    <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Dikirim dari Gudang:</div>
+                    <div className="mt-1 font-semibold text-varena-espresso">
+                      {selectedOrder.warehouseOriginName || 'Gudang Pusat VARENA'}
+                      {selectedOrder.warehouseOriginCity && (
+                        <span className="text-stone-500 font-normal"> — {selectedOrder.warehouseOriginCity}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Kurir & Resi */}
                   <div>
                     <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Kurir & No. Resi:</div>
                     {selectedOrder.trackingNumber ? (
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="font-semibold text-varena-espresso">{selectedOrder.courierName}</span>
-                        <span className="font-mono bg-stone-100 px-2 py-0.5 rounded font-bold text-varena-espresso">
-                          {selectedOrder.trackingNumber}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard?.writeText(selectedOrder.trackingNumber);
-                            setCopiedResiModal(true);
-                            setTimeout(() => setCopiedResiModal(false), 2000);
-                          }}
-                          className="text-[10px] bg-stone-100 hover:bg-stone-200 px-1.5 py-0.5 rounded transition text-varena-espresso inline-flex items-center gap-0.5"
-                          title="Salin No Resi"
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-varena-espresso">{selectedOrder.courierName}</span>
+                          <span className="font-mono bg-stone-100 px-2 py-0.5 rounded font-bold text-varena-espresso">
+                            {selectedOrder.trackingNumber}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(selectedOrder.trackingNumber);
+                              setCopiedResiModal(true);
+                              setTimeout(() => setCopiedResiModal(false), 2000);
+                            }}
+                            className="text-[10px] bg-stone-100 hover:bg-stone-200 px-1.5 py-0.5 rounded transition text-varena-espresso inline-flex items-center gap-0.5 border border-stone-200"
+                            title="Salin No Resi"
+                          >
+                            {copiedResiModal ? (
+                              <><Check className="w-3 h-3 text-emerald-600" /><span className="text-emerald-700">Tersalin</span></>
+                            ) : (
+                              <><Copy className="w-3 h-3 text-stone-600" /><span>Salin</span></>
+                            )}
+                          </button>
+                        </div>
+                        <a
+                          href={`https://cekresi.com/?noresi=${selectedOrder.trackingNumber}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 underline inline-flex items-center gap-0.5"
                         >
-                          {copiedResiModal ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span className="text-emerald-700">Tersalin</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3 text-stone-600" />
-                              <span>Salin</span>
-                            </>
-                          )}
-                        </button>
+                          Lacak paket via cekresi.com ↗
+                        </a>
                       </div>
                     ) : (
                       <div className="mt-1 text-stone-500 italic text-[11px]">
@@ -1121,6 +1177,7 @@ export default function MemberDashboardPage() {
                     )}
                   </div>
 
+                  {/* Penerima & Alamat */}
                   <div>
                     <div className="text-[10px] text-varena-taupe uppercase font-bold tracking-wider">Penerima & Alamat Kirim:</div>
                     <div className="mt-1 text-varena-espresso font-medium text-[11px] leading-relaxed">

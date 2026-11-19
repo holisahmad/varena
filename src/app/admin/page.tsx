@@ -134,6 +134,8 @@ export default function AdminPage() {
   const [shippingModalOrder, setShippingModalOrder] = useState<any | null>(null);
   const [courierName, setCourierName] = useState('JNE Express');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [warehouseOriginName, setWarehouseOriginName] = useState('Gudang Pusat VARENA');
+  const [warehouseOriginCity, setWarehouseOriginCity] = useState('Jakarta');
 
   // Bulk Shipping State
   const [bulkShipModalOpen, setBulkShipModalOpen] = useState(false);
@@ -484,6 +486,8 @@ export default function AdminPage() {
           orderId: shippingModalOrder.id,
           courierName,
           trackingNumber: trackingNumber.trim(),
+          warehouseOriginName,
+          warehouseOriginCity,
           actorUserId: authHeaders['x-user-id'],
         }),
       });
@@ -491,9 +495,11 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman.');
 
-      alert(`Pesanan ${shippingModalOrder.orderNumber} berhasil diperbarui menjadi TERKIRIM (${courierName} - ${trackingNumber}).`);
+      alert(`Pesanan ${shippingModalOrder.orderNumber} berhasil diperbarui menjadi TERKIRIM (${courierName} - ${trackingNumber}) dari ${warehouseOriginName}.`);
       setShippingModalOrder(null);
       setTrackingNumber('');
+      setWarehouseOriginName('Gudang Pusat VARENA');
+      setWarehouseOriginCity('Jakarta');
       loadDashboardData();
     } catch (err: any) {
       alert(err.message);
@@ -2142,6 +2148,15 @@ export default function AdminPage() {
                               setViewOrderDetail(null);
                               setShippingModalOrder(o);
                               setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
+                              // Set default warehouse based on fulfillmentMode
+                              if (o?.fulfillmentMode === 'ASSIGNED_AGENT' && o?.assignedAgentMemberId) {
+                                const agentCity = o?.agentCity || 'Daerah';
+                                setWarehouseOriginName(`Gudang Agen ${agentCity}`);
+                                setWarehouseOriginCity(agentCity);
+                              } else {
+                                setWarehouseOriginName('Gudang Pusat VARENA');
+                                setWarehouseOriginCity('Jakarta');
+                              }
                             }}
                             className="py-2 px-3 rounded-lg bg-varena-espresso hover:bg-varena-espresso-dark text-varena-gold-light font-semibold text-xs transition"
                           >
@@ -2186,6 +2201,44 @@ export default function AdminPage() {
                     </div>
 
                     <form onSubmit={handleShipOrderSubmit} className="space-y-3 text-xs">
+                      {/* Gudang Pengirim */}
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">
+                          Dikirim dari Gudang *
+                        </label>
+                        <select
+                          value={warehouseOriginName}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setWarehouseOriginName(val);
+                            // Auto-resolve city from warehouse name
+                            const cityMap: Record<string, string> = {
+                              'Gudang Pusat VARENA': 'Jakarta',
+                              'Gudang Transit Surabaya': 'Surabaya',
+                              'Gudang Transit Bandung': 'Bandung',
+                              'Gudang Transit Medan': 'Medan',
+                              'Gudang Transit Makassar': 'Makassar',
+                            };
+                            setWarehouseOriginCity(cityMap[val] || shippingModalOrder?.agentCity || 'Jakarta');
+                          }}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold bg-white"
+                        >
+                          <option value="Gudang Pusat VARENA">🏭 Gudang Pusat VARENA — Jakarta</option>
+                          <option value="Gudang Transit Surabaya">🏭 Gudang Transit Surabaya</option>
+                          <option value="Gudang Transit Bandung">🏭 Gudang Transit Bandung</option>
+                          <option value="Gudang Transit Medan">🏭 Gudang Transit Medan</option>
+                          <option value="Gudang Transit Makassar">🏭 Gudang Transit Makassar</option>
+                          {shippingModalOrder?.fulfillmentMode === 'ASSIGNED_AGENT' && (
+                            <option value={`Gudang Agen ${shippingModalOrder?.agentCity || 'Daerah'}`}>
+                              🏪 Gudang Agen {shippingModalOrder?.agentCity || 'Daerah'} (Ditugaskan)
+                            </option>
+                          )}
+                        </select>
+                        <p className="text-[10px] text-varena-taupe mt-1">
+                          Gudang asal pengiriman akan tercatat pada detail pesanan mitra.
+                        </p>
+                      </div>
+
                       <div>
                         <label className="block font-semibold text-varena-espresso mb-1">Pilih Ekspedisi / Kurir *</label>
                         <select
