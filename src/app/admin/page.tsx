@@ -365,16 +365,7 @@ export default function AdminPage() {
   }, [router]);
 
   const getAdminHeaders = (customUser?: any): Record<string, string> => {
-    // JWT-first: pakai Bearer token jika tersedia
-    const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
-    if (token) {
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
-    }
-
-    // Fallback legacy (backward compat)
+    // Always collect legacy user info first
     const user = customUser || currentUser;
     let uid = typeof customUser === 'string' ? customUser : (user?.userId || user?.id || '');
     let email = typeof customUser === 'object' ? customUser?.email : (user?.email || '');
@@ -390,10 +381,17 @@ export default function AdminPage() {
       } catch { }
     }
 
-    return {
+    // JWT-first + always include legacy headers for backward compat
+    const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
       'x-user-id': uid || '',
       'x-user-email': email || '',
     };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
   };
 
   const loadDashboardData = (customUser?: any) => {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
-import { verifyCorporateAdmin, getCorporateUser } from '@/lib/auth';
+import { verifyCorporateAdmin } from '@/lib/auth';
 import { settleOrderPayment, shipOrder, completeOrder } from '@/lib/order';
 
 export async function GET(req: Request) {
@@ -99,9 +99,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const authUser = await getCorporateUser(userId, userEmail);
+    const authUser = await resolveCorporateAdmin(req);
     if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak memproses pesanan.' },
@@ -112,7 +110,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, orderId, providerReference, courierName, trackingNumber, warehouseOriginName, warehouseOriginCity, actorUserId } = body;
 
-    const actor = authUser.id;
+    const actor = authUser.userId;
 
     if (!orderId || !action) {
       return NextResponse.json({ error: 'orderId dan action wajib diisi.' }, { status: 400 });
