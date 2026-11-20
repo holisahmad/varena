@@ -692,12 +692,48 @@ export default function MemberWalletPage() {
               </button>
             </div>
 
-            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl border border-blue-200">
-              <div className="text-[11px] text-blue-600 font-semibold uppercase tracking-widest mb-1">Saldo Aktif</div>
-              <div className="text-2xl font-bold font-mono text-blue-900">
-                Rp{(shoppingDeposit?.balance || 0).toLocaleString('id-ID')}
-              </div>
-            </div>
+            {/* Saldo Aktif & Status Pending */}
+            {(() => {
+              const pendingList = shoppingDeposit?.transactions?.filter(
+                (t: any) => t.status === 'PENDING' && t.type === 'SHOPPING_TOPUP'
+              ) || [];
+              const pendingTotal = pendingList.reduce(
+                (sum: number, t: any) => sum + (t.amount || 0),
+                0
+              );
+
+              return (
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl border border-blue-200 space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <div className="text-[11px] text-blue-600 font-semibold uppercase tracking-widest mb-1">
+                        Saldo Aktif (Siap Belanja)
+                      </div>
+                      <div className="text-2xl font-bold font-mono text-blue-900">
+                        Rp{(shoppingDeposit?.balance || 0).toLocaleString('id-ID')}
+                      </div>
+                    </div>
+                    {pendingTotal > 0 && (
+                      <div className="text-right">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                          <span>Menunggu Approval Admin</span>
+                        </span>
+                        <div className="text-sm font-bold font-mono text-amber-800 mt-0.5">
+                          +Rp{pendingTotal.toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {pendingTotal > 0 && (
+                    <div className="p-2.5 rounded-lg bg-amber-50/90 border border-amber-200 text-[11px] text-amber-900 leading-relaxed">
+                      ⏳ <strong>Konfirmasi Keuangan:</strong> Pengajuan top-up Anda sebesar <strong>Rp{pendingTotal.toLocaleString('id-ID')}</strong> sedang dalam antrean verifikasi mutasi bank oleh admin. Dana belum masuk ke Saldo Aktif dan akan otomatis bertambah setelah disetujui admin.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {shoppingDeposit?.transactions && shoppingDeposit.transactions.length > 0 && (
               <div>
@@ -722,10 +758,10 @@ export default function MemberWalletPage() {
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           tx.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800'
-                          : tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800'
+                          : tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800 border border-amber-300'
                           : 'bg-rose-100 text-rose-800'
                         }`}>
-                          {tx.status === 'COMPLETED' ? 'SELESAI' : tx.status === 'PENDING' ? 'MENUNGGU' : tx.status}
+                          {tx.status === 'COMPLETED' ? 'MASUK KE SALDO' : tx.status === 'PENDING' ? 'MENUNGGU APPROVAL ADMIN' : tx.status}
                         </span>
                       </div>
                     </div>

@@ -824,6 +824,26 @@ export default function AgentPortalPage() {
               </div>
             </div>
 
+            {depositTransactions.filter((t) => t.status === 'PENDING' && t.type === 'TOPUP_DEPOSIT').length > 0 && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
+                <div className="flex-1">
+                  <div className="font-bold flex items-center justify-between">
+                    <span>Menunggu Approval Admin:</span>
+                    <span className="font-mono text-amber-800">
+                      +Rp{depositTransactions
+                        .filter((t) => t.status === 'PENDING' && t.type === 'TOPUP_DEPOSIT')
+                        .reduce((sum, t) => sum + (t.amount || 0), 0)
+                        .toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                    Pengajuan top-up deposit kas agen belum masuk ke Saldo Aktif karena masih dalam verifikasi mutasi transfer oleh tim finance. Saldo akan otomatis bertambah setelah disetujui admin.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {depositTransactions.length === 0 ? (
               <div className="py-12 text-center text-stone-500 text-xs">
                 Belum ada riwayat mutasi deposit kas agen.
