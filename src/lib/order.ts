@@ -185,12 +185,11 @@ export async function createOrder(payload: CheckoutPayload) {
     }
   }
 
-  return withTransactionRetry(async (tx) => {
-    // Jika metode deposit: hitung total tanpa kode unik, potong saldo, langsung PAID
+  const createdOrder = await withTransactionRetry(async (tx) => {
+    // Jika metode deposit: hitung total tanpa kode unik
     const depositTotal = useDeposit ? subtotal + shippingCost : 0;
     const finalTotal = useDeposit ? depositTotal : total;
     const finalUniqueCode = useDeposit ? 0 : uniqueCode;
-    const initialStatus = useDeposit ? 'PAID' : 'PENDING_PAYMENT';
 
     const order = await tx.order.create({
       data: {
@@ -201,7 +200,7 @@ export async function createOrder(payload: CheckoutPayload) {
         buyerEmail: buyerEmail || null,
         shippingAddress,
         referralMemberId,
-        orderStatus: initialStatus,
+        orderStatus: 'PENDING_PAYMENT',
         orderType: resolvedOrderType,
         subtotal,
         discount: 0,
@@ -209,7 +208,6 @@ export async function createOrder(payload: CheckoutPayload) {
         shippingExpense,
         uniqueCode: finalUniqueCode,
         total: finalTotal,
-        paidAt: useDeposit ? new Date() : null,
         fulfillmentSource: isStockist ? 'REGIONAL_STOCKIST' : (fulfillmentSource || 'CENTRAL_WAREHOUSE'),
         stockistMemberId: resolvedStockistId,
         shippingProvince: shippingProvince || null,
@@ -258,10 +256,9 @@ export async function createOrder(payload: CheckoutPayload) {
       data: {
         orderId: order.id,
         amount: finalTotal,
-        status: useDeposit ? 'SUCCESS' : 'PENDING',
+        status: 'PENDING',
         provider: useDeposit ? 'SHOPPING_DEPOSIT' : 'SIMULATED',
         providerReference: useDeposit ? `DEPOSIT-${order.orderNumber}` : null,
-        paidAt: useDeposit ? new Date() : null,
       },
     });
 
@@ -276,19 +273,31 @@ export async function createOrder(payload: CheckoutPayload) {
       await tx.agentDepositTransaction.create({
         data: {
           memberId: buyerMember.id,
-          type: 'PURCHASE_DEDUCTION',
+          type: 'SHOPPING_PAYMENT',
           amount: depositTotal,
           balanceBefore: buyerMember.shoppingDepositBalance || 0,
           balanceAfter: (buyerMember.shoppingDepositBalance || 0) - depositTotal,
-          status: 'APPROVED',
+          status: 'COMPLETED',
+          referenceId: order.orderNumber,
           notes: `Pembayaran pesanan ${order.orderNumber} via saldo deposit belanja`,
-          processedAt: new Date(),
         },
       });
     }
 
     return { ...order, paidViaDeposit: useDeposit, total: finalTotal, uniqueCode: finalUniqueCode };
   }, { maxWait: 15000, timeout: 30000 });
+
+  // Jika pembayaran via saldo deposit, langsung jalankan settlement (ledger, komisi jaringan, aktivasi member, notifikasi WA)
+  if (useDeposit) {
+    try {
+      await settleOrderPayment(createdOrder.id, `DEPOSIT-${createdOrder.orderNumber}`);
+      createdOrder.orderStatus = 'PAID';
+    } catch (settleErr) {
+      console.error('Failed to auto-settle deposit order:', settleErr);
+    }
+  }
+
+  return createdOrder;
 }
 
 /**
@@ -327,9 +336,15 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
   });
 
   // 2. Post Payment Receipt to Double-Entry Ledger:
+  // Jika bayar via Saldo Deposit:
+  // DEBIT: ACC-LIAB-DEPOSIT-SHOPPING (Kewajiban saldo deposit berkurang)
+  // Jika bayar via Bank Transfer:
   // DEBIT: Company Bank Clearing (`ACC-COMP-PAYOUT`) for total cash received
   // CREDIT: Company Operations Revenue (`ACC-COMP-OPS`) for product subtotal
   // CREDIT: Company Shipping Fee Inflow (`ACC-COMP-OPS`) for member shipping cost (if any)
+  const isDepositSettlement = providerRef.startsWith('DEPOSIT-');
+  const cashOrDepositAccount = isDepositSettlement ? 'ACC-LIAB-DEPOSIT-SHOPPING' : 'ACC-COMP-PAYOUT';
+
   const ledgerEntries: Array<{
     accountCode: string;
     direction: 'DEBIT' | 'CREDIT';
@@ -337,10 +352,12 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
     memo: string;
   }> = [
     {
-      accountCode: 'ACC-COMP-PAYOUT',
+      accountCode: cashOrDepositAccount,
       direction: 'DEBIT',
       amount: order.total,
-      memo: `Bank settlement received for ${order.orderNumber}`,
+      memo: isDepositSettlement
+        ? `Pemotongan saldo deposit belanja untuk pesanan ${order.orderNumber}`
+        : `Bank settlement received for ${order.orderNumber}`,
     },
     {
       accountCode: 'ACC-COMP-OPS',
