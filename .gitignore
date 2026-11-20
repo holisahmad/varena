@@ -19,3 +19,6 @@ tsconfig.tsbuildinfo
 # Uploads
 public/uploads/proof/*
 !public/uploads/proof/.gitkeep
+
+# Internal Blueprints & Private Specs
+direct-selling-platform-blueprint/
