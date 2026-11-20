@@ -33,6 +33,7 @@ export interface CheckoutPayload {
   shippingNotes?: string;
   uniqueCode?: number; // Kode unik 3 digit otomatis (100 - 999)
   saveToProfile?: boolean; // Default true: simpan alamat ini ke profil mitra
+  paymentMethod?: 'TRANSFER' | 'DEPOSIT'; // Metode pembayaran: transfer manual atau potong saldo deposit
 }
 
 /**
@@ -62,6 +63,7 @@ export async function createOrder(payload: CheckoutPayload) {
     recipientPhone: customRecipientPhone,
     addressDetail: customAddressDetail,
     saveToProfile,
+    paymentMethod = 'TRANSFER',
   } = payload;
 
   if (!items || items.length === 0) {
@@ -166,8 +168,30 @@ export async function createOrder(payload: CheckoutPayload) {
   // 3. Persist Order in transaction
   const isAlreadyActiveMember = Boolean(buyerMember && buyerMember.memberStatus === 'ACTIVE');
   const resolvedOrderType = hasFirstPack && !isAlreadyActiveMember ? 'FIRST_PACK' : 'REPEAT_PURCHASE';
+  const useDeposit = paymentMethod === 'DEPOSIT';
+
+  // Jika metode deposit, validasi saldo sebelum masuk transaksi
+  if (useDeposit) {
+    if (!buyerMember) {
+      throw new Error('Pembayaran saldo deposit hanya tersedia untuk mitra yang terdaftar dan login.');
+    }
+    const depositBalance = buyerMember.shoppingDepositBalance || 0;
+    // Untuk deposit, tidak ada kode unik (uniqueCode = 0)
+    const depositTotal = subtotal + shippingCost;
+    if (depositBalance < depositTotal) {
+      throw new Error(
+        `Saldo deposit belanja tidak cukup. Saldo Anda: Rp${depositBalance.toLocaleString('id-ID')}, diperlukan: Rp${depositTotal.toLocaleString('id-ID')}.`
+      );
+    }
+  }
 
   return withTransactionRetry(async (tx) => {
+    // Jika metode deposit: hitung total tanpa kode unik, potong saldo, langsung PAID
+    const depositTotal = useDeposit ? subtotal + shippingCost : 0;
+    const finalTotal = useDeposit ? depositTotal : total;
+    const finalUniqueCode = useDeposit ? 0 : uniqueCode;
+    const initialStatus = useDeposit ? 'PAID' : 'PENDING_PAYMENT';
+
     const order = await tx.order.create({
       data: {
         orderNumber,
@@ -177,14 +201,15 @@ export async function createOrder(payload: CheckoutPayload) {
         buyerEmail: buyerEmail || null,
         shippingAddress,
         referralMemberId,
-        orderStatus: 'PENDING_PAYMENT',
+        orderStatus: initialStatus,
         orderType: resolvedOrderType,
         subtotal,
         discount: 0,
         shippingCost,
         shippingExpense,
-        uniqueCode,
-        total,
+        uniqueCode: finalUniqueCode,
+        total: finalTotal,
+        paidAt: useDeposit ? new Date() : null,
         fulfillmentSource: isStockist ? 'REGIONAL_STOCKIST' : (fulfillmentSource || 'CENTRAL_WAREHOUSE'),
         stockistMemberId: resolvedStockistId,
         shippingProvince: shippingProvince || null,
@@ -232,13 +257,37 @@ export async function createOrder(payload: CheckoutPayload) {
     await tx.payment.create({
       data: {
         orderId: order.id,
-        amount: total,
-        status: 'PENDING',
-        provider: 'SIMULATED',
+        amount: finalTotal,
+        status: useDeposit ? 'SUCCESS' : 'PENDING',
+        provider: useDeposit ? 'SHOPPING_DEPOSIT' : 'SIMULATED',
+        providerReference: useDeposit ? `DEPOSIT-${order.orderNumber}` : null,
+        paidAt: useDeposit ? new Date() : null,
       },
     });
 
-    return order;
+    // Jika deposit: potong saldo shoppingDepositBalance member secara atomik
+    if (useDeposit && buyerMember) {
+      await tx.member.update({
+        where: { id: buyerMember.id },
+        data: { shoppingDepositBalance: { decrement: depositTotal } },
+      });
+
+      // Catat mutasi saldo di ledger deposit
+      await tx.agentDepositTransaction.create({
+        data: {
+          memberId: buyerMember.id,
+          type: 'PURCHASE_DEDUCTION',
+          amount: depositTotal,
+          balanceBefore: buyerMember.shoppingDepositBalance || 0,
+          balanceAfter: (buyerMember.shoppingDepositBalance || 0) - depositTotal,
+          status: 'APPROVED',
+          notes: `Pembayaran pesanan ${order.orderNumber} via saldo deposit belanja`,
+          processedAt: new Date(),
+        },
+      });
+    }
+
+    return { ...order, paidViaDeposit: useDeposit, total: finalTotal, uniqueCode: finalUniqueCode };
   }, { maxWait: 15000, timeout: 30000 });
 }
 

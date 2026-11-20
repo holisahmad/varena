@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createOrder } from '@/lib/order';
 import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
+import { resolveMemberFromRequest } from '@/lib/api-auth';
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +27,21 @@ export async function POST(req: Request) {
       );
     }
 
+    // 3. Jika metode pembayaran DEPOSIT, harus ada sesi login yang valid
+    if (body.paymentMethod === 'DEPOSIT') {
+      const session = await resolveMemberFromRequest(req);
+      if (!session) {
+        return NextResponse.json(
+          { error: 'Pembayaran via saldo deposit memerlukan login sebagai mitra.' },
+          { status: 401 }
+        );
+      }
+      // Pastikan buyerUserId terisi dari session jika tidak dikirim
+      if (!body.buyerUserId) {
+        body.buyerUserId = session.userId;
+      }
+    }
+
     const order = await createOrder(body);
 
     return NextResponse.json({
@@ -34,7 +50,9 @@ export async function POST(req: Request) {
         id: order.id,
         orderNumber: order.orderNumber,
         total: order.total,
+        uniqueCode: order.uniqueCode,
         status: order.orderStatus,
+        paidViaDeposit: (order as any).paidViaDeposit || false,
       },
     });
   } catch (err: any) {

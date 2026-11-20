@@ -185,6 +185,10 @@ function CheckoutContent() {
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
 
+  // Metode pembayaran & saldo deposit
+  const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'DEPOSIT'>('TRANSFER');
+  const [shoppingDepositBalance, setShoppingDepositBalance] = useState(0);
+
   // Countdown timer 24 jam untuk pembayaran pesanan
   useEffect(() => {
     if (!orderResult || orderResult.orderStatus !== 'PENDING_PAYMENT') {
@@ -384,6 +388,18 @@ function CheckoutContent() {
 
         // Fetch fresh address dari database
         loadProfileAddress(u.memberCode, u.userId || u.id);
+
+        // Fetch saldo deposit belanja member
+        const dToken = localStorage.getItem('varena_token');
+        const dHeaders: Record<string, string> = {};
+        if (dToken) dHeaders['Authorization'] = `Bearer ${dToken}`;
+        fetch('/api/v1/agent/deposit', { headers: dHeaders })
+          .then((r) => r.json())
+          .then((d) => {
+            const bal = d.shoppingDepositBalance ?? (d.isAgent ? 0 : d.balance) ?? 0;
+            setShoppingDepositBalance(Number(bal) || 0);
+          })
+          .catch(() => {});
       } catch (e) {}
     } else {
       // Jika token ada di session, coba load profil
@@ -561,9 +577,13 @@ function CheckoutContent() {
         .filter(Boolean)
         .join(', ');
 
+      const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
+      const checkoutHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) checkoutHeaders['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/v1/orders/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: checkoutHeaders,
         body: JSON.stringify({
           buyerUserId,
           buyerName: activeRecipientName,
@@ -583,6 +603,7 @@ function CheckoutContent() {
           addressDetail: activeAddressDetail,
           shippingNotes,
           saveToProfile: addressMode === 'MANUAL' ? saveToProfile : false,
+          paymentMethod,
         }),
       });
 
@@ -592,6 +613,10 @@ function CheckoutContent() {
       }
       setOrderResult(data.order);
       if (data.order.uniqueCode) setUniqueCode(data.order.uniqueCode);
+      // Jika bayar via deposit, kurangi tampilan saldo lokal
+      if (data.order.paidViaDeposit) {
+        setShoppingDepositBalance((prev) => Math.max(0, prev - (data.order.total || 0)));
+      }
 
       // Jika mengisi alamat manual dan opsi simpan aktif, perbarui state & localStorage
       if (addressMode === 'MANUAL' && saveToProfile) {
@@ -1248,6 +1273,77 @@ function CheckoutContent() {
               <p className="text-[10px] text-varena-gold-light/70">
                 + kode unik 3 digit akan ditambahkan otomatis untuk verifikasi bank
               </p>
+
+              {/* ── PILIH METODE PEMBAYARAN ── */}
+              {isExistingMember && (
+                <div className="pt-2 space-y-2">
+                  <div className="text-xs font-bold text-varena-ivory/80 uppercase tracking-wider">
+                    Metode Pembayaran:
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* Opsi Transfer Manual */}
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('TRANSFER')}
+                      className={`p-3 rounded-xl border-2 text-left transition ${
+                        paymentMethod === 'TRANSFER'
+                          ? 'border-varena-gold bg-varena-gold/10'
+                          : 'border-[#4A3B30] bg-transparent hover:border-varena-gold/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMethod === 'TRANSFER' ? 'border-varena-gold' : 'border-varena-taupe'}`}>
+                          {paymentMethod === 'TRANSFER' && <span className="w-2 h-2 rounded-full bg-varena-gold block" />}
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-varena-ivory">Transfer Bank Manual</div>
+                          <div className="text-[11px] text-varena-taupe-light mt-0.5">
+                            Transfer ke rekening VARENA + kode unik, verifikasi admin 1×24 jam
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Opsi Bayar via Saldo Deposit */}
+                    <button
+                      type="button"
+                      onClick={() => shoppingDepositBalance >= total ? setPaymentMethod('DEPOSIT') : undefined}
+                      disabled={shoppingDepositBalance < total}
+                      className={`p-3 rounded-xl border-2 text-left transition ${
+                        paymentMethod === 'DEPOSIT'
+                          ? 'border-emerald-400 bg-emerald-900/20'
+                          : shoppingDepositBalance >= total
+                          ? 'border-[#4A3B30] bg-transparent hover:border-emerald-500/60'
+                          : 'border-[#3A2A20] bg-transparent opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentMethod === 'DEPOSIT' ? 'border-emerald-400' : 'border-varena-taupe'}`}>
+                          {paymentMethod === 'DEPOSIT' && <span className="w-2 h-2 rounded-full bg-emerald-400 block" />}
+                        </span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-varena-ivory">Saldo Deposit Belanja</span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${shoppingDepositBalance >= total ? 'bg-emerald-800/50 text-emerald-300' : 'bg-red-900/40 text-red-400'}`}>
+                              Rp{shoppingDepositBalance.toLocaleString('id-ID')}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-varena-taupe-light mt-0.5">
+                            {shoppingDepositBalance >= total
+                              ? '✓ Langsung lunas & diproses otomatis, tanpa transfer'
+                              : `Saldo kurang Rp${Math.max(0, total - shoppingDepositBalance).toLocaleString('id-ID')} · Topup dulu di dashboard`}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                  {paymentMethod === 'DEPOSIT' && (
+                    <div className="text-[11px] text-emerald-300 bg-emerald-900/20 border border-emerald-700/40 rounded-lg px-3 py-2">
+                      ✓ Pesanan akan <strong>langsung berstatus Lunas</strong> dan segera diproses pengiriman tanpa menunggu verifikasi admin.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {isNewRegistrationFlow && !hasFirstPackSelected && (
                 <div className="p-2.5 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[11px]">
