@@ -13,6 +13,13 @@ import {
   ArrowRight,
   Clock,
   Sparkles,
+  Users,
+  UserPlus,
+  CheckCircle2,
+  XCircle,
+  Store,
+  Banknote,
+  ShieldCheck,
 } from 'lucide-react';
 import { useNotifications, NotificationItem } from '@/contexts/NotificationContext';
 
@@ -30,10 +37,6 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     markAllAsRead,
     markItemAsRead,
     isItemRead,
-    ackOrders,
-    ackWallet,
-    ackAdminOrders,
-    ackAdminPayout,
   } = useNotifications();
 
   // Close on Escape or click outside
@@ -81,6 +84,12 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
             <Truck className="w-4 h-4" />
           </div>
         );
+      case 'ORDER_COMPLETED':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        );
       case 'COMMISSION_NEW':
         return (
           <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center flex-shrink-0">
@@ -93,16 +102,70 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
             <CreditCard className="w-4 h-4" />
           </div>
         );
+      case 'DOWNLINE_NEW':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center flex-shrink-0">
+            <UserPlus className="w-4 h-4" />
+          </div>
+        );
+      case 'DOWNLINE_ORDER':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center flex-shrink-0">
+            <Users className="w-4 h-4" />
+          </div>
+        );
+      case 'DEPOSIT_APPROVED':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center flex-shrink-0">
+            <Banknote className="w-4 h-4" />
+          </div>
+        );
+      case 'DEPOSIT_REJECTED':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center flex-shrink-0">
+            <XCircle className="w-4 h-4" />
+          </div>
+        );
+      case 'AGENT_STATUS':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-varena-gold/20 text-varena-gold-light flex items-center justify-center flex-shrink-0">
+            <Store className="w-4 h-4" />
+          </div>
+        );
       case 'ADMIN_ORDER':
         return (
           <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center flex-shrink-0">
             <Package className="w-4 h-4" />
           </div>
         );
+      case 'ADMIN_PAYMENT_PROOF':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+        );
       case 'ADMIN_PAYOUT':
         return (
           <div className="w-8 h-8 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center flex-shrink-0">
             <CreditCard className="w-4 h-4" />
+          </div>
+        );
+      case 'ADMIN_AGENT_APPLY':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center flex-shrink-0">
+            <Store className="w-4 h-4" />
+          </div>
+        );
+      case 'ADMIN_DEPOSIT_REQUEST':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center flex-shrink-0">
+            <Banknote className="w-4 h-4" />
+          </div>
+        );
+      case 'ADMIN_NEW_MEMBER':
+        return (
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center flex-shrink-0">
+            <UserPlus className="w-4 h-4" />
           </div>
         );
       default:
@@ -120,7 +183,7 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
       const diffMs = Date.now() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);
       if (diffMins < 1) return 'Baru saja';
-      if (diffMins < 60) return `${diffMins} menit lalu`;
+      if (diffMins < 60) return `${diffMins} mnt lalu`;
       const diffHours = Math.floor(diffMins / 60);
       if (diffHours < 24) return `${diffHours} jam lalu`;
       const diffDays = Math.floor(diffHours / 24);
@@ -149,7 +212,7 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
             <div className="flex items-center gap-1.5">
               <h4 className="font-serif font-bold text-sm text-varena-gold-light">Notifikasi</h4>
               {totalBadgeCount > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full min-w-[18px] text-center">
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                   {totalBadgeCount}
                 </span>
               )}
@@ -180,15 +243,15 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
         </div>
 
         {/* Content List */}
-        <div className="max-h-[380px] overflow-y-auto divide-y divide-[#35251C]">
+        <div className="max-h-[420px] overflow-y-auto divide-y divide-[#35251C]">
           {items.length === 0 ? (
             <div className="py-10 px-4 text-center space-y-2">
               <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-varena-taupe-light">
                 <Sparkles className="w-6 h-6 text-varena-gold/60" />
               </div>
-              <p className="text-xs font-medium text-varena-ivory-light">Tidak ada pembaruan baru</p>
+              <p className="text-xs font-medium text-varena-ivory-light">Semua sudah diperbarui</p>
               <p className="text-[11px] text-varena-taupe-light max-w-[240px] mx-auto">
-                Semua pesanan, komisi, dan status pengiriman Anda telah diperbarui.
+                Tidak ada notifikasi baru saat ini.
               </p>
             </div>
           ) : (
@@ -200,7 +263,7 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
                   type="button"
                   onClick={() => handleItemClick(item)}
                   className={`w-full text-left p-3 hover:bg-white/10 transition flex items-start gap-3 group relative cursor-pointer ${
-                    unread ? 'bg-white/[0.04]' : 'opacity-85'
+                    unread ? 'bg-white/[0.04]' : 'opacity-80'
                   }`}
                 >
                   {getItemIcon(item.type)}
@@ -227,27 +290,19 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
           )}
         </div>
 
-        {/* Footer Link */}
+        {/* Footer */}
         <div className="p-2.5 bg-black/40 border-t border-[#3D2C22] flex items-center justify-between text-xs">
           <button
             type="button"
-            onClick={() => {
-              ackOrders();
-              onClose();
-              router.push('/member#pesanan');
-            }}
+            onClick={() => { onClose(); router.push('/member#pesanan'); }}
             className="text-[11px] text-varena-gold-light hover:text-white transition flex items-center gap-1 font-medium"
           >
-            <span>Buka Riwayat Pesanan</span>
+            <span>Riwayat Pesanan</span>
             <ArrowRight className="w-3 h-3" />
           </button>
           <button
             type="button"
-            onClick={() => {
-              ackWallet();
-              onClose();
-              router.push('/member/wallet');
-            }}
+            onClick={() => { onClose(); router.push('/member/wallet'); }}
             className="text-[11px] text-varena-taupe-light hover:text-varena-gold-light transition font-medium"
           >
             Dompet &amp; Komisi

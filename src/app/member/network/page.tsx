@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { GitFork, Users, Search, ChevronRight, ArrowLeft, Shield, CheckCircle2 } from 'lucide-react';
 import { formatMemberStatus } from '@/lib/formatters';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 export default function MemberNetworkPage() {
   const router = useRouter();
+  const { ackNetwork } = useNotifications();
   const [user, setUser] = useState<any>(null);
   const [tab, setTab] = useState<'placement' | 'sponsor'>('placement');
 
@@ -37,6 +39,8 @@ export default function MemberNetworkPage() {
     setCurrentRootCode(focal);
     loadPlacementTree(focal);
     loadSponsorList(focal);
+    ackNetwork();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const loadPlacementTree = (code: string) => {

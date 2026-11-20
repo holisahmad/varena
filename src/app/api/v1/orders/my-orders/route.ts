@@ -53,6 +53,7 @@ export async function GET(req: Request) {
             id: true,
             provider: true,
             providerReference: true,
+            amount: true,
             status: true,
             paidAt: true,
           },
@@ -67,10 +68,16 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // 2. Orders generated via this member's referral link
+    // 2. Orders generated via this member's referral link (excluding the member's own purchases)
     const referralOrders = member
       ? await prisma.order.findMany({
-          where: { referralMemberId: member.id },
+          where: {
+            referralMemberId: member.id,
+            NOT: [
+              ...(user ? [{ buyerUserId: user.id }] : []),
+              ...(user?.email ? [{ buyerEmail: user.email }] : []),
+            ],
+          },
           include: {
             items: {
               include: { variant: true },
@@ -97,6 +104,12 @@ export async function GET(req: Request) {
         shippingAddress: o.shippingAddress,
         orderStatus: o.orderStatus,
         orderType: o.orderType,
+        paymentConfirmationStatus: o.paymentConfirmationStatus,
+        senderBankName: o.senderBankName,
+        senderAccountName: o.senderAccountName,
+        transferAmountPaid: o.transferAmountPaid,
+        transferNotes: o.transferNotes,
+        paymentProofUrl: o.paymentProofUrl,
         subtotal: o.subtotal,
         discount: o.discount,
         shippingCost: o.shippingCost,
@@ -117,6 +130,13 @@ export async function GET(req: Request) {
         referral: o.referralMember
           ? { code: o.referralMember.memberCode, name: o.referralMember.displayName }
           : null,
+        payments: o.payments.map((p) => ({
+          id: p.id,
+          provider: p.provider,
+          amount: p.amount,
+          status: p.status,
+          paidAt: p.paidAt,
+        })),
       })),
       referralOrders: referralOrders.map((ro) => {
         const myCommissions = ro.commissionRuns?.flatMap((cr) => cr.items) || [];

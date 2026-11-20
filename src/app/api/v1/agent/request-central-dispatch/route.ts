@@ -38,7 +38,14 @@ export async function POST(req: Request) {
     }
 
     const qty = parseInt(quantity, 10) || 1;
-    const variant = await prisma.productVariant.findUnique({ where: { id: variantId } }) || (await prisma.productVariant.findFirst());
+    const variant =
+      (variantId
+        ? await prisma.productVariant.findUnique({ where: { id: variantId } })
+        : null) ||
+      (await prisma.productVariant.findFirst({
+        where: { sku: { contains: 'BOX' } },
+      })) ||
+      (await prisma.productVariant.findFirst());
     if (!variant) {
       return NextResponse.json({ error: 'Produk tidak ditemukan.' }, { status: 404 });
     }

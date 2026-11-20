@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { formatPayoutStatus } from '@/lib/formatters';
+import { compressImageToWebP } from '@/lib/image-compression';
 import {
   Wallet,
   ArrowDownRight,
@@ -18,6 +19,9 @@ import {
   CreditCard,
   UserCheck,
   Info,
+  Clock,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 export default function MemberWalletPage() {
@@ -48,6 +52,59 @@ export default function MemberWalletPage() {
   const WITHDRAWALS_PER_PAGE = 5;
   const STATEMENTS_PER_PAGE = 10;
 
+  // Shopping Deposit state
+  const [shoppingDeposit, setShoppingDeposit] = useState<any>(null);
+  const [shopDepositStep, setShopDepositStep] = useState<1 | 2>(1);
+  const [shopDepositModalOpen, setShopDepositModalOpen] = useState(false);
+  const [shopDepositAmount, setShopDepositAmount] = useState('500000');
+  const [depositBankMode, setDepositBankMode] = useState<'SAVED' | 'MANUAL'>('SAVED');
+  const [shopDepositBankName, setShopDepositBankName] = useState('');
+  const [shopDepositAccountNumber, setShopDepositAccountNumber] = useState('');
+  const [shopDepositNotes, setShopDepositNotes] = useState('');
+  const [shopDepositSubmitting, setShopDepositSubmitting] = useState(false);
+  const [shopDepositResult, setShopDepositResult] = useState<any>(null);
+  const [shopDepositProofUrl, setShopDepositProofUrl] = useState('');
+  const [shopDepositUploadingProof, setShopDepositUploadingProof] = useState(false);
+  const [depositConfirmed, setDepositConfirmed] = useState(false);
+  const [depositTimeLeft, setDepositTimeLeft] = useState<{
+    hours: number;
+    minutes: number;
+    seconds: number;
+    totalSeconds: number;
+    expired: boolean;
+  } | null>(null);
+
+  // 24-hour countdown timer for deposit transfer
+  useEffect(() => {
+    if (!shopDepositResult || shopDepositStep !== 2) {
+      setDepositTimeLeft(null);
+      return;
+    }
+
+    const createdTime = new Date(shopDepositResult.createdAt || Date.now()).getTime();
+    const expiryTime = createdTime + 24 * 60 * 60 * 1000;
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
+      if (diff <= 0) {
+        setDepositTimeLeft({ hours: 0, minutes: 0, seconds: 0, totalSeconds: 0, expired: true });
+      } else {
+        const hours = Math.floor(diff / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        setDepositTimeLeft({ hours, minutes, seconds, totalSeconds: diff, expired: false });
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [shopDepositResult, shopDepositStep]);
+
+  // Ref untuk menyimpan memberCode agar loadWallet bisa dipanggil ulang tanpa merusak closure
+  const memberCodeRef = useRef<string>('VRN-0001');
+
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
@@ -57,12 +114,21 @@ export default function MemberWalletPage() {
     const parsed = JSON.parse(stored);
     setUser(parsed);
     setBindAccountHolder(parsed.displayName || parsed.legalName || '');
-    loadWallet(parsed.memberCode || 'VRN-0001');
+    memberCodeRef.current = parsed.memberCode || 'VRN-0001';
+    // Initial load — tampilkan loading hanya jika belum ada data
+    loadWallet(memberCodeRef.current, true);
+    // ackWallet dipanggil sekali saat mount, tidak perlu masuk dependency array
     ackWallet();
-  }, [router, ackWallet]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
-  const loadWallet = (code: string) => {
-    setLoading(true);
+  /**
+   * loadWallet — Stale-While-Revalidate pattern
+   * isInitial=true  → tampilkan skeleton hanya jika wallet masih null (pertama kali buka)
+   * isInitial=false → silent background refresh, tabel TIDAK unmount/flicker
+   */
+  const loadWallet = (code: string, isInitial = false) => {
+    if (isInitial && !wallet) setLoading(true);
     fetch(`/api/v1/wallet?memberCode=${code}`)
       .then((res) => res.json())
       .then((data) => {
@@ -71,12 +137,21 @@ export default function MemberWalletPage() {
           if (data.wallet.bankInfo?.displayName || data.wallet.bankInfo?.legalName) {
             setBindAccountHolder(data.wallet.bankInfo.legalName || data.wallet.bankInfo.displayName);
           }
+          if (data.wallet.bankInfo?.bankName) {
+            setShopDepositBankName((prev) => prev || data.wallet.bankInfo.bankName);
+            setShopDepositAccountNumber((prev) => prev || data.wallet.bankInfo.bankAccountNumber);
+          }
         }
         // Also fetch uniqueCodeBalance from member profile
         const memberCode = code;
         fetch(`/api/v1/member/profile?memberCode=${memberCode}`)
           .then((r) => r.json())
           .then((p) => { if (p.member) setUniqueCodeBalance(p.member.uniqueCodeBalance || 0); })
+          .catch(() => {});
+        // Also fetch shopping deposit balance
+        fetch(`/api/v1/member/deposit?memberCode=${code}`)
+          .then((r) => r.json())
+          .then((d) => { if (d.balance !== undefined) setShoppingDeposit(d); })
           .catch(() => {});
       })
       .finally(() => setLoading(false));
@@ -142,6 +217,74 @@ export default function MemberWalletPage() {
       setErrorMsg(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleShopDepositSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setShopDepositSubmitting(true);
+    setErrorMsg('');
+    try {
+      const activeBank =
+        depositBankMode === 'SAVED' && wallet?.bankInfo?.bankName
+          ? wallet.bankInfo.bankName
+          : shopDepositBankName;
+      const activeAcc =
+        depositBankMode === 'SAVED' && wallet?.bankInfo?.bankAccountNumber
+          ? wallet.bankInfo.bankAccountNumber
+          : shopDepositAccountNumber;
+
+      const res = await fetch('/api/v1/member/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberCode: user.memberCode,
+          amount: shopDepositAmount,
+          bankName: activeBank,
+          accountNumber: activeAcc,
+          notes: shopDepositNotes,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShopDepositResult(data);
+        setDepositConfirmed(false);
+        setShopDepositStep(2);
+      } else {
+        setErrorMsg(data.error || 'Gagal mengajukan top up saldo belanja.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setShopDepositSubmitting(false);
+    }
+  };
+
+  const handleShopDepositProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !shopDepositResult?.transactionId) return;
+    setShopDepositUploadingProof(true);
+    try {
+      // Auto kompresi client-side ke WebP (memotong ukuran foto HP dari ~4MB ke ~50KB)
+      const compressed = await compressImageToWebP(file, { maxWidth: 1000, quality: 0.82 });
+
+      const formData = new FormData();
+      formData.append('file', compressed.file);
+      formData.append('transactionId', shopDepositResult.transactionId);
+      formData.append('memberCode', user.memberCode);
+      const res = await fetch('/api/v1/agent/deposit/proof', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        setShopDepositProofUrl(data.proofUrl);
+        setSuccessMsg(`Bukti transfer berhasil dikompresi WebP & diunggah (${compressed.compressionRatio})!`);
+      } else {
+        setErrorMsg(data.error || 'Gagal upload bukti.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal upload bukti transfer.');
+    } finally {
+      setShopDepositUploadingProof(false);
     }
   };
 
@@ -530,6 +673,68 @@ export default function MemberWalletPage() {
 
         {/* Right Column: Ledger Statement & Withdrawal Tracking */}
         <div className="md:col-span-7 space-y-6">
+
+          {/* Shopping Deposit Card */}
+          <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-blue-500" />
+                <div>
+                  <h2 className="font-serif text-base font-bold text-varena-espresso">Saldo Deposit Belanja</h2>
+                  <p className="text-[11px] text-varena-taupe">Gunakan untuk pembayaran pembelian produk VARENA</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShopDepositModalOpen(true); setShopDepositStep(1); setShopDepositResult(null); setShopDepositProofUrl(''); }}
+                className="px-4 py-2 rounded-xl bg-varena-espresso text-varena-gold font-bold text-xs hover:bg-varena-espresso-dark transition"
+              >
+                + Top Up Saldo Belanja
+              </button>
+            </div>
+
+            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl border border-blue-200">
+              <div className="text-[11px] text-blue-600 font-semibold uppercase tracking-widest mb-1">Saldo Aktif</div>
+              <div className="text-2xl font-bold font-mono text-blue-900">
+                Rp{(shoppingDeposit?.balance || 0).toLocaleString('id-ID')}
+              </div>
+            </div>
+
+            {shoppingDeposit?.transactions && shoppingDeposit.transactions.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-stone-600 mb-2">Riwayat Deposit Belanja</h3>
+                <div className="divide-y divide-stone-100">
+                  {shoppingDeposit.transactions.slice(0, 5).map((tx: any) => (
+                    <div key={tx.id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
+                      <div>
+                        <div className="font-semibold text-stone-700">
+                          {tx.type === 'SHOPPING_TOPUP' ? 'Top Up Saldo Belanja'
+                            : tx.type === 'SHOPPING_PAYMENT' ? 'Pembayaran Belanja'
+                            : tx.type}
+                        </div>
+                        <div className="text-[10px] text-stone-400 font-mono">{tx.referenceId}</div>
+                        <div className="text-[10px] text-stone-400">
+                          {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-mono font-bold ${tx.type === 'SHOPPING_TOPUP' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {tx.type === 'SHOPPING_TOPUP' ? '+' : '-'}Rp{(tx.amount || 0).toLocaleString('id-ID')}
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          tx.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800'
+                          : tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {tx.status === 'COMPLETED' ? 'SELESAI' : tx.status === 'PENDING' ? 'MENUNGGU' : tx.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Withdrawal Requests Tracking */}
           {wallet?.withdrawals && wallet.withdrawals.length > 0 && (
             <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
@@ -691,6 +896,311 @@ export default function MemberWalletPage() {
           </div>
         </div>
       </div>
+
+      {/* ── MODAL: TOP UP SALDO BELANJA ── */}
+      {shopDepositModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-blue-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-500" />
+                <span>Top Up Saldo Deposit Belanja</span>
+              </h3>
+              <button
+                onClick={() => { setShopDepositModalOpen(false); setShopDepositStep(1); setShopDepositResult(null); setShopDepositProofUrl(''); }}
+                className="text-stone-400 hover:text-stone-700"
+              >✕</button>
+            </div>
+
+            {/* Step indicator */}
+            <div className="flex items-center px-6 pt-4 gap-3 text-xs font-semibold">
+              <div className={`flex items-center gap-1.5 ${shopDepositStep === 1 ? 'text-varena-espresso' : 'text-emerald-700'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${shopDepositStep === 1 ? 'bg-blue-500 text-white' : 'bg-emerald-600 text-white'}`}>
+                  {shopDepositStep === 1 ? '1' : '✓'}
+                </span>
+                Isi Formulir
+              </div>
+              <div className="flex-1 h-px bg-stone-200" />
+              <div className={`flex items-center gap-1.5 ${shopDepositStep === 2 ? 'text-varena-espresso' : 'text-stone-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${shopDepositStep === 2 ? 'bg-blue-500 text-white' : 'bg-stone-200 text-stone-500'}`}>
+                  2
+                </span>
+                Transfer &amp; Bukti
+              </div>
+            </div>
+
+            <div className="p-6">
+              {shopDepositStep === 1 ? (
+                <form onSubmit={handleShopDepositSubmit} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-stone-700 font-bold mb-1">Nominal Top Up (Rp) *</label>
+                    <input
+                      type="number"
+                      min={50000}
+                      step={10000}
+                      required
+                      value={shopDepositAmount}
+                      onChange={(e) => setShopDepositAmount(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 font-bold text-base text-varena-espresso outline-none focus:border-blue-500"
+                    />
+                    <p className="text-stone-400 mt-1">Minimal deposit Rp50.000</p>
+                  </div>
+
+                  {/* Rekening Pengirim (Default dari Setting atau Manual) */}
+                  <div className="space-y-1.5">
+                    <label className="block text-stone-700 font-bold">Rekening Bank Pengirim (Asal Transfer) *</label>
+
+                    {wallet?.bankInfo?.bankName && depositBankMode === 'SAVED' ? (
+                      <div className="p-3 rounded-xl border border-blue-200 bg-blue-50/60 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase text-blue-700 tracking-wider">
+                            ✓ Rekening Utama (Tersimpan di Setting)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDepositBankMode('MANUAL');
+                              setShopDepositBankName('');
+                              setShopDepositAccountNumber('');
+                            }}
+                            className="text-[11px] font-semibold text-blue-600 hover:underline"
+                          >
+                            Transfer dari Bank Lain →
+                          </button>
+                        </div>
+                        <div className="font-bold text-sm text-stone-900">
+                          Bank {wallet.bankInfo.bankName} - <span className="font-mono">{wallet.bankInfo.bankAccountNumber}</span>
+                        </div>
+                        <div className="text-[11px] text-stone-600">
+                          a.n. <strong>{wallet.bankInfo.bankAccountHolder}</strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                        {wallet?.bankInfo?.bankName && (
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDepositBankMode('SAVED');
+                                setShopDepositBankName(wallet.bankInfo.bankName);
+                                setShopDepositAccountNumber(wallet.bankInfo.bankAccountNumber);
+                              }}
+                              className="text-[11px] font-bold text-blue-600 hover:underline"
+                            >
+                              ← Gunakan Rekening Utama Tersimpan
+                            </button>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-stone-600 font-semibold mb-1">Nama Bank Pengirim *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="BRI / BCA / Mandiri"
+                              value={shopDepositBankName}
+                              onChange={(e) => setShopDepositBankName(e.target.value)}
+                              className="w-full p-2 rounded-lg border border-stone-300 outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-stone-600 font-semibold mb-1">No. Rekening Pengirim *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Nomor rekening Anda"
+                              value={shopDepositAccountNumber}
+                              onChange={(e) => setShopDepositAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                              className="w-full p-2 rounded-lg border border-stone-300 font-mono outline-none focus:border-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-600 font-semibold mb-1">Catatan Tambahan (Opsional):</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Top up saldo belanja untuk pesanan mitra"
+                      value={shopDepositNotes}
+                      onChange={(e) => setShopDepositNotes(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-800 leading-relaxed">
+                    <strong>Transfer ke:</strong> BRI <span className="font-mono font-bold">3065 0102 4471 539</span> a.n. <strong>Sunariyo</strong>.<br />
+                    Kode unik 3-digit akan digenerate otomatis di langkah berikutnya — pastikan transfer dengan nominal tepat.
+                  </div>
+
+                  <div className="pt-1 flex justify-end gap-2 border-t border-stone-100">
+                    <button
+                      type="button"
+                      onClick={() => setShopDepositModalOpen(false)}
+                      className="py-2 px-4 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={shopDepositSubmitting}
+                      className="py-2 px-5 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                    >
+                      {shopDepositSubmitting ? 'Memproses...' : 'Lanjut ke Instruksi Transfer →'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-4 text-xs">
+                  {/* 24-Hour Countdown Timer */}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-amber-900">
+                      <Clock className="w-4 h-4 text-amber-600 animate-pulse flex-shrink-0" />
+                      <div className="text-left">
+                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Transfer (24 Jam)</div>
+                        <div className="text-[10px] text-amber-700">Harap transfer & konfirmasi sebelum waktu habis.</div>
+                      </div>
+                    </div>
+                    <div className="font-mono font-bold text-amber-900 text-sm bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs">
+                      {depositTimeLeft ? (
+                        `${String(depositTimeLeft.hours).padStart(2, '0')}:${String(depositTimeLeft.minutes).padStart(2, '0')}:${String(depositTimeLeft.seconds).padStart(2, '0')}`
+                      ) : (
+                        '24:00:00'
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Transfer instruction card */}
+                  <div className="rounded-2xl bg-blue-900 text-white p-5 space-y-3 shadow-md">
+                    <div className="text-blue-300 font-semibold text-[11px] uppercase tracking-widest">
+                      Instruksi Pembayaran Transfer
+                    </div>
+                    <div className="text-center">
+                      <div className="text-blue-200 text-[11px] mb-1">Transfer TEPAT sejumlah:</div>
+                      <div className="text-3xl font-bold font-mono tracking-tight text-white">
+                        Rp{(shopDepositResult?.transferTotal || 0).toLocaleString('id-ID')}
+                      </div>
+                      <div className="text-blue-200 text-[10px] mt-1">
+                        (Rp{Number(shopDepositAmount).toLocaleString('id-ID')} + kode unik verifikasi Rp{shopDepositResult?.uniqueCode})
+                      </div>
+                    </div>
+                    <div className="border-t border-white/15 pt-3 space-y-2 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/70">Bank Tujuan:</span>
+                        <span className="font-bold">BRI (Bank Rakyat Indonesia)</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/70">Nomor Rekening:</span>
+                        <span className="font-mono font-bold text-sm tracking-wide">3065 0102 4471 539</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/70">Atas Nama:</span>
+                        <span className="font-bold">Sunariyo</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/70">Kode Unik:</span>
+                        <span className="font-mono font-bold text-yellow-300">+Rp{shopDepositResult?.uniqueCode}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/70">ID Referensi:</span>
+                        <span className="font-mono text-[10px] text-blue-200">{shopDepositResult?.referenceId}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-[11px] leading-relaxed">
+                    ⚠️ <strong>PENTING:</strong> Pastikan nominal transfer <strong>persis sama</strong> hingga 3 digit kode unik terakhir agar admin dapat memverifikasi dana Anda dengan cepat.
+                  </div>
+
+                  {/* Proof upload */}
+                  <div>
+                    <label className="block font-semibold text-stone-700 mb-1.5">
+                      Unggah Bukti Transfer (Opsional / Dianjurkan):
+                    </label>
+                    {shopDepositProofUrl ? (
+                      <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Bukti berhasil diunggah!</span>
+                      </div>
+                    ) : (
+                      <label
+                        className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 cursor-pointer transition ${
+                          shopDepositUploadingProof
+                            ? 'border-stone-200 bg-stone-50'
+                            : 'border-blue-300 hover:border-blue-500 bg-blue-50/40'
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          disabled={shopDepositUploadingProof}
+                          onChange={handleShopDepositProofUpload}
+                        />
+                        {shopDepositUploadingProof ? (
+                          <span className="text-stone-500">Mengunggah...</span>
+                        ) : (
+                          <>
+                            <Info className="w-5 h-5 text-blue-500 mb-1" />
+                            <span className="text-stone-600 font-semibold text-xs">Pilih file struk / screenshot transfer</span>
+                            <span className="text-stone-400 text-[10px] mt-0.5">JPG / PNG / PDF — maks 5MB</span>
+                          </>
+                        )}
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Tombol Konfirmasi Sudah Bayar oleh Mitra */}
+                  <div className="pt-2">
+                    {depositConfirmed ? (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                        <div className="font-bold flex items-center gap-1.5 text-xs">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Konfirmasi Pembayaran Telah Dikirim!</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-700 leading-relaxed">
+                          Admin telah menerima pemberitahuan topup Anda dan akan mengecek mutasi bank untuk mencocokkan nominal + kode unik <strong>+Rp{shopDepositResult?.uniqueCode}</strong>. Begitu disetujui, saldo deposit Anda akan otomatis masuk ke dompet dan siap digunakan!
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDepositConfirmed(true);
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99]"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>✓ Saya Sudah Transfer (Konfirmasi Pembayaran)</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex justify-between items-center gap-2 border-t border-stone-100">
+                    <span className="text-stone-400 text-[11px]">ID Ref: {shopDepositResult?.referenceId}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShopDepositModalOpen(false);
+                        setShopDepositStep(1);
+                        setShopDepositResult(null);
+                        setShopDepositProofUrl('');
+                        setDepositConfirmed(false);
+                      }}
+                      className="py-2 px-5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition text-xs"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

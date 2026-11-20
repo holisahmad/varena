@@ -2,7 +2,7 @@
 // Prisma Schema - Strict ACID compliance & auditability
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -95,6 +95,9 @@ model Member {
   agentDiscountValue       Float     @default(15.0)   // Nilai diskon: 15% atau Rp50.000
   agentStatus              String    @default("NONE") // NONE, APPLIED, ACTIVE, SUSPENDED
   agentVerifiedAt          DateTime?
+
+  // Saldo Deposit Belanja Mitra
+  shoppingDepositBalance   Int       @default(0)      // Saldo deposit untuk belanja mitra
 
   // Alamat Pengiriman Tersimpan (Default Structured Shipping Address)
   recipientName        String?
@@ -310,6 +313,8 @@ model Order {
   @@index([createdAt])
   @@index([buyerUserId, createdAt])
   @@index([paymentConfirmationStatus])
+  @@index([shippingCity, orderStatus])
+  @@index([buyerPhone])
   @@map("orders")
 }
 
@@ -552,7 +557,7 @@ model AgentApplication {
 model AgentDepositTransaction {
   id            String    @id @default(uuid())
   memberId      String
-  type          String    // TOPUP_DEPOSIT, RESTOCK_PAYMENT, ADJUSTMENT_CREDIT, ADJUSTMENT_DEBIT
+  type          String    // TOPUP_DEPOSIT, RESTOCK_PAYMENT, ADJUSTMENT_CREDIT, ADJUSTMENT_DEBIT, RESTOCK_HYBRID_DEPOSIT, SHOPPING_TOPUP, SHOPPING_PAYMENT
   amount        Int       // Nominal IDR
   balanceBefore Int       @default(0)
   balanceAfter  Int       @default(0)
@@ -561,7 +566,11 @@ model AgentDepositTransaction {
   status        String    @default("COMPLETED") // PENDING, COMPLETED, REJECTED
   proofUrl      String?   // Bukti transfer bank jika topup
   approvedBy    String?   // User admin yang approve topup
+  uniqueCode    Int       @default(0) // 3-digit unique code for transfer verification
+  bankName      String?   // Bank pengirim dari agent/mitra
+  accountNumber String?   // Nomor rekening pengirim
   createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt @default(now())
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

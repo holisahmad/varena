@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin } from '@/lib/auth';
 
@@ -16,15 +17,9 @@ function generateSlug(name: string): string {
  */
 export async function GET(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses master produk.' },
-        { status: 403 }
-      );
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -37,9 +32,9 @@ export async function GET(req: Request) {
     }
     if (q) {
       whereClause.OR = [
-        { name: { contains: q } },
-        { description: { contains: q } },
-        { bpomNumber: { contains: q } },
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { bpomNumber: { contains: q, mode: 'insensitive' } },
       ];
     }
 
@@ -81,15 +76,9 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak menambah produk.' },
-        { status: 403 }
-      );
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
 
     const body = await req.json();
@@ -170,7 +159,7 @@ export async function POST(req: Request) {
       // Catat ke Audit Log
       await tx.auditLog.create({
         data: {
-          actorUserId: userId || null,
+          actorUserId: authUser.userId || null,
           action: 'PRODUCT_CREATED',
           entityType: 'PRODUCT',
           entityId: prod.id,

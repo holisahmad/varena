@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyCorporateAdmin } from '@/lib/auth';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
 
 /**
  * GET /api/v1/admin/products/[id]
@@ -39,14 +39,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
+    const authUser = await resolveCorporateAdmin(req);
 
-    if (!isAuthorized) {
+    if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengubah produk.' },
-        { status: 403 }
+        { status: 401 }
       );
     }
 
@@ -149,7 +147,7 @@ export async function PUT(
       // 3. Audit Log
       await tx.auditLog.create({
         data: {
-          actorUserId: userId || null,
+          actorUserId: authUser.userId || null,
           action: 'PRODUCT_UPDATED',
           entityType: 'PRODUCT',
           entityId: prod.id,
@@ -187,14 +185,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
+    const authUser = await resolveCorporateAdmin(req);
 
-    if (!isAuthorized) {
+    if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengarsipkan produk.' },
-        { status: 403 }
+        { status: 401 }
       );
     }
 
@@ -212,7 +208,7 @@ export async function DELETE(
 
     await prisma.auditLog.create({
       data: {
-        actorUserId: userId || null,
+        actorUserId: authUser.userId || null,
         action: 'PRODUCT_ARCHIVED',
         entityType: 'PRODUCT',
         entityId: id,

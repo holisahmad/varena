@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin, getCorporateUser } from '@/lib/auth';
 import { settleOrderPayment, shipOrder, completeOrder } from '@/lib/order';
 
 export async function GET(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses data penjualan.' },
-        { status: 403 }
-      );
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -34,10 +30,10 @@ export async function GET(req: Request) {
 
     if (q) {
       whereClause.OR = [
-        { orderNumber: { contains: q } },
-        { buyerName: { contains: q } },
-        { buyerPhone: { contains: q } },
-        { trackingNumber: { contains: q } },
+        { orderNumber: { contains: q, mode: 'insensitive' } },
+        { buyerName: { contains: q, mode: 'insensitive' } },
+        { buyerPhone: { contains: q, mode: 'insensitive' } },
+        { trackingNumber: { contains: q, mode: 'insensitive' } },
       ];
     }
 

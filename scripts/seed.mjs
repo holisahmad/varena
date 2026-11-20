@@ -118,6 +118,9 @@ async function main() {
     { code: 'ACC-COMP-OPS', type: 'REVENUE', ownerType: 'COMPANY_OPERATIONS' },
     { code: 'ACC-COMP-UNALLOC', type: 'LIABILITY', ownerType: 'COMPANY_UNALLOCATED_RESERVE' },
     { code: 'ACC-COMP-PAYOUT', type: 'ASSET', ownerType: 'COMPANY_PAYOUT_CLEARING' },
+    { code: 'ACC-COMP-CASH', type: 'ASSET', ownerType: 'COMPANY_CASH_ACCOUNT' },
+    { code: 'ACC-LIAB-DEPOSIT-AGENT', type: 'LIABILITY', ownerType: 'AGENT_DEPOSIT_LIABILITY' },
+    { code: 'ACC-LIAB-DEPOSIT-SHOPPING', type: 'LIABILITY', ownerType: 'SHOPPING_DEPOSIT_LIABILITY' },
   ];
 
   for (const ca of companyAccounts) {
@@ -458,9 +461,9 @@ async function main() {
 
   // Seed Default System Settings
   const defaultSettings = [
-    { key: 'PRIMARY_BANK_NAME', value: 'BCA', group: 'FINANCIAL', description: 'Bank operasional penerima utama' },
-    { key: 'PRIMARY_BANK_ACCOUNT', value: '8830192831', group: 'FINANCIAL', description: 'Nomor rekening operasional resmi' },
-    { key: 'PRIMARY_BANK_HOLDER', value: 'PT VARENA BINA NUSANTARA', group: 'FINANCIAL', description: 'Atas nama rekening korporasi' },
+    { key: 'PRIMARY_BANK_NAME', value: 'BRI', group: 'FINANCIAL', description: 'Bank operasional penerima utama' },
+    { key: 'PRIMARY_BANK_ACCOUNT', value: '3065 0102 4471 539', group: 'FINANCIAL', description: 'Nomor rekening operasional resmi' },
+    { key: 'PRIMARY_BANK_HOLDER', value: 'Sunariyo', group: 'FINANCIAL', description: 'Atas nama rekening operasional (sementara sebelum korporasi)' },
     { key: 'MIN_PAYOUT_AMOUNT', value: '50000', group: 'FINANCIAL', description: 'Batas minimal penarikan saldo dompet mitra' },
     { key: 'DEFAULT_AGENT_MOQ', value: '10', group: 'AGENT', description: 'Minimal pembelian pasokan stokis/agen (box)' },
     { key: 'DEFAULT_AGENT_DISCOUNT', value: '15.0', group: 'AGENT', description: 'Persentase diskon pembelian grosir agen' },

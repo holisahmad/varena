@@ -23,12 +23,16 @@ export interface CheckoutPayload {
   stockistMemberId?: string;
   fulfillmentSource?: string;
   // Alamat Pengiriman Terstruktur
+  recipientName?: string;
+  recipientPhone?: string;
+  addressDetail?: string;
   shippingProvince?: string;
   shippingCity?: string;
   shippingDistrict?: string;
   shippingPostalCode?: string;
   shippingNotes?: string;
   uniqueCode?: number; // Kode unik 3 digit otomatis (100 - 999)
+  saveToProfile?: boolean; // Default true: simpan alamat ini ke profil mitra
 }
 
 /**
@@ -54,6 +58,10 @@ export async function createOrder(payload: CheckoutPayload) {
     shippingPostalCode,
     shippingNotes,
     uniqueCode: customUniqueCode,
+    recipientName: customRecipientName,
+    recipientPhone: customRecipientPhone,
+    addressDetail: customAddressDetail,
+    saveToProfile,
   } = payload;
 
   if (!items || items.length === 0) {
@@ -63,15 +71,22 @@ export async function createOrder(payload: CheckoutPayload) {
   // Check if buyer is a registered regional stockist
   let isStockist = Boolean(isStockistOrder);
   let resolvedStockistId = stockistMemberId || null;
+  let buyerMember: any = null;
 
-  if (buyerUserId && !isStockist) {
-    const buyerMember = await prisma.member.findUnique({
+  if (buyerUserId) {
+    buyerMember = await prisma.member.findUnique({
       where: { userId: buyerUserId },
     });
     if (buyerMember && (buyerMember.stockistType === 'MASTER' || buyerMember.stockistType === 'MOBILE')) {
       isStockist = true;
       resolvedStockistId = buyerMember.id;
     }
+  } else if (buyerEmail) {
+    const u = await prisma.user.findUnique({
+      where: { email: buyerEmail },
+      include: { member: true },
+    });
+    buyerMember = u?.member || null;
   }
 
   // 1. Resolve Referral Member if provided
@@ -80,8 +95,12 @@ export async function createOrder(payload: CheckoutPayload) {
     const member = await prisma.member.findUnique({
       where: { memberCode: referralCode.trim() },
     });
+    // Cegah self-referral: pesanan pribadi member bukan merupakan penjualan dari referral dirinya sendiri
     if (member && member.memberStatus === 'ACTIVE') {
-      referralMemberId = member.id;
+      const isSelfReferral = buyerMember && buyerMember.id === member.id;
+      if (!isSelfReferral) {
+        referralMemberId = member.id;
+      }
     }
   }
 
@@ -106,7 +125,7 @@ export async function createOrder(payload: CheckoutPayload) {
     }
     const lineTotal = v.price * item.quantity;
     subtotal += lineTotal;
-    if (v.packSize >= 10) {
+    if (v.allowFirstPack || v.packSize >= 10 || (v.price >= 500000 && v.variantType === 'PACK')) {
       hasFirstPack = true;
     }
 
@@ -145,6 +164,9 @@ export async function createOrder(payload: CheckoutPayload) {
   const orderNumber = `VRN-${Date.now().toString().slice(-8)}-${Math.floor(100 + Math.random() * 900)}`;
 
   // 3. Persist Order in transaction
+  const isAlreadyActiveMember = Boolean(buyerMember && buyerMember.memberStatus === 'ACTIVE');
+  const resolvedOrderType = hasFirstPack && !isAlreadyActiveMember ? 'FIRST_PACK' : 'REPEAT_PURCHASE';
+
   return withTransactionRetry(async (tx) => {
     const order = await tx.order.create({
       data: {
@@ -156,7 +178,7 @@ export async function createOrder(payload: CheckoutPayload) {
         shippingAddress,
         referralMemberId,
         orderStatus: 'PENDING_PAYMENT',
-        orderType: hasFirstPack ? 'FIRST_PACK' : 'REPEAT_PURCHASE',
+        orderType: resolvedOrderType,
         subtotal,
         discount: 0,
         shippingCost,
@@ -173,18 +195,20 @@ export async function createOrder(payload: CheckoutPayload) {
       },
     });
 
-    // Save default shipping address on member record if logged in
-    if (buyerUserId) {
+    // Save / update default shipping address on member record if logged in (or resolved from email)
+    const targetUserId = buyerUserId || (buyerMember ? buyerMember.userId : null);
+    const shouldSaveToProfile = saveToProfile !== false;
+    if (targetUserId && shouldSaveToProfile) {
       await tx.member.updateMany({
-        where: { userId: buyerUserId },
+        where: { userId: targetUserId },
         data: {
-          recipientName: buyerName,
-          recipientPhone: buyerPhone,
+          recipientName: customRecipientName || buyerName,
+          recipientPhone: customRecipientPhone || buyerPhone,
           province: shippingProvince || null,
           city: shippingCity || null,
           district: shippingDistrict || null,
           postalCode: shippingPostalCode || null,
-          addressDetail: shippingAddress,
+          addressDetail: customAddressDetail || shippingAddress,
         },
       });
     }
@@ -520,6 +544,7 @@ export async function completeOrder({
 }) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
+    include: { items: true },
   });
 
   if (!order) {
@@ -539,6 +564,45 @@ export async function completeOrder({
       },
     });
 
+    // Sinkronisasi otomatis stok fisik agen jika pesanan ini adalah pasokan restock grosir agen
+    const isRestockOrder = order.orderNumber.startsWith('AGN-RESTOCK') || order.fulfillmentSource === 'REGIONAL_AGENT';
+    if (isRestockOrder && order.buyerUserId) {
+      const buyerMember = await tx.member.findFirst({
+        where: { userId: order.buyerUserId },
+      });
+
+      if (buyerMember && (buyerMember.isAgent || ['REGIONAL_AGENT', 'MASTER_AGENT'].includes(buyerMember.agentType))) {
+        const existingMutation = await tx.agentStockMutation.findFirst({
+          where: {
+            memberId: buyerMember.id,
+            referenceId: order.orderNumber,
+          },
+        });
+
+        if (!existingMutation) {
+          const totalItemsCount = (order.items || []).reduce((s, it) => s + it.quantity, 0);
+          const newStock = buyerMember.agentInventory + totalItemsCount;
+
+          await tx.member.update({
+            where: { id: buyerMember.id },
+            data: { agentInventory: newStock },
+          });
+
+          await tx.agentStockMutation.create({
+            data: {
+              memberId: buyerMember.id,
+              type: 'RESTOCK_FROM_CENTRAL',
+              quantity: totalItemsCount,
+              balanceBefore: buyerMember.agentInventory,
+              balanceAfter: newStock,
+              referenceId: order.orderNumber,
+              notes: `Penerimaan ${totalItemsCount} item pasokan dari pusat (${order.orderNumber}) diverifikasi selesai oleh kantor`,
+            },
+          });
+        }
+      }
+    }
+
     await tx.auditLog.create({
       data: {
         actorUserId: actorUserId || null,
@@ -552,5 +616,71 @@ export async function completeOrder({
     });
 
     return updated;
+  });
+}
+
+/**
+ * Cancel an unpaid order that has passed the 24-hour expiration window or is cancelled by timeout
+ * Restores product variant inventory stock and cancels pending payment records
+ */
+export async function cancelExpiredOrder(orderIdOrNumber: string, reason?: string) {
+  const order = await prisma.order.findFirst({
+    where: {
+      OR: [{ id: orderIdOrNumber }, { orderNumber: orderIdOrNumber }],
+    },
+    include: { items: true, payments: true },
+  });
+
+  if (!order) {
+    throw new Error('Order not found');
+  }
+
+  if (order.orderStatus !== 'PENDING_PAYMENT') {
+    return { status: 'NOT_PENDING', order };
+  }
+
+  // If already confirmed by buyer, do not auto-cancel without admin review
+  if (order.paymentConfirmationStatus === 'SUBMITTED') {
+    return { status: 'AWAITING_VERIFICATION', order };
+  }
+
+  return withTransactionRetry(async (tx) => {
+    // 1. Update order status to CANCELLED
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: {
+        orderStatus: 'CANCELLED',
+      },
+    });
+
+    // 2. Restore inventory stock
+    for (const item of order.items) {
+      await tx.productVariant.update({
+        where: { id: item.productVariantId },
+        data: { stockQuantity: { increment: item.quantity } },
+      });
+    }
+
+    // 3. Mark pending payments as CANCELLED
+    await tx.payment.updateMany({
+      where: { orderId: order.id, status: 'PENDING' },
+      data: { status: 'CANCELLED' },
+    });
+
+    // 4. Audit Log
+    await tx.auditLog.create({
+      data: {
+        action: 'ORDER_EXPIRED_CANCELLED',
+        entityType: 'ORDER',
+        entityId: order.id,
+        beforeJson: JSON.stringify({ orderStatus: 'PENDING_PAYMENT' }),
+        afterJson: JSON.stringify({ orderStatus: 'CANCELLED' }),
+        reason:
+          reason ||
+          'Pesanan dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran 24 jam tanpa konfirmasi.',
+      },
+    });
+
+    return { status: 'CANCELLED', order: updated };
   });
 }

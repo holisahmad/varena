@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin } from '@/lib/auth';
 
@@ -8,14 +9,9 @@ import { verifyCorporateAdmin } from '@/lib/auth';
  */
 export async function GET(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const isAuthorized = await verifyCorporateAdmin(userId, userEmail);
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengunduh file batch transfer bank.' },
-        { status: 403 }
-      );
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'REQUESTED';

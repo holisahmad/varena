@@ -34,6 +34,7 @@ export default function ReferralLandingPage() {
           src="/brand/varena-connected-v-symbol.png"
           alt="VARENA Logo"
           fill
+          sizes="80px"
           className="object-contain p-2"
         />
       </div>

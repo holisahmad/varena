@@ -1,17 +1,9 @@
 import prisma from './prisma';
 import bcrypt from 'bcryptjs';
+import { getTokenFromRequest, verifySessionToken, type AuthSession } from './jwt';
 
-export interface AuthSession {
-  userId: string;
-  email: string;
-  displayName: string;
-  roles: string[];
-  memberId?: string;
-  memberCode?: string;
-  isAgent?: boolean;
-  agentStatus?: string;
-  agentCity?: string;
-}
+// Re-export AuthSession from jwt.ts for backward compatibility
+export type { AuthSession };
 
 // In-memory or header-based token helper for modular monolith
 export async function authenticateUser(email: string, passwordPlain: string): Promise<AuthSession | null> {
@@ -109,5 +101,41 @@ export async function getMemberByUserId(userId: string) {
       placementRel: { include: { parent: true } },
     },
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JWT-based authentication helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get authenticated user from JWT token in request (Authorization header or cookie).
+ * Returns null if not authenticated or token invalid/expired.
+ */
+export async function getAuthenticatedUser(req: Request): Promise<AuthSession | null> {
+  const token = getTokenFromRequest(req);
+  if (!token) return null;
+  return verifySessionToken(token);
+}
+
+/**
+ * Get corporate admin user from JWT (must have a corporate role).
+ * Returns the AuthSession if valid + corporate role, else null.
+ */
+export async function getCorporateUserFromJWT(req: Request): Promise<AuthSession | null> {
+  const session = await getAuthenticatedUser(req);
+  if (!session) return null;
+  const isCorporate = session.roles.some((r) => CORPORATE_ADMIN_ROLES.includes(r));
+  if (!isCorporate) return null;
+  return session;
+}
+
+/**
+ * Get member session from JWT.
+ * Returns the AuthSession if valid + has memberId, else null.
+ */
+export async function getMemberFromJWT(req: Request): Promise<AuthSession | null> {
+  const session = await getAuthenticatedUser(req);
+  if (!session || !session.memberId) return null;
+  return session;
 }
 

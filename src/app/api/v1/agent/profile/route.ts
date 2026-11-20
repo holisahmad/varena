@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,8 +8,13 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const memberCodeParam = searchParams.get('memberCode');
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
+
+    // JWT-first auth
+    const jwtSession = await getAuthenticatedUser(req);
+
+    // Fallback: legacy x-user-id/x-user-email headers
+    const userId = jwtSession?.userId || req.headers.get('x-user-id');
+    const userEmail = jwtSession?.email || req.headers.get('x-user-email');
 
     // Resolve member
     let member: any = null;

@@ -20,6 +20,7 @@ import {
   formatMemberStatus,
   formatAgentStatus,
   formatAgentType,
+  getOrderStatusBadge,
   ORDER_STATUS_BADGES,
 } from '@/lib/formatters';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -71,7 +72,7 @@ import {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { adminOrdersBadge, adminPayoutBadge, ackAdminOrders, ackAdminPayout } = useNotifications();
+  const { adminOrdersBadge, adminPayoutBadge, ackAdminOrders, ackAdminPayout, ackAdminMisc } = useNotifications();
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'SETTINGS' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
@@ -161,6 +162,7 @@ export default function AdminPage() {
   const [bulkShipModalOpen, setBulkShipModalOpen] = useState(false);
   const [bulkShipInput, setBulkShipInput] = useState('');
   const [bulkShipLoading, setBulkShipLoading] = useState(false);
+  const [bulkShipReport, setBulkShipReport] = useState<any | null>(null);
 
   // Payment confirmation state
   const [paymentProofOrders, setPaymentProofOrders] = useState<any[]>([]);
@@ -198,7 +200,11 @@ export default function AdminPage() {
   const [routableOrders, setRoutableOrders] = useState<any[]>([]);
   const [agentConfig, setAgentConfig] = useState<any>({ minimumRestockBox: 10, defaultDiscountType: 'PERCENTAGE', defaultDiscountValue: 15.0 });
   const [pendingAgentTopups, setPendingAgentTopups] = useState<any[]>([]);
-  const [agentSubTab, setAgentSubTab] = useState<'APPLICATIONS' | 'LIST' | 'APPOINT' | 'ROUTING' | 'TOPUP' | 'CONFIG'>('LIST');
+  const [rejectTopupId, setRejectTopupId] = useState<string | null>(null);
+  const [rejectTopupReason, setRejectTopupReason] = useState('');
+  const [rejectTopupSubmitting, setRejectTopupSubmitting] = useState(false);
+  const [agentSubTab, setAgentSubTab] = useState<'APPLICATIONS' | 'LIST' | 'APPOINT' | 'ROUTING' | 'TOPUP' | 'CONFIG' | 'RANKING'>('LIST');
+  const [rankingSortBy, setRankingSortBy] = useState<'SOLD_BOX' | 'SALES_NOMINAL'>('SOLD_BOX');
   const [agentLoading, setAgentLoading] = useState(false);
 
   // Direct Appointment Form State
@@ -210,6 +216,16 @@ export default function AdminPage() {
   const [appointInitialStock, setAppointInitialStock] = useState(20);
   const [appointDiscountType, setAppointDiscountType] = useState('PERCENTAGE');
   const [appointDiscountValue, setAppointDiscountValue] = useState(15);
+  // Calon Agen Verification State
+  const [candidateMember, setCandidateMember] = useState<any>(null);
+  const [candidateChecking, setCandidateChecking] = useState(false);
+  const [candidateError, setCandidateError] = useState('');
+  const [candidateConfirmed, setCandidateConfirmed] = useState(false);
+
+  // Agent Monitoring & Detail State
+  const [monitoringAgent, setMonitoringAgent] = useState<any>(null);
+  const [monitoringModalOpen, setMonitoringModalOpen] = useState(false);
+  const [monitoringTab, setMonitoringTab] = useState<'OVERVIEW' | 'REWARDS' | 'STOCK' | 'ORDERS'>('OVERVIEW');
 
   // Approve Application Modal
   const [approveAppModalOpen, setApproveAppModalOpen] = useState(false);
@@ -349,6 +365,16 @@ export default function AdminPage() {
   }, [router]);
 
   const getAdminHeaders = (customUser?: any): Record<string, string> => {
+    // JWT-first: pakai Bearer token jika tersedia
+    const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
+    if (token) {
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+    }
+
+    // Fallback legacy (backward compat)
     const user = customUser || currentUser;
     let uid = typeof customUser === 'string' ? customUser : (user?.userId || user?.id || '');
     let email = typeof customUser === 'object' ? customUser?.email : (user?.email || '');
@@ -372,7 +398,8 @@ export default function AdminPage() {
 
   const loadDashboardData = (customUser?: any) => {
     const authHeaders = getAdminHeaders(customUser);
-    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
+    const hasAuth = authHeaders['Authorization'] || authHeaders['x-user-id'] || authHeaders['x-user-email'];
+    if (!hasAuth) return;
     setLoading(true);
 
     const checkRes = async (res: Response) => {
@@ -434,7 +461,7 @@ export default function AdminPage() {
   // Filter Orders with Pagination
   const loadFilteredOrders = (status = orderStatusFilter, query = orderSearchQuery, page = 1) => {
     const authHeaders = getAdminHeaders();
-    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
+    if (!authHeaders['Authorization'] && !authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
     fetch(`/api/v1/admin/orders?status=${status}&q=${encodeURIComponent(query)}&page=${page}&limit=15`, {
       headers: authHeaders,
@@ -455,7 +482,7 @@ export default function AdminPage() {
   // Payouts Pagination
   const loadPayouts = (page = 1) => {
     const authHeaders = getAdminHeaders();
-    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
+    if (!authHeaders['Authorization'] && !authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
     fetch(`/api/v1/payout/admin?page=${page}&limit=15`, {
       headers: authHeaders,
@@ -474,7 +501,7 @@ export default function AdminPage() {
   // Filter Audit Logs with Pagination
   const loadFilteredLogs = (days = logDays, entity = logEntityFilter, page = 1) => {
     const authHeaders = getAdminHeaders();
-    if (!authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
+    if (!authHeaders['Authorization'] && !authHeaders['x-user-id'] && !authHeaders['x-user-email']) return;
 
     fetch(`/api/v1/admin/audit-logs?days=${days}&entityType=${entity}&page=${page}&limit=20`, {
       headers: authHeaders,
@@ -688,7 +715,14 @@ export default function AdminPage() {
         headers: getAdminHeaders(),
       });
       const data = await res.json();
-      setOmniResults(data);
+      const normalized = {
+        totalMatches: data.totalMatches || 0,
+        members: data.members || data.results?.members || [],
+        orders: data.orders || data.results?.orders || [],
+        payouts: data.payouts || data.results?.payouts || [],
+        ledger: data.ledger || data.results?.ledger || [],
+      };
+      setOmniResults(normalized);
     } catch (e) {
       console.error('Omni search error:', e);
     } finally {
@@ -747,23 +781,41 @@ export default function AdminPage() {
   const handleBulkShipSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkShipInput.trim()) {
-      showToast('Masukkan daftar resi pengiriman.', 'error');
+      showToast('Masukkan data manifest resi pengiriman.', 'error');
       return;
     }
     const lines = bulkShipInput.split('\n').map((l) => l.trim()).filter(Boolean);
-    const shipments: Array<{ orderNumber: string; courierName: string; trackingNumber: string }> = [];
+    const shipments: Array<{ orderNumber: string; courierName?: string; trackingNumber: string }> = [];
     for (const line of lines) {
-      const parts = line.split(',').map((p) => p.trim());
+      const lower = line.toLowerCase();
+      if ((lower.includes('order') || lower.includes('pesanan')) && (lower.includes('resi') || lower.includes('kurir'))) {
+        continue;
+      }
+      const delimiter = line.includes('\t')
+        ? '\t'
+        : line.includes(';')
+        ? ';'
+        : line.includes('|')
+        ? '|'
+        : ',';
+      const parts = line.split(delimiter).map((p) => p.trim().replace(/^["']|["']$/g, ''));
       if (parts.length >= 2) {
-        shipments.push({
-          orderNumber: parts[0],
-          courierName: parts.length >= 3 ? parts[1] : 'JNE Express',
-          trackingNumber: parts.length >= 3 ? parts[2] : parts[1],
-        });
+        if (parts.length >= 3) {
+          shipments.push({
+            orderNumber: parts[0],
+            courierName: parts[1] || 'JNE Express',
+            trackingNumber: parts[2],
+          });
+        } else {
+          shipments.push({
+            orderNumber: parts[0],
+            trackingNumber: parts[1],
+          });
+        }
       }
     }
     if (shipments.length === 0) {
-      showToast('Format input tidak valid. Gunakan format baris: NO_ORDER, KURIR, NO_RESI', 'error');
+      showToast('Format input tidak valid. Gunakan format baris: NO_ORDER, KURIR, NO_RESI (atau salin langsung dari tabel Excel).', 'error');
       return;
     }
     setBulkShipLoading(true);
@@ -772,13 +824,12 @@ export default function AdminPage() {
       const res = await fetch('/api/v1/admin/orders/bulk-ship', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ shipments, actorUserId: authHeaders['x-user-id'] }),
+        body: JSON.stringify({ shipments, rawText: bulkShipInput }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memproses pengiriman massal.');
+      setBulkShipReport(data);
       showToast(data.message || 'Pengiriman massal berhasil diproses!', 'success');
-      setBulkShipModalOpen(false);
-      setBulkShipInput('');
       loadDashboardData();
       loadFilteredOrders();
     } catch (err: any) {
@@ -799,6 +850,10 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) {
         setAgents(data.agents || []);
+        if (data.agents && monitoringAgent) {
+          const fresh = (data.agents || []).find((ag: any) => ag.id === monitoringAgent.id);
+          if (fresh) setMonitoringAgent(fresh);
+        }
         setAgentApplications(data.applications || []);
         setRoutableOrders(data.routableOrders || []);
         if (data.config) {
@@ -875,6 +930,49 @@ export default function AdminPage() {
     });
   };
 
+  const lookupCandidateMember = async (code: string) => {
+    const cleanCode = code?.trim().toUpperCase();
+    if (!cleanCode) return;
+    setCandidateChecking(true);
+    setCandidateError('');
+    try {
+      const authHeaders = getAdminHeaders();
+      const res = await fetch(`/api/v1/admin/agents?lookupMemberCode=${encodeURIComponent(cleanCode)}`, {
+        headers: authHeaders,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCandidateMember(null);
+        setCandidateError(data.error || 'Mitra tidak ditemukan dengan ID tersebut.');
+      } else {
+        setCandidateMember(data.member);
+        setCandidateError('');
+      }
+    } catch {
+      setCandidateError('Gagal memverifikasi ID calon agen.');
+    } finally {
+      setCandidateChecking(false);
+    }
+  };
+
+  const handleApplyCandidateData = () => {
+    if (!candidateMember) return;
+    const hasCity = Boolean(candidateMember.city && candidateMember.city.trim() && candidateMember.city !== '-');
+    const hasProvince = Boolean(candidateMember.province && candidateMember.province.trim() && candidateMember.province !== '-');
+    const hasAddress = Boolean(candidateMember.addressDetail && candidateMember.addressDetail.trim() && candidateMember.addressDetail !== '-');
+
+    if (hasCity) setAppointCity(candidateMember.city);
+    if (hasProvince) setAppointProvince(candidateMember.province);
+    if (hasAddress) setAppointAddress(candidateMember.addressDetail);
+    setCandidateConfirmed(true);
+
+    if (hasCity || hasAddress) {
+      showToast(`Data wilayah calon agen ${candidateMember.displayName} (${candidateMember.city || ''}) berhasil dimuat ke formulir!`, 'success');
+    } else {
+      showToast(`Profil mitra belum memiliki data domisili tersimpan. Silakan isi kota dan alamat di formulir secara manual.`, 'info');
+    }
+  };
+
   const handleDirectAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appointMemberCode || !appointCity) {
@@ -906,7 +1004,10 @@ export default function AdminPage() {
       setAppointCity('');
       setAppointProvince('');
       setAppointAddress('');
-      loadAgents();
+      setCandidateMember(null);
+      setCandidateConfirmed(false);
+      await loadAgents();
+      setAgentSubTab('LIST');
     } catch (err: any) {
       showToast(err.message || 'Gagal mengangkat agen.', 'error');
     } finally {
@@ -974,14 +1075,46 @@ export default function AdminPage() {
     }
   };
 
-  const handleApproveDepositTopup = (transactionId: string) => {
+  const handleApproveDepositTopup = (topupOrId: any) => {
+    const isObj = typeof topupOrId === 'object' && topupOrId !== null;
+    const transactionId = isObj ? topupOrId.id : topupOrId;
+    const memberName = isObj ? (topupOrId.member?.displayName || topupOrId.member?.legalName || topupOrId.member?.memberCode || 'Mitra') : 'Mitra';
+    const amount = isObj ? (topupOrId.amount || 0) : 0;
+    const uniqueCode = isObj ? (topupOrId.uniqueCode || 0) : 0;
+    const transferTotal = amount + uniqueCode;
+    const bankName = isObj ? topupOrId.bankName : '';
+    const accNum = isObj ? topupOrId.accountNumber : '';
+
     showConfirm({
-      title: 'Setujui Topup Deposit Agen',
-      message: 'Apakah Anda yakin ingin menyetujui mutasi topup saldo deposit agen ini? Saldo deposit agen akan ditambahkan ke akun agen.',
+      title: 'Verifikasi & Persetujuan Topup Saldo Deposit',
+      message: `Pastikan dana transfer sebesar Rp${transferTotal.toLocaleString('id-ID')} dengan kode unik (+Rp${uniqueCode}) dari ${memberName} sudah benar-benar MASUK ke mutasi rekening bank perusahaan.`,
+      detail: (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs space-y-2 text-stone-800 text-left">
+          <div className="font-bold text-amber-950 flex items-center gap-1.5 border-b border-amber-200 pb-1">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Pemeriksaan Mutasi Rekening Bank</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div>Mitra Pengirim: <strong>{memberName}</strong></div>
+            <div>Bank Asal: <strong>{bankName || '-'}</strong> ({accNum || '-'})</div>
+            <div>Nominal Saldo: <strong>Rp{amount.toLocaleString('id-ID')}</strong></div>
+            <div>Kode Unik Verifikasi: <strong className="text-amber-800 font-mono">+Rp{uniqueCode}</strong></div>
+          </div>
+          <div className="pt-2 border-t border-amber-200 flex items-center justify-between">
+            <span className="font-semibold text-stone-700">Total Wajib Ada di Mutasi:</span>
+            <span className="font-mono font-bold text-emerald-800 text-sm">
+              Rp{transferTotal.toLocaleString('id-ID')}
+            </span>
+          </div>
+          <div className="text-[10px] text-amber-800 italic">
+            *Setelah Anda klik setujui, saldo deposit belanja/agen akan langsung ditambahkan ke akun mitra dan siap digunakan untuk transaksi.
+          </div>
+        </div>
+      ),
       variant: 'emerald',
       icon: 'shield',
-      confirmText: 'Ya, Setujui Topup',
-      cancelText: 'Batal',
+      confirmText: 'Ya, Dana Sudah Masuk & Setujui',
+      cancelText: 'Batal / Cek Lagi',
       onConfirm: async () => {
         const authHeaders = getAdminHeaders();
         const res = await fetch('/api/v1/admin/agents', {
@@ -994,10 +1127,37 @@ export default function AdminPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Gagal menyetujui topup deposit.');
-        showToast(data.message || 'Topup saldo deposit agen berhasil disetujui!', 'success');
+        showToast(data.message || 'Topup saldo deposit berhasil disetujui & saldo telah aktif!', 'success');
         loadAgents();
       },
     });
+  };
+
+  const handleRejectDepositTopup = async () => {
+    if (!rejectTopupId || !rejectTopupReason.trim()) return;
+    setRejectTopupSubmitting(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'REJECT_TOPUP',
+          transactionId: rejectTopupId,
+          reason: rejectTopupReason,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menolak topup deposit.');
+      showToast(data.message || 'Pengajuan topup berhasil ditolak.', 'success');
+      setRejectTopupId(null);
+      setRejectTopupReason('');
+      loadAgents();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menolak topup.', 'error');
+    } finally {
+      setRejectTopupSubmitting(false);
+    }
   };
 
   const handleAwardReward = async (e: React.FormEvent) => {
@@ -1235,6 +1395,7 @@ export default function AdminPage() {
                   // Ack notification badges when user opens relevant tab
                   if (item.id === 'ORDERS') ackAdminOrders();
                   if (item.id === 'PAYOUTS') ackAdminPayout();
+                  if (item.id === 'STOCKIST' || item.id === 'NETWORK') ackAdminMisc();
                 }}
                 title={sidebarCollapsed ? item.label : undefined}
                 className={`w-full relative flex items-center rounded-xl transition-all duration-150 text-xs ${sidebarCollapsed ? 'justify-center p-3' : 'px-3.5 py-2.5 gap-3'
@@ -1407,7 +1568,9 @@ export default function AdminPage() {
                           key={o.id}
                           onClick={() => {
                             setActiveTab('ORDERS');
+                            setOrderStatusFilter('ALL');
                             setOrderSearchQuery(o.orderNumber);
+                            loadFilteredOrders('ALL', o.orderNumber);
                             setShowOmniDropdown(false);
                           }}
                           className="p-2.5 rounded-lg border border-varena-taupe/20 hover:border-varena-gold cursor-pointer bg-varena-ivory-light/30 transition flex justify-between items-center"
@@ -1416,11 +1579,11 @@ export default function AdminPage() {
                             <div className="font-mono font-bold text-varena-espresso">{o.orderNumber}</div>
                             <div className="text-[10px] text-varena-taupe">{o.buyerName} · Rp{o.total?.toLocaleString('id-ID')}</div>
                             {o.trackingNumber && (
-                              <div className="text-[10px] text-blue-700 font-mono">Resi: {o.trackingNumber} ({o.courierName})</div>
+                              <div className="text-[10px] text-blue-700 font-mono">Resi: {o.trackingNumber} ({o.courierName || o.courier || '-'})</div>
                             )}
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-slate-100'} ${ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-slate-800'}`}>
-                            {formatOrderStatus(o.orderStatus)}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${ORDER_STATUS_BADGES[o.orderStatus || o.status]?.bg || 'bg-slate-100'} ${ORDER_STATUS_BADGES[o.orderStatus || o.status]?.text || 'text-slate-800'}`}>
+                            {formatOrderStatus(o.orderStatus || o.status)}
                           </span>
                         </div>
                       ))}
@@ -1446,7 +1609,7 @@ export default function AdminPage() {
                           className="p-2 rounded-lg border border-varena-taupe/20 hover:border-varena-gold cursor-pointer bg-white transition flex justify-between items-center"
                         >
                           <div>
-                            <span className="font-bold text-varena-espresso">{p.member?.displayName}</span> · <span className="font-mono text-emerald-800 font-bold">Rp{p.netAmount?.toLocaleString('id-ID')}</span>
+                            <span className="font-bold text-varena-espresso">{p.member?.displayName || p.memberName}</span> · <span className="font-mono text-emerald-800 font-bold">Rp{p.netAmount?.toLocaleString('id-ID')}</span>
                             <div className="text-[10px] text-varena-taupe">{p.bankName} - {p.accountNumberMasked} (a.n {p.accountHolder})</div>
                           </div>
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
@@ -1721,7 +1884,7 @@ export default function AdminPage() {
           {activeTab === 'ORDERS' && (
             <div className="space-y-6">
               {/* Summary Pills */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
                 <button
                   onClick={() => {
                     setOrderStatusFilter('ALL');
@@ -1748,6 +1911,25 @@ export default function AdminPage() {
                 >
                   <div className="text-[10px] uppercase">Menunggu Bayar</div>
                   <div className="text-xl font-bold font-serif text-amber-700">{ordersSummary?.pendingPayment || 0}</div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setOrderStatusFilter('MANUAL_CONFIRMATION');
+                    loadFilteredOrders('MANUAL_CONFIRMATION', orderSearchQuery);
+                  }}
+                  className={`p-3 rounded-xl border text-left transition ${orderStatusFilter === 'MANUAL_CONFIRMATION'
+                    ? 'border-blue-400 bg-blue-900 text-blue-100 font-semibold shadow-sm'
+                    : 'border-blue-200 bg-blue-50/70 text-blue-900 hover:border-blue-400'
+                    }`}
+                >
+                  <div className="text-[10px] uppercase font-bold text-blue-700">Verifikasi Transfer</div>
+                  <div className="text-xl font-bold font-serif text-blue-900 flex items-center justify-between">
+                    <span>{ordersSummary?.manualConfirmation || 0}</span>
+                    {(ordersSummary?.manualConfirmation || 0) > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                    )}
+                  </div>
                 </button>
 
                 <button
@@ -2022,14 +2204,21 @@ export default function AdminPage() {
                                 )}
                               </td>
                               <td className="py-2.5 px-3">
-                                <span
-                                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold block w-fit mb-1 border ${ORDER_STATUS_BADGES[o.orderStatus]?.bg || 'bg-stone-50'
-                                    } ${ORDER_STATUS_BADGES[o.orderStatus]?.text || 'text-stone-800'
-                                    } ${ORDER_STATUS_BADGES[o.orderStatus]?.border || 'border-stone-200'
-                                    }`}
-                                >
-                                  {formatOrderStatus(o.orderStatus)}
-                                </span>
+                                {(() => {
+                                  const badge = getOrderStatusBadge(o.orderStatus, o.paymentConfirmationStatus);
+                                  return (
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold block w-fit mb-1 border ${badge.bg} ${badge.text} ${badge.border}`}
+                                    >
+                                      {formatOrderStatus(o.orderStatus, o.paymentConfirmationStatus)}
+                                    </span>
+                                  );
+                                })()}
+                                {o.paymentConfirmationStatus === 'SUBMITTED' && o.orderStatus === 'PENDING_PAYMENT' && (
+                                  <div className="text-[10px] font-semibold text-blue-700 flex items-center gap-1 mt-0.5">
+                                    <span>⬆ Bukti transfer dikirim mitra</span>
+                                  </div>
+                                )}
                                 {o.trackingNumber && (
                                   <div className="text-[10px] font-mono text-varena-taupe">
                                     {o.courierName}: <strong>{o.trackingNumber}</strong>
@@ -2038,7 +2227,17 @@ export default function AdminPage() {
                               </td>
                               <td className="py-2.5 px-3 text-right">
                                 {/* Alur Aksi Berdasarkan Status */}
-                                {o.orderStatus === 'PENDING_PAYMENT' && (
+                                {o.orderStatus === 'PENDING_PAYMENT' && o.paymentConfirmationStatus === 'SUBMITTED' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmOrderPayment(o.id, o.orderNumber)}
+                                    disabled={actionLoading}
+                                    className="px-2.5 py-1.5 rounded bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition shadow-sm whitespace-nowrap"
+                                  >
+                                    ✓ Verifikasi & Setujui
+                                  </button>
+                                )}
+                                {o.orderStatus === 'PENDING_PAYMENT' && o.paymentConfirmationStatus !== 'SUBMITTED' && (
                                   <button
                                     type="button"
                                     onClick={() => handleConfirmOrderPayment(o.id, o.orderNumber)}
@@ -2435,57 +2634,151 @@ export default function AdminPage() {
               {/* Modal Bulk Input Resi Pengiriman Massal */}
               {bulkShipModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                  <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-varena-gold/40 max-h-[90vh] overflow-y-auto">
+                  <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl border border-varena-gold/40 max-h-[90vh] overflow-y-auto">
                     <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
                       <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
                         <Truck className="w-5 h-5 text-varena-gold" />
                         <span>Input Resi Pengiriman Massal (Bulk Shipping)</span>
                       </h3>
                       <button
-                        onClick={() => setBulkShipModalOpen(false)}
+                        onClick={() => {
+                          setBulkShipModalOpen(false);
+                          setBulkShipReport(null);
+                        }}
                         className="text-varena-taupe hover:text-varena-espresso text-sm font-bold"
                       >
                         ✕
                       </button>
                     </div>
 
-                    <p className="text-xs text-varena-taupe leading-relaxed">
-                      Tempel data resi dari manifest ekspedisi logistik. Satu pesanan per baris dengan format CSV:<br />
-                      <code className="font-mono bg-varena-ivory px-1.5 py-0.5 rounded text-[11px] font-bold text-varena-espresso">NOMOR_PESANAN, NAMA_KURIR, NOMOR_RESI</code>
-                    </p>
+                    {bulkShipReport ? (
+                      /* Tampilan Laporan Hasil Pemrosesan Resi */
+                      <div className="space-y-4 text-xs">
+                        <div className="p-3.5 rounded-xl bg-varena-ivory border border-varena-gold/30">
+                          <p className="font-semibold text-varena-espresso mb-2">{bulkShipReport.message}</p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                              <div className="font-bold text-base text-emerald-700">{bulkShipReport.shippedCount || 0}</div>
+                              <div className="text-[11px] text-emerald-600 font-medium">Terkirim</div>
+                            </div>
+                            <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                              <div className="font-bold text-base text-blue-700">{bulkShipReport.updatedCount || 0}</div>
+                              <div className="text-[11px] text-blue-600 font-medium">Resi Diperbarui</div>
+                            </div>
+                            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                              <div className="font-bold text-base text-amber-700">{bulkShipReport.skippedCount || 0}</div>
+                              <div className="text-[11px] text-amber-600 font-medium">Dilewati</div>
+                            </div>
+                          </div>
+                        </div>
 
-                    <form onSubmit={handleBulkShipSubmit} className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-semibold text-varena-espresso mb-1">
-                          Data Resi Ekspedisi (Baris per Baris) *
-                        </label>
-                        <textarea
-                          rows={6}
-                          required
-                          value={bulkShipInput}
-                          onChange={(e) => setBulkShipInput(e.target.value)}
-                          placeholder={`VRN-ORD-202611-1001, JNE Express, JNE882019482ID\nVRN-ORD-202611-1002, SiCepat, SCP992100412ID\nVRN-ORD-202611-1003, J&T Express, JT100293884ID`}
-                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-xs focus:outline-none focus:border-varena-gold bg-slate-50"
-                        />
-                      </div>
+                        {/* Rincian Baris */}
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1 font-mono text-[11px]">
+                          {bulkShipReport.shippedOrders?.map((s: any, idx: number) => (
+                            <div key={`ship-${idx}`} className="p-2 bg-emerald-50/70 border border-emerald-200 rounded-lg flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-emerald-900">{s.orderNumber}</span>
+                                <span className="text-emerald-700 ml-2">({s.courierName} - {s.trackingNumber})</span>
+                              </div>
+                              <span className="px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded font-semibold text-[10px]">TERKIRIM</span>
+                            </div>
+                          ))}
+                          {bulkShipReport.updatedOrders?.map((u: any, idx: number) => (
+                            <div key={`upd-${idx}`} className="p-2 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-blue-900">{u.orderNumber}</span>
+                                <span className="text-blue-700 ml-2">({u.courierName} - {u.trackingNumber})</span>
+                              </div>
+                              <span className="px-2 py-0.5 bg-blue-200 text-blue-800 rounded font-semibold text-[10px]">DIPERBARUI</span>
+                            </div>
+                          ))}
+                          {bulkShipReport.skippedOrders?.map((sk: any, idx: number) => (
+                            <div key={`skip-${idx}`} className="p-2 bg-amber-50/70 border border-amber-200 rounded-lg flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-bold text-amber-900">{sk.orderNumber}</span>
+                                <div className="text-amber-800 text-[10px] mt-0.5 font-sans">{sk.reason}</div>
+                              </div>
+                              <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded font-semibold text-[10px] whitespace-nowrap">DILEWATI</span>
+                            </div>
+                          ))}
+                        </div>
 
-                      <div className="flex gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setBulkShipModalOpen(false)}
-                          className="flex-1 py-2 rounded-lg border border-varena-taupe/30 text-varena-taupe hover:bg-varena-ivory transition"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={bulkShipLoading}
-                          className="flex-1 py-2 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
-                        >
-                          {bulkShipLoading ? 'Memproses Resi...' : 'Proses Pengiriman Massal'}
-                        </button>
+                        <div className="flex gap-2 pt-2 border-t border-varena-taupe/20">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBulkShipReport(null);
+                              setBulkShipInput('');
+                            }}
+                            className="flex-1 py-2 rounded-lg border border-varena-taupe/30 text-varena-espresso font-semibold hover:bg-varena-ivory transition"
+                          >
+                            Input Manifest Lagi
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBulkShipModalOpen(false);
+                              setBulkShipReport(null);
+                              setBulkShipInput('');
+                            }}
+                            className="flex-1 py-2 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                          >
+                            Selesai & Tutup
+                          </button>
+                        </div>
                       </div>
-                    </form>
+                    ) : (
+                      /* Form Input Resi */
+                      <form onSubmit={handleBulkShipSubmit} className="space-y-3 text-xs">
+                        <div className="p-3 bg-varena-ivory rounded-xl border border-varena-gold/30 text-varena-espresso space-y-1">
+                          <div className="font-semibold flex items-center gap-1.5">
+                            <span className="text-varena-gold font-bold">ℹ️</span> Format Input Manifest (CSV atau Salin dari Excel):
+                          </div>
+                          <p className="text-[11px] text-varena-taupe leading-relaxed">
+                            Tempel data resi per baris. Sistem otomatis mengenali pemisah koma (<code className="font-mono bg-white px-1 rounded">,</code>), titik-koma (<code className="font-mono bg-white px-1 rounded">;</code>), atau tab Excel:
+                          </p>
+                          <div className="bg-white p-2 rounded-lg font-mono text-[11px] border border-varena-taupe/20 text-varena-espresso">
+                            NO_PESANAN, NAMA_KURIR, NOMOR_RESI<br />
+                            <span className="text-varena-taupe">// atau 2 kolom (kurir otomatis terdeteksi):</span><br />
+                            NO_PESANAN, NOMOR_RESI
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block font-semibold text-varena-espresso mb-1">
+                            Data Resi Ekspedisi (Baris per Baris) *
+                          </label>
+                          <textarea
+                            rows={7}
+                            required
+                            value={bulkShipInput}
+                            onChange={(e) => setBulkShipInput(e.target.value)}
+                            placeholder={`VRN-ORD-2026-0005, JNE Express, JNE882019482ID\nVRN-ORD-2026-0006, SiCepat, SCP992100412ID\nVRN-ORD-2026-0007, J&T Express, JT100293884ID`}
+                            className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-xs focus:outline-none focus:border-varena-gold bg-slate-50 leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBulkShipModalOpen(false);
+                              setBulkShipReport(null);
+                            }}
+                            className="flex-1 py-2 rounded-lg border border-varena-taupe/30 text-varena-taupe hover:bg-varena-ivory transition"
+                          >
+                            Batal
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={bulkShipLoading}
+                            className="flex-1 py-2 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold hover:bg-varena-espresso-dark transition shadow"
+                          >
+                            {bulkShipLoading ? 'Memvalidasi & Memproses...' : 'Proses Pengiriman Massal'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}
@@ -3263,103 +3556,235 @@ export default function AdminPage() {
                 >
                   Aturan Keagenan (MOQ)
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentSubTab('RANKING')}
+                  className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-1.5 ${agentSubTab === 'RANKING'
+                      ? 'bg-varena-espresso text-varena-gold shadow'
+                      : 'text-slate-600 hover:bg-varena-ivory-light'
+                    }`}
+                >
+                  <span>🏆 Board Ranking Agen</span>
+                </button>
               </div>
 
-              {/* SUBTAB 1: DAFTAR AGEN AKTIF */}
+              {/* SUBTAB 1: DAFTAR AGEN AKTIF & MONITORING PROGRES */}
               {agentSubTab === 'LIST' && (
-                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
-                    <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
-                      <Store className="w-4 h-4 text-varena-gold" />
-                      <span>Daftar Agen Resmi VARENA Aktif</span>
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={loadAgents}
-                      disabled={agentLoading}
-                      className="text-xs text-varena-taupe hover:text-varena-espresso font-semibold flex items-center gap-1"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${agentLoading ? 'animate-spin' : ''}`} />
-                      <span>Segarkan</span>
-                    </button>
+                <div className="space-y-4">
+                  {/* KPI Ringkasan Jaringan Keagenan */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="bg-white p-4 rounded-2xl border border-varena-taupe/20 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between text-varena-taupe text-[11px] font-semibold">
+                        <span>Total Sisa Stok Fisik</span>
+                        <Package className="w-4 h-4 text-emerald-700" />
+                      </div>
+                      <div className="text-2xl font-bold font-serif text-varena-espresso">
+                        {agents.reduce((sum: number, a: any) => sum + (a.inventory || 0), 0)} <span className="text-xs font-normal text-slate-500 font-sans">Box</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Tersebar di {agents.length} agen aktif
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-varena-taupe/20 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between text-varena-taupe text-[11px] font-semibold">
+                        <span>Total Produk Terjual</span>
+                        <TrendingUp className="w-4 h-4 text-blue-700" />
+                      </div>
+                      <div className="text-2xl font-bold font-serif text-varena-espresso">
+                        {agents.reduce((sum: number, a: any) => sum + (a.totalSoldBoxes || 0), 0)} <span className="text-xs font-normal text-slate-500 font-sans">Box</span>
+                      </div>
+                      <div className="text-[10px] text-blue-700 font-medium">
+                        Didistribusikan ke konsumen/mitra
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-varena-taupe/20 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between text-varena-taupe text-[11px] font-semibold">
+                        <span>Total Omset Penjualan</span>
+                        <DollarSign className="w-4 h-4 text-varena-gold" />
+                      </div>
+                      <div className="text-xl font-bold font-mono text-varena-espresso">
+                        Rp{agents.reduce((sum: number, a: any) => sum + (a.totalSalesNominal || 0), 0).toLocaleString('id-ID')}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        Nilai pesanan terselesaikan
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-varena-taupe/20 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between text-varena-taupe text-[11px] font-semibold">
+                        <span>Total Reward Diberikan</span>
+                        <Award className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="text-xl font-bold font-mono text-amber-900">
+                        Rp{agents.reduce((sum: number, a: any) => sum + (a.totalRewardValue || 0), 0).toLocaleString('id-ID')}
+                      </div>
+                      <div className="text-[10px] text-amber-700 font-medium">
+                        {agents.reduce((sum: number, a: any) => sum + (a.rewardsCount || 0), 0)} Penghargaan resmi kantor
+                      </div>
+                    </div>
                   </div>
 
-                  {agents.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left min-w-[750px]">
-                        <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                          <tr>
-                            <th className="py-2.5 px-3">Kode Mitra</th>
-                            <th className="py-2.5 px-3">Nama Agen</th>
-                            <th className="py-2.5 px-3">Wilayah / Kota</th>
-                            <th className="py-2.5 px-3">Stok Gudang</th>
-                            <th className="py-2.5 px-3">Saldo Deposit</th>
-                            <th className="py-2.5 px-3">Diskon Agen</th>
-                            <th className="py-2.5 px-3 text-right">Aksi Manajemen</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-varena-taupe/10">
-                          {agents.map((a: any) => (
-                            <tr key={a.id} className="hover:bg-varena-ivory-light/40">
-                              <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{a.memberCode}</td>
-                              <td className="py-2.5 px-3">
-                                <div className="font-semibold text-varena-espresso">{a.displayName}</div>
-                                <div className="text-[10px] text-varena-taupe font-mono">{a.phone || a.email || '-'}</div>
-                              </td>
-                              <td className="py-2.5 px-3 font-medium text-slate-700">
-                                <div>{a.city}</div>
-                                <div className="text-[10px] text-varena-taupe">{a.province}</div>
-                              </td>
-                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">
-                                {a.inventory} Box
-                              </td>
-                              <td className="py-2.5 px-3 font-mono font-semibold text-varena-espresso">
-                                Rp{(a.depositBalance || 0).toLocaleString('id-ID')}
-                              </td>
-                              <td className="py-2.5 px-3 font-mono text-amber-900 font-medium">
-                                {a.discountType === 'PERCENTAGE'
-                                  ? `${a.discountValue}%`
-                                  : `Rp${(a.discountValue || 0).toLocaleString('id-ID')}/box`}
-                              </td>
-                              <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedRewardAgent(a);
-                                    setRewardTitle('');
-                                    setRewardDesc('');
-                                    setRewardValue(1000000);
-                                    setRewardModalOpen(true);
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-amber-600 text-white font-semibold text-[11px] hover:bg-amber-700 transition inline-flex items-center gap-1 shadow-xs"
-                                >
-                                  <Award className="w-3 h-3" />
-                                  <span>Beri Reward</span>
-                                </button>
-                                {a.phone && (
-                                  <a
-                                    href={`https://wa.me/${a.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
-                                      `Halo Agen ${a.displayName} (${a.memberCode}), salam dari Manajemen Pusat VARENA terkait wilayah keagenan ${a.city}.`
-                                    )}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="px-2.5 py-1 rounded bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition inline-flex items-center gap-1 shadow-xs"
-                                  >
-                                    <Send className="w-3 h-3" />
-                                    <span>WA</span>
-                                  </a>
-                                )}
-                              </td>
+                  {/* Tabel Daftar Agen dengan Kolom Progres Stok & Penjualan */}
+                  <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                          <Store className="w-4 h-4 text-varena-gold" />
+                          <span>Monitoring Stok &amp; Progres Pencapaian Agen</span>
+                        </h3>
+                        <p className="text-xs text-varena-taupe mt-0.5">
+                          Pantau stok real-time, volume penjualan, omset, dan riwayat reward tiap agen resmi.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={loadAgents}
+                        disabled={agentLoading}
+                        className="text-xs text-varena-taupe hover:text-varena-espresso font-semibold flex items-center gap-1 bg-stone-50 hover:bg-stone-100 px-3 py-1.5 rounded-lg border border-stone-200 transition"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${agentLoading ? 'animate-spin' : ''}`} />
+                        <span>Segarkan Data</span>
+                      </button>
+                    </div>
+
+                    {agents.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left min-w-[980px]">
+                          <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                            <tr>
+                              <th className="py-2.5 px-3">Kode &amp; Agen</th>
+                              <th className="py-2.5 px-3">Wilayah / Kota</th>
+                              <th className="py-2.5 px-3">Sisa Stok Fisik</th>
+                              <th className="py-2.5 px-3">Total Terjual</th>
+                              <th className="py-2.5 px-3">Nominal Penjualan</th>
+                              <th className="py-2.5 px-3">Reward Diterima</th>
+                              <th className="py-2.5 px-3">Saldo Kas Deposit</th>
+                              <th className="py-2.5 px-3 text-right">Aksi &amp; Detail</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 text-xs text-varena-taupe">
-                      Belum ada agen resmi terdaftar. Anda dapat menyetujui pengajuan mitra atau menggunakan tab Penunjukan Langsung.
-                    </div>
-                  )}
+                          </thead>
+                          <tbody className="divide-y divide-varena-taupe/10">
+                            {agents.map((a: any) => (
+                              <tr key={a.id} className="hover:bg-varena-ivory-light/40 transition">
+                                <td className="py-2.5 px-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-bold text-varena-espresso">{a.memberCode}</span>
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                      a.type === 'MASTER_AGENT' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {a.type === 'MASTER_AGENT' ? 'MASTER' : 'WILAYAH'}
+                                    </span>
+                                  </div>
+                                  <div className="font-semibold text-varena-espresso text-sm mt-0.5">{a.displayName}</div>
+                                  <div className="text-[10px] text-varena-taupe font-mono">{a.phone || a.email || '-'}</div>
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-slate-700">
+                                  <div className="font-semibold">{a.city}</div>
+                                  <div className="text-[10px] text-varena-taupe">{a.province}</div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-mono font-bold text-sm text-emerald-800 flex items-center gap-1.5">
+                                    <span>{a.inventory} Box</span>
+                                    {a.inventory < 10 ? (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-rose-100 text-rose-700 font-bold">
+                                        Menipis
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold">
+                                        Aman
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-stone-400 mt-0.5">
+                                    Pasokan Masuk: {a.totalRestockBoxes || 0} Box
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-mono font-bold text-sm text-blue-900">
+                                    {a.totalSoldBoxes || 0} Box
+                                  </div>
+                                  <div className="text-[10px] text-stone-400 mt-0.5">
+                                    {a.completedOrdersCount || 0} pesanan selesai
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-mono font-bold text-sm text-varena-espresso">
+                                    Rp{(a.totalSalesNominal || 0).toLocaleString('id-ID')}
+                                  </div>
+                                  <div className="text-[10px] text-emerald-700 font-medium">
+                                    Omset Terdistribusi
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-bold text-amber-900 flex items-center gap-1">
+                                    <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>{a.rewardsCount || 0} Reward</span>
+                                  </div>
+                                  {a.totalRewardValue > 0 ? (
+                                    <div className="font-mono text-[11px] text-amber-700 font-semibold mt-0.5">
+                                      Valuasi: Rp{(a.totalRewardValue || 0).toLocaleString('id-ID')}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-stone-400 italic">Belum ada reward</div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">
+                                  Rp{(a.depositBalance || 0).toLocaleString('id-ID')}
+                                </td>
+                                <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMonitoringAgent(a);
+                                      setMonitoringTab('OVERVIEW');
+                                      setMonitoringModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-varena-espresso text-varena-gold font-bold text-[11px] hover:bg-varena-espresso-dark transition inline-flex items-center gap-1 shadow-xs"
+                                    title="Monitor Progres, Stok & Reward Agen"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>Detail &amp; Progres</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedRewardAgent(a);
+                                      setRewardTitle('');
+                                      setRewardDesc('');
+                                      setRewardValue(1000000);
+                                      setRewardModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-semibold text-[11px] hover:bg-amber-700 transition inline-flex items-center gap-1 shadow-xs"
+                                  >
+                                    <Award className="w-3 h-3" />
+                                    <span>Beri Reward</span>
+                                  </button>
+                                  {a.phone && (
+                                    <a
+                                      href={`https://wa.me/${a.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
+                                        `Halo Agen ${a.displayName} (${a.memberCode}), salam dari Manajemen Pusat VARENA terkait stok dan perkembangan penjualan keagenan wilayah ${a.city}.`
+                                      )}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-semibold text-[11px] hover:bg-emerald-800 transition inline-flex items-center gap-1 shadow-xs"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      <span>WA</span>
+                                    </a>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-xs text-varena-taupe">
+                        Belum ada agen resmi terdaftar. Anda dapat menyetujui pengajuan mitra atau menggunakan tab Penunjukan Langsung.
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -3539,59 +3964,106 @@ export default function AdminPage() {
                   <div>
                     <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-varena-gold" />
-                      <span>Verifikasi Pengajuan Topup Saldo Deposit Agen</span>
+                      <span>Verifikasi Pengajuan Topup Saldo Deposit</span>
                     </h3>
                     <p className="text-xs text-varena-taupe mt-1">
-                      Agen menyetor dana via transfer bank untuk mengisi saldo kas deposit yang digunakan belanja restock grosir.
+                      Verifikasi transfer bank dari agen &amp; mitra. Cocokkan nominal + kode unik dengan mutasi rekening BRI sebelum menyetujui.
                     </p>
                   </div>
 
                   {pendingAgentTopups.length > 0 ? (
                     <div className="divide-y divide-varena-taupe/10">
-                      {pendingAgentTopups.map((topup: any) => (
-                        <div key={topup.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
+                      {pendingAgentTopups.map((topup: any) => {
+                        const transferTotal = (topup.amount || 0) + (topup.uniqueCode || 0);
+                        const isShoppingTopup = topup.type === 'SHOPPING_TOPUP';
+                        return (
+                          <div key={topup.id} className="py-5 space-y-3">
+                            {/* Top row: name + badge */}
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="font-bold text-sm text-varena-espresso">
                                 {topup.member?.displayName} ({topup.member?.memberCode})
                               </span>
-                              <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold font-mono">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isShoppingTopup ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {isShoppingTopup ? 'DEPOSIT BELANJA MITRA' : 'DEPOSIT AGEN'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800 font-bold">
                                 PENDING REVIEW
                               </span>
                             </div>
-                            <div className="text-xs text-varena-taupe mt-0.5">
-                              Diajukan: {new Date(topup.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · Bank Pengirim: <strong>{topup.bankName || '-'}</strong> (Rek: {topup.accountNumber || '-'})
+
+                            {/* Detail boxes */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                              <div className="bg-stone-50 rounded-xl p-3">
+                                <div className="text-varena-taupe mb-0.5">Nominal Deposit</div>
+                                <div className="font-mono font-bold text-emerald-800 text-sm">
+                                  Rp{(topup.amount || 0).toLocaleString('id-ID')}
+                                </div>
+                              </div>
+                              <div className="bg-stone-50 rounded-xl p-3">
+                                <div className="text-varena-taupe mb-0.5">Kode Unik</div>
+                                <div className="font-mono font-bold text-varena-espresso text-sm">
+                                  +Rp{(topup.uniqueCode || 0).toLocaleString('id-ID')}
+                                </div>
+                              </div>
+                              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 col-span-2">
+                                <div className="text-amber-700 mb-0.5 font-semibold">Total Harus Diterima di BRI</div>
+                                <div className="font-mono font-bold text-amber-900 text-base">
+                                  Rp{transferTotal.toLocaleString('id-ID')}
+                                </div>
+                                <div className="text-[10px] text-amber-600">Cocokkan dengan mutasi rekening BRI 3065 0102 4471 539</div>
+                              </div>
+                            </div>
+
+                            {/* Bank info */}
+                            <div className="text-[11px] text-varena-taupe">
+                              Diajukan: {new Date(topup.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              {' · '}Bank Pengirim: <strong>{topup.bankName || '-'}</strong> (Rek: {topup.accountNumber || '-'})
                             </div>
                             {topup.notes && (
-                              <div className="text-[11px] text-slate-600 mt-1 font-mono">
+                              <div className="text-[11px] text-slate-600 font-mono bg-slate-50 px-2 py-1 rounded">
                                 Ref: {topup.notes}
                               </div>
                             )}
-                          </div>
 
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <span className="text-[11px] text-varena-taupe block">Nominal Topup</span>
-                              <span className="font-mono text-base font-bold text-emerald-800">
-                                Rp{(topup.amount || 0).toLocaleString('id-ID')}
-                              </span>
+                            {/* Proof image */}
+                            {topup.proofUrl && (
+                              <div className="mt-1">
+                                <div className="text-[11px] font-semibold text-stone-600 mb-1">Bukti Transfer:</div>
+                                <a href={topup.proofUrl} target="_blank" rel="noopener noreferrer">
+                                  <img
+                                    src={topup.proofUrl}
+                                    alt="Bukti Transfer"
+                                    className="max-h-32 rounded-lg border border-stone-200 hover:opacity-80 transition cursor-pointer"
+                                  />
+                                </a>
+                              </div>
+                            )}
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => handleApproveDepositTopup(topup)}
+                                disabled={agentLoading}
+                                className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition shadow"
+                              >
+                                ✓ Setujui &amp; Tambah Saldo
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setRejectTopupId(topup.id); setRejectTopupReason(''); }}
+                                className="px-4 py-2 rounded-xl bg-rose-100 text-rose-700 font-bold text-xs hover:bg-rose-200 transition"
+                              >
+                                ✕ Tolak
+                              </button>
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleApproveDepositTopup(topup.id)}
-                              disabled={agentLoading}
-                              className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition shadow"
-                            >
-                              Setujui &amp; Tambah Saldo
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
-                      Tidak ada permintaan topup deposit agen yang pending saat ini.
+                      Tidak ada permintaan topup deposit yang pending saat ini.
                     </div>
                   )}
                 </div>
@@ -3611,16 +4083,120 @@ export default function AdminPage() {
                   </p>
 
                   <form onSubmit={handleDirectAppointment} className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-2">
-                    <div>
-                      <label className="block font-semibold text-varena-espresso mb-1">Kode ID Mitra Terdaftar *</label>
-                      <input
-                        type="text"
-                        required
-                        value={appointMemberCode}
-                        onChange={(e) => setAppointMemberCode(e.target.value)}
-                        placeholder="Contoh: VRN-0002"
-                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 uppercase font-mono focus:outline-none focus:border-varena-gold text-sm"
-                      />
+                    <div className="sm:col-span-3">
+                      <label className="block font-semibold text-varena-espresso mb-1">
+                        Kode ID Mitra Terdaftar *
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            required
+                            value={appointMemberCode}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setAppointMemberCode(val);
+                              setCandidateConfirmed(false);
+                              if (val.length >= 4) {
+                                lookupCandidateMember(val);
+                              } else {
+                                setCandidateMember(null);
+                                setCandidateError('');
+                              }
+                            }}
+                            placeholder="Ketik ID Mitra (Contoh: VRN-0002)"
+                            className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 uppercase font-mono focus:outline-none focus:border-varena-gold text-sm"
+                          />
+                          {candidateChecking && (
+                            <span className="absolute right-3 top-2.5 text-xs text-stone-400">Mengecek...</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => lookupCandidateMember(appointMemberCode)}
+                          className="px-4 py-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold"
+                        >
+                          Cek ID
+                        </button>
+                      </div>
+
+                      {/* Notifikasi Error jika tidak ditemukan */}
+                      {candidateError && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          <span>{candidateError}</span>
+                        </div>
+                      )}
+
+                      {/* Kartu Verifikasi Calon Agen Otomatis */}
+                      {candidateMember && (
+                        <div className="mt-2.5 p-3.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 space-y-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-sm text-varena-espresso">
+                                  {candidateMember.displayName || candidateMember.legalName}
+                                </span>
+                                <span className="font-mono text-[11px] bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 font-bold">
+                                  {candidateMember.memberCode}
+                                </span>
+                                {candidateMember.isAgent ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-blue-100 text-blue-800 font-bold">
+                                    SUDAH AGEN ({candidateMember.agentType})
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-bold">
+                                    ✓ CALON AGEN TERVERIFIKASI
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-stone-600 mt-1">
+                                {candidateMember.phone && <span>📱 {candidateMember.phone} · </span>}
+                                Wilayah Terdaftar: <strong>{candidateMember.city || 'Belum diatur'}</strong> ({candidateMember.province || '-'})
+                              </div>
+                              {candidateMember.addressDetail && (
+                                <div className="text-[11px] text-stone-500 mt-0.5 italic">
+                                  Alamat Domisili: {candidateMember.addressDetail}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Tombol OK untuk Masukkan ke Rencana Agen */}
+                            <button
+                              type="button"
+                              onClick={handleApplyCandidateData}
+                              className={`px-4 py-2.5 rounded-lg font-bold text-xs transition shadow-sm flex items-center gap-1.5 flex-shrink-0 ${
+                                candidateConfirmed
+                                  ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                                  : 'bg-varena-gold text-varena-espresso hover:bg-varena-gold-hover'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>{candidateConfirmed ? '✓ Data Telah Diisi' : 'OK / Masukkan ke Rencana Agen'}</span>
+                            </button>
+                          </div>
+
+                          {candidateConfirmed && (
+                            <div className="pt-2 border-t border-amber-200">
+                              {candidateMember.city || candidateMember.addressDetail ? (
+                                <div className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                  <span>
+                                    ✓ Data otomatis dimasukkan ke formulir di bawah: Kota <strong>{candidateMember.city || '-'}</strong>, Provinsi <strong>{candidateMember.province || '-'}</strong>, Alamat: <em>{candidateMember.addressDetail || '-'}</em>.
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-[11px] text-amber-900 bg-amber-100/80 p-2.5 rounded-lg border border-amber-300 flex items-start gap-1.5">
+                                  <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-bold">Perhatian:</span> Mitra <strong>{candidateMember.displayName}</strong> belum memiliki riwayat alamat domisili tersimpan di sistem (status: Belum diatur). Silakan ketik nama <strong>Kota / Kabupaten</strong> dan <strong>Alamat Gudang</strong> pada formulir di bawah ini secara manual.
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -3636,25 +4212,39 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-varena-espresso mb-1">Kota / Kabupaten *</label>
+                      <label className="block font-semibold text-varena-espresso mb-1 flex items-center justify-between">
+                        <span>Kota / Kabupaten *</span>
+                        {appointCity && <span className="text-[10px] text-emerald-700 font-normal">✓ Terisi</span>}
+                      </label>
                       <input
                         type="text"
                         required
                         value={appointCity}
                         onChange={(e) => setAppointCity(e.target.value)}
-                        placeholder="Contoh: Surabaya"
-                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                        placeholder="Contoh: Jakarta Pusat / Surabaya"
+                        className={`w-full px-3 py-2 rounded-lg border text-sm transition focus:outline-none focus:border-varena-gold ${
+                          appointCity
+                            ? 'border-emerald-400 bg-emerald-50/20 text-varena-espresso font-semibold'
+                            : 'border-varena-taupe/30'
+                        }`}
                       />
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-varena-espresso mb-1">Provinsi</label>
+                      <label className="block font-semibold text-varena-espresso mb-1 flex items-center justify-between">
+                        <span>Provinsi</span>
+                        {appointProvince && <span className="text-[10px] text-emerald-700 font-normal">✓ Terisi</span>}
+                      </label>
                       <input
                         type="text"
                         value={appointProvince}
                         onChange={(e) => setAppointProvince(e.target.value)}
-                        placeholder="Contoh: Jawa Timur"
-                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                        placeholder="Contoh: DKI Jakarta / Jawa Timur"
+                        className={`w-full px-3 py-2 rounded-lg border text-sm transition focus:outline-none focus:border-varena-gold ${
+                          appointProvince
+                            ? 'border-emerald-400 bg-emerald-50/20 text-varena-espresso font-semibold'
+                            : 'border-varena-taupe/30'
+                        }`}
                       />
                     </div>
 
@@ -3690,13 +4280,20 @@ export default function AdminPage() {
                     </div>
 
                     <div className="sm:col-span-3">
-                      <label className="block font-semibold text-varena-espresso mb-1">Alamat Titik Distribusi / Gudang</label>
+                      <label className="block font-semibold text-varena-espresso mb-1 flex items-center justify-between">
+                        <span>Alamat Titik Distribusi / Gudang Agen</span>
+                        {appointAddress && <span className="text-[10px] text-emerald-700 font-normal">✓ Terisi</span>}
+                      </label>
                       <textarea
                         rows={2}
                         value={appointAddress}
                         onChange={(e) => setAppointAddress(e.target.value)}
-                        placeholder="Alamat ruko / rumah tempat operasional agen..."
-                        className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 focus:outline-none focus:border-varena-gold text-sm"
+                        placeholder="Alamat ruko / rumah tempat operasional dan gudang agen..."
+                        className={`w-full px-3 py-2 rounded-lg border text-sm transition focus:outline-none focus:border-varena-gold ${
+                          appointAddress
+                            ? 'border-emerald-400 bg-emerald-50/20 text-varena-espresso font-medium'
+                            : 'border-varena-taupe/30'
+                        }`}
                       />
                     </div>
 
@@ -3710,6 +4307,72 @@ export default function AdminPage() {
                       </button>
                     </div>
                   </form>
+
+                  {/* TABEL AGEN AKTIF HASIL PENUNJUKAN */}
+                  <div className="pt-6 border-t border-varena-taupe/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-serif font-bold text-sm text-varena-espresso flex items-center gap-2">
+                        <Users className="w-4 h-4 text-varena-gold" />
+                        Daftar Seluruh Agen Resmi Aktif ({agents.length} Agen)
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setAgentSubTab('LIST')}
+                        className="text-xs text-varena-gold hover:underline font-semibold"
+                      >
+                        Lihat di Tab Daftar Agen →
+                      </button>
+                    </div>
+
+                    {agents.length === 0 ? (
+                      <div className="text-center py-6 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
+                        Belum ada agen resmi yang terdaftar.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border border-varena-taupe/20">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-varena-ivory-light text-varena-taupe text-left">
+                              <th className="px-3 py-2.5 font-semibold">Kode & Nama</th>
+                              <th className="px-3 py-2.5 font-semibold">Tipe</th>
+                              <th className="px-3 py-2.5 font-semibold">Wilayah</th>
+                              <th className="px-3 py-2.5 font-semibold text-right">Stok Fisik</th>
+                              <th className="px-3 py-2.5 font-semibold text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-varena-taupe/10">
+                            {agents.slice(0, 5).map((a) => (
+                              <tr key={a.id} className="hover:bg-varena-ivory-light/40">
+                                <td className="px-3 py-2.5">
+                                  <div className="font-semibold text-varena-espresso">{a.displayName}</div>
+                                  <div className="text-varena-taupe font-mono text-[11px]">{a.memberCode}</div>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                    a.type === 'MASTER_AGENT' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {a.type === 'MASTER_AGENT' ? 'Master Agen' : 'Agen Regional'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 text-stone-600">
+                                  <div>{a.city || '-'}</div>
+                                  <div className="text-[10px] text-stone-400">{a.province || '-'}</div>
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-mono font-bold text-varena-espresso">
+                                  {(a.inventory || 0).toLocaleString('id-ID')} Box
+                                </td>
+                                <td className="px-3 py-2.5 text-center">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    AKTIF
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -3782,6 +4445,251 @@ export default function AdminPage() {
                   </form>
                 </div>
               )}
+
+              {/* SUBTAB: BOARD RANKING PENJUALAN AGEN */}
+              {agentSubTab === 'RANKING' && (() => {
+                const rankedAgents = [...agents].sort((a, b) => {
+                  if (rankingSortBy === 'SOLD_BOX') return (b.totalSoldBoxes || 0) - (a.totalSoldBoxes || 0);
+                  return (b.totalSalesNominal || 0) - (a.totalSalesNominal || 0);
+                });
+                const top3 = rankedAgents.slice(0, 3);
+                const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : top3;
+                const podiumStyles: Record<number, { bg: string; border: string; badge: string; emoji: string; height: string; labelBg: string }> = {
+                  0: { bg: 'bg-gradient-to-b from-slate-100 to-slate-50', border: 'border-slate-300', badge: 'bg-slate-400 text-white', emoji: '🥈', height: 'h-28', labelBg: 'bg-slate-200' },
+                  1: { bg: 'bg-gradient-to-b from-amber-50 to-yellow-50', border: 'border-varena-gold', badge: 'bg-varena-gold text-varena-espresso', emoji: '🥇', height: 'h-36', labelBg: 'bg-amber-100' },
+                  2: { bg: 'bg-gradient-to-b from-orange-50 to-amber-50', border: 'border-orange-300', badge: 'bg-orange-400 text-white', emoji: '🥉', height: 'h-24', labelBg: 'bg-orange-100' },
+                };
+                const podiumRanks = top3.length >= 3 ? [2, 1, 3] : top3.length === 2 ? [2, 1] : [1];
+                return (
+                  <div className="space-y-6">
+                    {/* Header & Sort Toggle */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+                          🏆 Board Ranking Penjualan Agen
+                        </h3>
+                        <p className="text-xs text-varena-taupe mt-0.5">Peringkat kinerja seluruh agen aktif VARENA berdasarkan volume penjualan</p>
+                      </div>
+                      <div className="flex gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setRankingSortBy('SOLD_BOX')}
+                          className={`px-4 py-2 rounded-xl font-semibold transition border ${rankingSortBy === 'SOLD_BOX'
+                            ? 'bg-varena-espresso text-varena-gold border-varena-espresso shadow'
+                            : 'bg-white text-slate-600 border-varena-taupe/30 hover:bg-varena-ivory-light'}`}
+                        >
+                          📦 Volume Box Terjual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRankingSortBy('SALES_NOMINAL')}
+                          className={`px-4 py-2 rounded-xl font-semibold transition border ${rankingSortBy === 'SALES_NOMINAL'
+                            ? 'bg-varena-espresso text-varena-gold border-varena-espresso shadow'
+                            : 'bg-white text-slate-600 border-varena-taupe/30 hover:bg-varena-ivory-light'}`}
+                        >
+                          💰 Nominal Omset (Rp)
+                        </button>
+                      </div>
+                    </div>
+
+                    {rankedAgents.length === 0 ? (
+                      <div className="bg-white rounded-2xl border border-varena-taupe/20 p-12 text-center text-varena-taupe text-sm">
+                        Belum ada data agen aktif untuk ditampilkan.
+                      </div>
+                    ) : (
+                      <>
+                        {/* TOP 3 PODIUM */}
+                        {rankedAgents.length >= 1 && (
+                          <div className="bg-gradient-to-b from-varena-ivory-light to-white rounded-3xl border border-varena-taupe/20 shadow-sm p-6">
+                            <p className="text-center text-xs font-semibold text-varena-taupe mb-6 uppercase tracking-widest">
+                              {rankingSortBy === 'SOLD_BOX' ? '— Podium Teratas: Volume Box Terjual —' : '— Podium Teratas: Nominal Omset Penjualan —'}
+                            </p>
+                            <div className="flex items-end justify-center gap-4">
+                              {podiumOrder.map((agent, idx) => {
+                                if (!agent) return null;
+                                const rank = podiumRanks[idx];
+                                const styleKey = idx as 0 | 1 | 2;
+                                const s = podiumStyles[styleKey];
+                                const score = rankingSortBy === 'SOLD_BOX'
+                                  ? `${(agent.totalSoldBoxes || 0).toLocaleString('id-ID')} Box`
+                                  : `Rp${(agent.totalSalesNominal || 0).toLocaleString('id-ID')}`;
+                                return (
+                                  <div key={agent.id} className="flex flex-col items-center gap-2 flex-1 max-w-[180px]">
+                                    <div className={`text-3xl ${styleKey === 1 ? 'animate-bounce' : ''}`}>{s.emoji}</div>
+                                    <div className={`w-full rounded-t-2xl border-2 ${s.bg} ${s.border} ${s.height} flex flex-col items-center justify-end pb-3 px-2 gap-1 shadow-sm`}>
+                                      <span className={`${s.badge} text-[10px] font-black px-2 py-0.5 rounded-full`}>#{rank}</span>
+                                      <div className="text-center">
+                                        <div className="font-serif font-bold text-varena-espresso text-xs leading-tight line-clamp-2 text-center">{agent.displayName}</div>
+                                        <div className="text-[10px] text-varena-taupe">{agent.city || agent.province || '-'}</div>
+                                        <div className={`text-[9px] mt-0.5 px-1.5 py-0.5 rounded-full font-semibold ${s.labelBg} text-varena-espresso`}>
+                                          {agent.type === 'MASTER_AGENT' ? 'Master' : 'Regional'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="font-mono font-bold text-varena-espresso text-xs">{score}</div>
+                                      {(agent.totalRewardValue || 0) > 0 && (
+                                        <div className="text-[9px] text-amber-600">🎁 Reward: Rp{(agent.totalRewardValue || 0).toLocaleString('id-ID')}</div>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setSelectedRewardAgent(agent); setRewardModalOpen(true); }}
+                                      className="text-[10px] px-3 py-1.5 rounded-lg bg-varena-gold/20 hover:bg-varena-gold/40 text-varena-espresso font-semibold border border-varena-gold/30 transition"
+                                    >
+                                      🎁 Beri Reward
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* FULL LEADERBOARD TABLE */}
+                        <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden">
+                          <div className="p-4 border-b border-varena-taupe/15 flex items-center justify-between">
+                            <h4 className="font-serif font-bold text-varena-espresso text-sm flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4 text-varena-gold" />
+                              Peringkat Lengkap Seluruh Agen ({rankedAgents.length} Agen)
+                            </h4>
+                            <span className="text-xs text-varena-taupe">
+                              Diurutkan berdasarkan: {rankingSortBy === 'SOLD_BOX' ? 'Volume Box Terjual ↓' : 'Nominal Omset ↓'}
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-varena-ivory-light text-varena-taupe text-left">
+                                  <th className="px-4 py-3 font-semibold w-14">#</th>
+                                  <th className="px-4 py-3 font-semibold">Kode & Nama Agen</th>
+                                  <th className="px-4 py-3 font-semibold">Wilayah</th>
+                                  <th className="px-4 py-3 font-semibold text-right">Terjual (Box)</th>
+                                  <th className="px-4 py-3 font-semibold text-right">Omset (Rp)</th>
+                                  <th className="px-4 py-3 font-semibold text-right">Sisa Stok</th>
+                                  <th className="px-4 py-3 font-semibold text-right">Reward</th>
+                                  <th className="px-4 py-3 font-semibold text-center">Aksi</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-varena-taupe/10">
+                                {rankedAgents.map((agent, idx) => {
+                                  const rank = idx + 1;
+                                  const rankBadge =
+                                    rank === 1 ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-white font-black text-xs shadow">🥇</span>
+                                    : rank === 2 ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white font-black text-xs shadow">🥈</span>
+                                    : rank === 3 ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-orange-400 text-white font-black text-xs shadow">🥉</span>
+                                    : <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-varena-ivory-light text-varena-espresso font-bold text-xs border border-varena-taupe/20">#{rank}</span>;
+                                  return (
+                                    <tr key={agent.id} className={`hover:bg-varena-ivory-light/50 transition ${rank <= 3 ? 'bg-amber-50/30' : ''}`}>
+                                      <td className="px-4 py-3">{rankBadge}</td>
+                                      <td className="px-4 py-3">
+                                        <div className="font-semibold text-varena-espresso">{agent.displayName}</div>
+                                        <div className="text-varena-taupe font-mono">{agent.memberCode}</div>
+                                        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${agent.type === 'MASTER_AGENT' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                          {agent.type === 'MASTER_AGENT' ? 'Master Agen' : 'Regional Agen'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-varena-taupe">
+                                        <div>{agent.city || '-'}</div>
+                                        <div className="text-[10px]">{agent.province || ''}</div>
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className={`font-mono font-bold ${rankingSortBy === 'SOLD_BOX' ? 'text-varena-espresso' : 'text-slate-500'}`}>
+                                          {(agent.totalSoldBoxes || 0).toLocaleString('id-ID')}
+                                        </div>
+                                        <div className="text-varena-taupe text-[10px]">box terjual</div>
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className={`font-mono font-bold ${rankingSortBy === 'SALES_NOMINAL' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                          Rp{(agent.totalSalesNominal || 0).toLocaleString('id-ID')}
+                                        </div>
+                                        <div className="text-varena-taupe text-[10px]">total omset</div>
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className={`font-mono font-bold ${(agent.inventory || 0) < 5 ? 'text-red-600' : 'text-slate-700'}`}>
+                                          {(agent.inventory || 0).toLocaleString('id-ID')}
+                                        </div>
+                                        <div className="text-varena-taupe text-[10px]">box tersisa</div>
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        {(agent.totalRewardValue || 0) > 0 ? (
+                                          <>
+                                            <div className="font-mono font-bold text-amber-600">Rp{(agent.totalRewardValue || 0).toLocaleString('id-ID')}</div>
+                                            <div className="text-varena-taupe text-[10px]">{agent.rewardsCount || 0}x reward</div>
+                                          </>
+                                        ) : (
+                                          <span className="text-varena-taupe/60">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <button
+                                            type="button"
+                                            title="Beri Reward"
+                                            onClick={() => { setSelectedRewardAgent(agent); setRewardModalOpen(true); }}
+                                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 transition"
+                                          >
+                                            <Gift className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title="Detail & Progres"
+                                            onClick={() => { setMonitoringAgent(agent); setMonitoringModalOpen(true); }}
+                                            className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition"
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </button>
+                                          {agent.phone && (
+                                            <a
+                                              href={`https://wa.me/${agent.phone.replace(/\D/g, '').replace(/^0/, '62')}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              title="WhatsApp"
+                                              className="p-1.5 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 transition"
+                                            >
+                                              <MessageSquare className="w-3.5 h-3.5" />
+                                            </a>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Footer summary */}
+                          <div className="p-4 border-t border-varena-taupe/15 bg-varena-ivory-light/40 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                            <div className="text-center">
+                              <div className="font-bold text-varena-espresso text-base font-mono">{rankedAgents.length}</div>
+                              <div className="text-varena-taupe">Total Agen</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-varena-espresso text-base font-mono">
+                                {rankedAgents.reduce((s, a) => s + (a.totalSoldBoxes || 0), 0).toLocaleString('id-ID')} Box
+                              </div>
+                              <div className="text-varena-taupe">Total Terjual Jaringan</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-emerald-700 text-base font-mono">
+                                Rp{rankedAgents.reduce((s, a) => s + (a.totalSalesNominal || 0), 0).toLocaleString('id-ID')}
+                              </div>
+                              <div className="text-varena-taupe">Total Omset Jaringan</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="font-bold text-amber-600 text-base font-mono">
+                                Rp{rankedAgents.reduce((s, a) => s + (a.totalRewardValue || 0), 0).toLocaleString('id-ID')}
+                              </div>
+                              <div className="text-varena-taupe">Total Reward Diberikan</div>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* MODAL: APPROVE APPLICATION */}
               {approveAppModalOpen && selectedApp && (
@@ -3857,6 +4765,411 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: MONITORING PROGRES, STOK & REWARD AGEN */}
+              {monitoringModalOpen && monitoringAgent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                  <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-varena-gold/40 space-y-4 text-xs max-h-[92vh] overflow-y-auto">
+                    {/* Header */}
+                    <div className="flex items-start justify-between border-b border-varena-taupe/20 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-varena-espresso text-varena-gold flex items-center justify-center font-serif text-lg font-bold shrink-0">
+                          <Store className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-serif text-lg font-bold text-varena-espresso">
+                              {monitoringAgent.displayName}
+                            </h4>
+                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-varena-ivory-light font-bold text-varena-espresso border border-varena-taupe/20">
+                              {monitoringAgent.memberCode}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              monitoringAgent.type === 'MASTER_AGENT' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {monitoringAgent.type === 'MASTER_AGENT' ? 'Master Agen Regional' : 'Agen Resmi Wilayah'}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 text-[11px] mt-0.5 flex flex-wrap items-center gap-2">
+                            <span>📍 {monitoringAgent.city}, {monitoringAgent.province}</span>
+                            <span>•</span>
+                            <span>📱 {monitoringAgent.phone || '-'}</span>
+                            {monitoringAgent.email && (
+                              <>
+                                <span>•</span>
+                                <span>✉️ {monitoringAgent.email}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringModalOpen(false)}
+                        className="text-varena-taupe hover:text-varena-espresso p-1.5 rounded-lg hover:bg-stone-100"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* 4 KPI Utama Progres Agen */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200">
+                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">Sisa Stok Fisik</span>
+                        <div className="text-2xl font-bold font-serif text-emerald-950 mt-1">
+                          {monitoringAgent.inventory} <span className="text-xs font-normal text-emerald-700">Box</span>
+                        </div>
+                        <span className={`text-[10px] font-semibold mt-0.5 inline-block ${
+                          monitoringAgent.inventory < 10 ? 'text-rose-700' : 'text-emerald-700'
+                        }`}>
+                          {monitoringAgent.inventory < 10 ? '⚠ Stok Menipis' : '✓ Stok Memadai'}
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200">
+                        <span className="text-[10px] uppercase font-bold text-blue-800 block">Total Terjual</span>
+                        <div className="text-2xl font-bold font-serif text-blue-950 mt-1">
+                          {monitoringAgent.totalSoldBoxes || 0} <span className="text-xs font-normal text-blue-700">Box</span>
+                        </div>
+                        <span className="text-[10px] text-blue-700 font-semibold mt-0.5 inline-block">
+                          {monitoringAgent.completedOrdersCount || 0} pesanan diselesaikan
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200">
+                        <span className="text-[10px] uppercase font-bold text-amber-800 block">Nominal Penjualan</span>
+                        <div className="text-lg font-bold font-mono text-amber-950 mt-1 truncate">
+                          Rp{(monitoringAgent.totalSalesNominal || 0).toLocaleString('id-ID')}
+                        </div>
+                        <span className="text-[10px] text-amber-700 font-semibold mt-0.5 inline-block">
+                          Omset terdistribusi
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-purple-50/80 border border-purple-200">
+                        <span className="text-[10px] uppercase font-bold text-purple-800 block">Reward Diberikan</span>
+                        <div className="text-lg font-bold font-mono text-purple-950 mt-1 truncate">
+                          Rp{(monitoringAgent.totalRewardValue || 0).toLocaleString('id-ID')}
+                        </div>
+                        <span className="text-[10px] text-purple-700 font-semibold mt-0.5 inline-block">
+                          {monitoringAgent.rewardsCount || 0} Penghargaan resmi
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Navigasi Tab di Dalam Modal */}
+                    <div className="flex border-b border-varena-taupe/20 space-x-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringTab('OVERVIEW')}
+                        className={`py-2 px-3 font-semibold text-xs border-b-2 transition ${
+                          monitoringTab === 'OVERVIEW'
+                            ? 'border-varena-espresso text-varena-espresso'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Ringkasan Keagenan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringTab('REWARDS')}
+                        className={`py-2 px-3 font-semibold text-xs border-b-2 transition flex items-center gap-1 ${
+                          monitoringTab === 'REWARDS'
+                            ? 'border-varena-espresso text-varena-espresso'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <Award className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Penghargaan &amp; Reward ({monitoringAgent.rewards?.length || 0})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringTab('STOCK')}
+                        className={`py-2 px-3 font-semibold text-xs border-b-2 transition flex items-center gap-1 ${
+                          monitoringTab === 'STOCK'
+                            ? 'border-varena-espresso text-varena-espresso'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <Package className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Mutasi Stok ({monitoringAgent.recentMutations?.length || 0})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringTab('ORDERS')}
+                        className={`py-2 px-3 font-semibold text-xs border-b-2 transition flex items-center gap-1 ${
+                          monitoringTab === 'ORDERS'
+                            ? 'border-varena-espresso text-varena-espresso'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <Truck className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Pesanan Terdistribusi ({monitoringAgent.recentOrders?.length || 0})</span>
+                      </button>
+                    </div>
+
+                    {/* CONTENT TAB: OVERVIEW */}
+                    {monitoringTab === 'OVERVIEW' && (
+                      <div className="space-y-4 pt-1">
+                        <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-stone-500 text-[11px]">Titik Gudang / Alamat Distribusi:</div>
+                            <div className="font-semibold text-varena-espresso mt-0.5">{monitoringAgent.address || '-'}</div>
+                            <div className="text-stone-500 text-[11px] mt-1">{monitoringAgent.city}, {monitoringAgent.province}</div>
+                          </div>
+                          <div>
+                            <div className="text-stone-500 text-[11px]">Parameter Keagenan:</div>
+                            <div className="font-semibold text-varena-espresso mt-0.5">
+                              Diskon: {monitoringAgent.discountType === 'PERCENTAGE' ? `${monitoringAgent.discountValue}%` : `Rp${monitoringAgent.discountValue}/box`}
+                            </div>
+                            <div className="text-stone-600 text-[11px] mt-1">
+                              Saldo Kas Deposit: <strong>Rp{(monitoringAgent.depositBalance || 0).toLocaleString('id-ID')}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
+                          <div>
+                            <span className="font-bold text-amber-950 block">Ingin Memberikan Reward Prestasi Agen?</span>
+                            <span className="text-[11px] text-amber-800">
+                              Beri apresiasi berupa bonus tunai saldo kas atau aset fisik (motor, emas, laptop).
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRewardAgent(monitoringAgent);
+                              setRewardTitle('');
+                              setRewardDesc('');
+                              setRewardValue(1000000);
+                              setRewardModalOpen(true);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 transition flex items-center gap-1.5 shadow"
+                          >
+                            <Award className="w-4 h-4" />
+                            <span>Beri Reward Prestasi</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CONTENT TAB: REWARDS */}
+                    {monitoringTab === 'REWARDS' && (
+                      <div className="space-y-3 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-700 text-xs">
+                            Riwayat Penghargaan Resmi dari Kantor Pusat ({monitoringAgent.rewards?.length || 0})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRewardAgent(monitoringAgent);
+                              setRewardTitle('');
+                              setRewardDesc('');
+                              setRewardValue(1000000);
+                              setRewardModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 transition inline-flex items-center gap-1"
+                          >
+                            <Award className="w-3.5 h-3.5" />
+                            <span>+ Beri Reward Baru</span>
+                          </button>
+                        </div>
+
+                        {monitoringAgent.rewards && monitoringAgent.rewards.length > 0 ? (
+                          <div className="divide-y divide-stone-100 border border-stone-200 rounded-2xl overflow-hidden bg-white">
+                            {monitoringAgent.rewards.map((rw: any) => (
+                              <div key={rw.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-stone-50/70 transition">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-varena-espresso">{rw.title}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                      rw.rewardType === 'CASH_BONUS' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {rw.rewardType === 'CASH_BONUS' ? 'BONUS TUNAI' : 'BARANG FISIK / ASET'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 mt-1 italic">
+                                    {rw.reasonNotes || rw.goodsDescription || 'Apresiasi pencapaian target penjualan'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                    Diterbitkan: {new Date(rw.awardedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="font-mono font-bold text-sm text-emerald-800">
+                                    Rp{(rw.totalValue || rw.cashAmount || rw.goodsValuation || 0).toLocaleString('id-ID')}
+                                  </div>
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                                    TERVERIFIKASI KANTOR
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-stone-400">
+                            Belum ada reward yang diberikan kepada agen ini. Klik tombol di atas untuk menerbitkan reward perdana.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* CONTENT TAB: STOCK MUTATIONS */}
+                    {monitoringTab === 'STOCK' && (
+                      <div className="space-y-3 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-700 text-xs">
+                            Riwayat Pergerakan &amp; Mutasi Stok Fisik Agen
+                          </span>
+                          <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                            Stok Saat Ini: {monitoringAgent.inventory} Box
+                          </span>
+                        </div>
+
+                        {monitoringAgent.recentMutations && monitoringAgent.recentMutations.length > 0 ? (
+                          <div className="overflow-x-auto border border-stone-200 rounded-2xl overflow-hidden">
+                            <table className="w-full text-left text-xs min-w-[500px]">
+                              <thead className="bg-stone-50 text-stone-600 border-b">
+                                <tr>
+                                  <th className="py-2 px-3">Tanggal</th>
+                                  <th className="py-2 px-3">Jenis Mutasi</th>
+                                  <th className="py-2 px-3">Jumlah (Box)</th>
+                                  <th className="py-2 px-3">Sisa Stok</th>
+                                  <th className="py-2 px-3">Referensi &amp; Keterangan</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y text-stone-700">
+                                {monitoringAgent.recentMutations.map((m: any) => (
+                                  <tr key={m.id} className="hover:bg-stone-50/60">
+                                    <td className="py-2 px-3 text-stone-500 whitespace-nowrap">
+                                      {new Date(m.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </td>
+                                    <td className="py-2 px-3 font-semibold">
+                                      {m.type === 'RESTOCK_FROM_CENTRAL' ? (
+                                        <span className="text-emerald-700 font-bold">Pasokan Pusat</span>
+                                      ) : m.type === 'DISPATCHED_TO_MEMBER' ? (
+                                        <span className="text-blue-700 font-bold">Kirim ke Konsumen</span>
+                                      ) : (
+                                        <span>{m.type}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold">
+                                      <span className={m.quantity > 0 || m.type === 'RESTOCK_FROM_CENTRAL' ? 'text-emerald-700' : 'text-rose-700'}>
+                                        {m.quantity > 0 || m.type === 'RESTOCK_FROM_CENTRAL' ? '+' : ''}{m.quantity} Box
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold text-slate-800">
+                                      {m.balanceAfter} Box
+                                    </td>
+                                    <td className="py-2 px-3 text-[11px] text-stone-600">
+                                      {m.referenceId && <strong className="font-mono mr-1 text-slate-800">[{m.referenceId}]</strong>}
+                                      {m.notes || '-'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-stone-400">
+                            Belum ada riwayat mutasi stok untuk agen ini.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* CONTENT TAB: ORDERS DISTRIBUTED */}
+                    {monitoringTab === 'ORDERS' && (
+                      <div className="space-y-3 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-700 text-xs">
+                            Riwayat Pesanan yang Dialihkan &amp; Didistribusikan Agen
+                          </span>
+                          <span className="font-mono text-xs text-blue-900 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-bold">
+                            Total Omset: Rp{(monitoringAgent.totalSalesNominal || 0).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+
+                        {monitoringAgent.recentOrders && monitoringAgent.recentOrders.length > 0 ? (
+                          <div className="overflow-x-auto border border-stone-200 rounded-2xl overflow-hidden">
+                            <table className="w-full text-left text-xs min-w-[550px]">
+                              <thead className="bg-stone-50 text-stone-600 border-b">
+                                <tr>
+                                  <th className="py-2 px-3">No. Invoice</th>
+                                  <th className="py-2 px-3">Pembeli</th>
+                                  <th className="py-2 px-3">Kuantitas</th>
+                                  <th className="py-2 px-3">Total (Rp)</th>
+                                  <th className="py-2 px-3">Status Pengiriman</th>
+                                  <th className="py-2 px-3">Ekspedisi / Resi</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y text-stone-700">
+                                {monitoringAgent.recentOrders.map((o: any) => (
+                                  <tr key={o.id} className="hover:bg-stone-50/60">
+                                    <td className="py-2 px-3 font-mono font-bold text-varena-espresso">
+                                      {o.orderNumber}
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <div className="font-semibold">{o.buyerName}</div>
+                                      <div className="text-[10px] text-stone-400">{o.shippingCity}</div>
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold">
+                                      {o.itemCount} Box
+                                    </td>
+                                    <td className="py-2 px-3 font-mono font-bold text-emerald-800">
+                                      Rp{(o.total || 0).toLocaleString('id-ID')}
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                        o.orderStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                      }`}>
+                                        {o.orderStatus === 'COMPLETED' ? 'SELESAI' : o.orderStatus}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 font-mono text-[11px] text-stone-600">
+                                      {o.trackingNumber ? `${o.courierName || 'Kurir'}: ${o.trackingNumber}` : 'Diantar kurir lokal'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-10 bg-stone-50 rounded-2xl border border-dashed border-stone-200 text-stone-400">
+                            Belum ada pesanan konsumen yang dialihkan ke agen ini.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="pt-3 border-t border-varena-taupe/20 flex items-center justify-between">
+                      {monitoringAgent.phone ? (
+                        <a
+                          href={`https://wa.me/${monitoringAgent.phone.replace(/^0/, '62')}?text=${encodeURIComponent(
+                            `Halo Agen ${monitoringAgent.displayName} (${monitoringAgent.memberCode}), salam dari Manajemen Pusat VARENA terkait evaluasi stok fisik dan progres keagenan Anda.`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition inline-flex items-center gap-1.5 shadow"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Hubungi Agen via WhatsApp</span>
+                        </a>
+                      ) : <div />}
+
+                      <button
+                        type="button"
+                        onClick={() => setMonitoringModalOpen(false)}
+                        className="px-5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs transition"
+                      >
+                        Tutup Pemantau
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -4159,6 +5472,38 @@ export default function AdminPage() {
         message={toast.message}
         onClose={() => setToast((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* ── MODAL: TOLAK TOPUP DEPOSIT ── */}
+      {rejectTopupId && (
+        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-rose-200">
+            <h3 className="font-serif text-base font-bold text-rose-700">Tolak Pengajuan Topup Deposit</h3>
+            <p className="text-xs text-stone-600">Masukkan alasan penolakan. Alasan ini akan dicatat di histori transaksi dan member akan diberitahu.</p>
+            <textarea
+              className="w-full border border-stone-300 rounded-lg p-2.5 text-xs outline-none focus:border-rose-400 resize-none"
+              rows={3}
+              placeholder="Contoh: Nominal transfer tidak sesuai, transfer tidak ditemukan di rekening..."
+              value={rejectTopupReason}
+              onChange={(e) => setRejectTopupReason(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setRejectTopupId(null); setRejectTopupReason(''); }}
+                className="py-2 px-4 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleRejectDepositTopup}
+                disabled={rejectTopupSubmitting || !rejectTopupReason.trim()}
+                className="py-2 px-5 rounded-lg bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition disabled:opacity-50"
+              >
+                {rejectTopupSubmitting ? 'Memproses...' : 'Tolak Pengajuan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

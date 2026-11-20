@@ -68,6 +68,15 @@ export default function Navbar() {
               Katalog Market
             </Link>
 
+            <Link
+              href="/track"
+              className={`transition hover:text-varena-gold-light ${
+                pathname.startsWith('/track') ? 'text-varena-gold-light font-semibold' : 'text-varena-ivory/80'
+              }`}
+            >
+              Lacak Pengiriman
+            </Link>
+
             {user && (
               <>
                 <Link
@@ -252,6 +261,13 @@ export default function Navbar() {
             className="block py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
           >
             Checkout Konsumen
+          </Link>
+          <Link
+            href="/track"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 text-sm text-varena-ivory hover:text-varena-gold-light"
+          >
+            Lacak Pengiriman
           </Link>
 
           {user ? (

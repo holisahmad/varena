@@ -35,6 +35,25 @@ export async function POST(req: Request) {
       );
     }
 
+    // 2b. Strict Gmail constraint for manual registration
+    const cleanEmail = email.trim().toLowerCase();
+    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+    if (!gmailRegex.test(cleanEmail)) {
+      return NextResponse.json(
+        { error: 'Pendaftaran manual hanya menerima alamat Gmail aktif (@gmail.com) agar faktur dan notifikasi resmi dapat terkirim.' },
+        { status: 400 }
+      );
+    }
+
+    // 2c. WhatsApp Phone Validation
+    const cleanPhone = (phone || '').trim().replace(/[\s-]/g, '');
+    if (!cleanPhone || cleanPhone.length < 9) {
+      return NextResponse.json(
+        { error: 'Nomor WhatsApp aktif wajib diisi untuk konfirmasi pengiriman pesanan dan notifikasi komisi.' },
+        { status: 400 }
+      );
+    }
+
     // 1. Verify sponsor
     const sponsor = await prisma.member.findUnique({
       where: { memberCode: sponsorCode.trim() },

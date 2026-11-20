@@ -7,7 +7,23 @@ import { usePathname } from 'next/navigation';
 
 export interface NotificationItem {
   id: string;
-  type: 'ORDER_PENDING' | 'ORDER_SHIPPED' | 'COMMISSION_NEW' | 'PAYOUT_STATUS' | 'ADMIN_ORDER' | 'ADMIN_PAYOUT';
+  type:
+    | 'ORDER_PENDING'
+    | 'ORDER_SHIPPED'
+    | 'ORDER_COMPLETED'
+    | 'COMMISSION_NEW'
+    | 'PAYOUT_STATUS'
+    | 'DOWNLINE_NEW'
+    | 'DOWNLINE_ORDER'
+    | 'DEPOSIT_APPROVED'
+    | 'DEPOSIT_REJECTED'
+    | 'AGENT_STATUS'
+    | 'ADMIN_ORDER'
+    | 'ADMIN_PAYOUT'
+    | 'ADMIN_PAYMENT_PROOF'
+    | 'ADMIN_AGENT_APPLY'
+    | 'ADMIN_DEPOSIT_REQUEST'
+    | 'ADMIN_NEW_MEMBER';
   title: string;
   message: string;
   url: string;
@@ -77,13 +93,17 @@ interface NotificationContextValue {
   totalBadgeCount: number;
   memberOrdersBadge: number;
   memberWalletBadge: number;
+  memberNetworkBadge: number;
   adminOrdersBadge: number;
   adminPayoutBadge: number;
+  adminMiscBadge: number;
   isItemRead: (id: string) => boolean;
   ackOrders: () => void;
   ackWallet: () => void;
+  ackNetwork: () => void;
   ackAdminOrders: () => void;
   ackAdminPayout: () => void;
+  ackAdminMisc: () => void;
   markItemAsRead: (id: string) => void;
   markAllAsRead: () => void;
   refresh: () => void;
@@ -95,13 +115,17 @@ const NotificationContext = createContext<NotificationContextValue>({
   totalBadgeCount: 0,
   memberOrdersBadge: 0,
   memberWalletBadge: 0,
+  memberNetworkBadge: 0,
   adminOrdersBadge: 0,
   adminPayoutBadge: 0,
+  adminMiscBadge: 0,
   isItemRead: () => false,
   ackOrders: () => {},
   ackWallet: () => {},
+  ackNetwork: () => {},
   ackAdminOrders: () => {},
   ackAdminPayout: () => {},
+  ackAdminMisc: () => {},
   markItemAsRead: () => {},
   markAllAsRead: () => {},
   refresh: () => {},
@@ -199,6 +223,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const items: NotificationItem[] =
     badge && 'items' in badge && Array.isArray(badge.items) ? badge.items : [];
 
+  // ── Stable ref: ack callbacks baca items dari ref, bukan closure ──────────
+  // Ini mencegah ackOrders/ackWallet/etc. berubah identitas setiap 4 detik
+  // (yang akan memicu useEffect di wallet/member page → setLoading(true) → flicker)
+  const itemsRef = useRef<NotificationItem[]>(items);
+  itemsRef.current = items;
+
   const isItemRead = useCallback(
     (id: string) => readIds.includes(id),
     [readIds]
@@ -207,26 +237,36 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // Unread items
   const unreadItems = items.filter((it) => !readIds.includes(it.id));
 
-  // Computed badge counts based on unread items
+  // ── Badge counts per kategori ─────────────────────────────────────────────
   const memberOrdersBadge = unreadItems.filter(
-    (it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED'
+    (it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED' || it.type === 'ORDER_COMPLETED'
   ).length;
 
   const memberWalletBadge = unreadItems.filter(
-    (it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS'
+    (it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS' || it.type === 'DEPOSIT_APPROVED' || it.type === 'DEPOSIT_REJECTED'
+  ).length;
+
+  const memberNetworkBadge = unreadItems.filter(
+    (it) => it.type === 'DOWNLINE_NEW' || it.type === 'DOWNLINE_ORDER' || it.type === 'AGENT_STATUS'
   ).length;
 
   const adminOrdersBadge = unreadItems.filter(
-    (it) => it.type === 'ADMIN_ORDER'
+    (it) => it.type === 'ADMIN_ORDER' || it.type === 'ADMIN_PAYMENT_PROOF'
   ).length;
 
   const adminPayoutBadge = unreadItems.filter(
     (it) => it.type === 'ADMIN_PAYOUT'
   ).length;
 
+  const adminMiscBadge = unreadItems.filter(
+    (it) => it.type === 'ADMIN_AGENT_APPLY' || it.type === 'ADMIN_DEPOSIT_REQUEST' || it.type === 'ADMIN_NEW_MEMBER'
+  ).length;
+
   const totalBadgeCount = unreadItems.length;
 
   // ── Ack and Read Handlers ──────────────────────────────────────────────────
+  // PENTING: semua ack callback menggunakan itemsRef.current (bukan items closure)
+  // agar dependency array bisa [] → identitas fungsi STABIL → tidak ada re-render loop
 
   const markItemAsRead = useCallback((id: string) => {
     setReadIds((prev) => {
@@ -238,17 +278,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    const allIds = items.map((it) => it.id);
+    const allIds = itemsRef.current.map((it) => it.id);
     setReadIds((prev) => {
       const next = Array.from(new Set([...prev, ...allIds]));
       saveReadIds(next);
       return next;
     });
-  }, [items]);
+  }, []);
 
   const ackOrders = useCallback(() => {
-    const orderIds = items
-      .filter((it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED')
+    const orderIds = itemsRef.current
+      .filter((it) => it.type === 'ORDER_PENDING' || it.type === 'ORDER_SHIPPED' || it.type === 'ORDER_COMPLETED')
       .map((it) => it.id);
     if (orderIds.length > 0) {
       setReadIds((prev) => {
@@ -257,11 +297,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return next;
       });
     }
-  }, [items]);
+  }, []);
 
   const ackWallet = useCallback(() => {
-    const walletIds = items
-      .filter((it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS')
+    const walletIds = itemsRef.current
+      .filter((it) => it.type === 'COMMISSION_NEW' || it.type === 'PAYOUT_STATUS' || it.type === 'DEPOSIT_APPROVED' || it.type === 'DEPOSIT_REJECTED')
       .map((it) => it.id);
     if (walletIds.length > 0) {
       setReadIds((prev) => {
@@ -270,10 +310,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return next;
       });
     }
-  }, [items]);
+  }, []);
+
+  const ackNetwork = useCallback(() => {
+    const networkIds = itemsRef.current
+      .filter((it) => it.type === 'DOWNLINE_NEW' || it.type === 'DOWNLINE_ORDER' || it.type === 'AGENT_STATUS')
+      .map((it) => it.id);
+    if (networkIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...networkIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, []);
 
   const ackAdminOrders = useCallback(() => {
-    const adminOrderIds = items.filter((it) => it.type === 'ADMIN_ORDER').map((it) => it.id);
+    const adminOrderIds = itemsRef.current
+      .filter((it) => it.type === 'ADMIN_ORDER' || it.type === 'ADMIN_PAYMENT_PROOF')
+      .map((it) => it.id);
     if (adminOrderIds.length > 0) {
       setReadIds((prev) => {
         const next = Array.from(new Set([...prev, ...adminOrderIds]));
@@ -281,10 +336,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return next;
       });
     }
-  }, [items]);
+  }, []);
 
   const ackAdminPayout = useCallback(() => {
-    const payoutIds = items.filter((it) => it.type === 'ADMIN_PAYOUT').map((it) => it.id);
+    const payoutIds = itemsRef.current.filter((it) => it.type === 'ADMIN_PAYOUT').map((it) => it.id);
     if (payoutIds.length > 0) {
       setReadIds((prev) => {
         const next = Array.from(new Set([...prev, ...payoutIds]));
@@ -292,7 +347,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return next;
       });
     }
-  }, [items]);
+  }, []);
+
+  const ackAdminMisc = useCallback(() => {
+    const miscIds = itemsRef.current
+      .filter((it) => it.type === 'ADMIN_AGENT_APPLY' || it.type === 'ADMIN_DEPOSIT_REQUEST' || it.type === 'ADMIN_NEW_MEMBER')
+      .map((it) => it.id);
+    if (miscIds.length > 0) {
+      setReadIds((prev) => {
+        const next = Array.from(new Set([...prev, ...miscIds]));
+        saveReadIds(next);
+        return next;
+      });
+    }
+  }, []);
 
   return (
     <NotificationContext.Provider
@@ -302,13 +370,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         totalBadgeCount,
         memberOrdersBadge,
         memberWalletBadge,
+        memberNetworkBadge,
         adminOrdersBadge,
         adminPayoutBadge,
+        adminMiscBadge,
         isItemRead,
         ackOrders,
         ackWallet,
+        ackNetwork,
         ackAdminOrders,
         ackAdminPayout,
+        ackAdminMisc,
         markItemAsRead,
         markAllAsRead,
         refresh: fetchBadge,

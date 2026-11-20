@@ -49,6 +49,7 @@ export default function ProductsPage() {
                     src={p.imageUrl || '/brand/kopi-matahari.jpeg'}
                     alt={p.name}
                     fill
+                    sizes="224px"
                     className="object-cover"
                   />
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/90 to-transparent p-3 text-center">

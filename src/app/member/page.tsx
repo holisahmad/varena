@@ -11,6 +11,7 @@ import {
   formatOrderStatus,
   formatOrderType,
   formatFulfillmentSource,
+  getOrderStatusBadge,
   ORDER_STATUS_BADGES,
 } from '@/lib/formatters';
 import {
@@ -22,11 +23,13 @@ import {
   ArrowUpRight,
   TrendingUp,
   Users,
+  User,
   ShoppingBag,
   Package,
   Truck,
   Clock,
   CheckCircle2,
+  CheckCircle,
   AlertCircle,
   ExternalLink,
   ChevronRight,
@@ -69,6 +72,70 @@ export default function MemberDashboardPage() {
   const [copiedResiModal, setCopiedResiModal] = useState(false);
   const [copiedOrderNumberModal, setCopiedOrderNumberModal] = useState(false);
   const [modalSettling, setModalSettling] = useState(false);
+
+  // Enrich selectedOrder with full backend details (discount, payments, breakdown)
+  useEffect(() => {
+    if (!selectedOrder?.orderNumber) return;
+    if (selectedOrder.payments && selectedOrder.payments.length > 0 && selectedOrder.discount !== undefined) {
+      return;
+    }
+    fetch(`/api/v1/orders/detail?orderNumber=${encodeURIComponent(selectedOrder.orderNumber)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.order) {
+          setSelectedOrder((prev: any) =>
+            prev?.orderNumber === data.order.orderNumber ? { ...prev, ...data.order } : prev
+          );
+        }
+      })
+      .catch((err) => console.error('Failed to fetch enriched order detail:', err));
+  }, [selectedOrder?.orderNumber]);
+
+  // Derived breakdown for selectedOrder in Marketplace Detail Modal
+  const modalBreakdown = selectedOrder
+    ? (() => {
+        const subtotal = selectedOrder.subtotal || selectedOrder.total - (selectedOrder.uniqueCode || 0);
+        const discount = selectedOrder.discount || 0;
+        const netSubtotal = subtotal - discount;
+        const uniqueCode = selectedOrder.uniqueCode || 0;
+        const total = selectedOrder.total || 0;
+        const isAgentRestock =
+          selectedOrder.orderType === 'AGENT_RESTOCK' ||
+          (selectedOrder.orderNumber && selectedOrder.orderNumber.startsWith('AGN-RESTOCK'));
+
+        const payments: any[] = selectedOrder.payments || [];
+        const depPay = payments.find((p: any) => p.provider === 'HYBRID_DEPOSIT' || p.provider === 'AGENT_DEPOSIT');
+        const manPay = payments.find((p: any) => p.provider === 'HYBRID_MANUAL' || p.provider === 'MANUAL_TRANSFER');
+
+        const depositUsed = depPay ? depPay.amount : 0;
+        const manualAmount = manPay
+          ? manPay.amount
+          : uniqueCode > 0
+          ? total - depositUsed
+          : total - depositUsed;
+
+        const isHybrid =
+          (depPay && manPay) ||
+          (depositUsed > 0 && manualAmount > 0) ||
+          (depositUsed > 0 && depositUsed < netSubtotal);
+        const isDepositFull = depositUsed > 0 && manualAmount === 0;
+        const isManualFull = depositUsed === 0;
+
+        return {
+          subtotal,
+          discount,
+          netSubtotal,
+          uniqueCode,
+          total,
+          depositUsed,
+          manualAmount,
+          isHybrid,
+          isDepositFull,
+          isManualFull,
+          isAgentRestock,
+        };
+      })()
+    : null;
 
   // Elegant Confirmation Dialog & Toast State
   const [confirmModal, setConfirmModal] = useState<{
@@ -210,11 +277,14 @@ export default function MemberDashboardPage() {
     const memberCode = parsed.memberCode || 'VRN-0001';
     const userId = parsed.userId || parsed.id;
     loadDashboard(memberCode, userId);
+    // ackOrders dipanggil sekali saat mount — tidak perlu masuk dependency array
+    // (ackOrders sekarang stabil via itemsRef, tapi tetap exclude agar tidak ada risiko loop)
     ackOrders();
-  }, [router, ackOrders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
-  const loadDashboard = (memberCode: string, userId: string) => {
-    setLoading(true);
+  const loadDashboard = (memberCode: string, userId: string, silent = false) => {
+    if (!silent) setLoading(true);
     Promise.all([
       fetch(`/api/v1/wallet?memberCode=${memberCode}`).then((r) => r.json()),
       fetch(`/api/v1/commission/summary?memberCode=${memberCode}`).then((r) => r.json()),
@@ -353,6 +423,7 @@ export default function MemberDashboardPage() {
               src="/brand/logo-circle.png"
               alt="VARENA Luxury Emblem"
               fill
+              sizes="64px"
               className="object-contain"
               priority
             />
@@ -364,8 +435,16 @@ export default function MemberDashboardPage() {
             <h1 className="font-serif text-xl sm:text-3xl font-bold text-varena-ivory-light">
               Halo, {user.displayName}
             </h1>
-            <p className="text-xs text-varena-taupe-light mt-0.5 font-mono">
-              ID Mitra: <span className="text-varena-gold-light font-bold">{user.memberCode || 'VRN-0001'}</span>
+            <p className="text-xs text-varena-taupe-light mt-0.5 font-mono flex items-center gap-2 flex-wrap">
+              <span>ID Mitra: <strong className="text-varena-gold-light">{user.memberCode || 'VRN-0001'}</strong></span>
+              <span>·</span>
+              <Link
+                href="/member/profile"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-varena-gold-light hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-lg border border-white/20 transition"
+              >
+                <User className="w-3 h-3 text-varena-gold" />
+                <span>Pengaturan Akun & Rekening →</span>
+              </Link>
             </p>
           </div>
         </div>
@@ -608,6 +687,103 @@ export default function MemberDashboardPage() {
         </div>
       )}
 
+      {/* Panduan Memulai Kemitraan untuk Mitra Baru (Tampil jika belum pernah belanja) */}
+      {personalOrders.length === 0 && (
+        <div className="bg-white p-6 rounded-2xl border-2 border-varena-gold/40 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-varena-taupe/15 pb-3">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-varena-gold/20 text-varena-espresso text-[11px] font-bold mb-1 uppercase tracking-wide">
+                <span>Panduan Mitra Baru</span>
+              </div>
+              <h2 className="font-serif text-base font-bold text-varena-espresso">
+                3 Langkah Cepat Memulai Bisnis VARENA Anda
+              </h2>
+            </div>
+            <div className="text-xs text-stone-500 font-medium">
+              Selesaikan langkah berikut untuk aktivasi penuh
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            {/* Step 1 */}
+            <div className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 ${
+              memberProfile?.recipientName && memberProfile?.bankName
+                ? 'bg-emerald-50/60 border-emerald-300 text-emerald-950'
+                : 'bg-stone-50 border-stone-200 text-stone-800'
+            }`}>
+              <div>
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-varena-gold text-varena-espresso font-mono text-[11px] flex items-center justify-center font-bold">1</span>
+                    <span>Alamat & Rekening</span>
+                  </span>
+                  {memberProfile?.recipientName && memberProfile?.bankName ? (
+                    <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-semibold">✓ Lengkap</span>
+                  ) : (
+                    <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">Perlu Diisi</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-stone-600 mt-1 leading-relaxed">
+                  Isi alamat pengiriman default dan rekening bank Anda untuk pencairan bonus komisi.
+                </p>
+              </div>
+              <Link
+                href="/member/profile"
+                className="mt-2 py-1.5 px-3 rounded-lg bg-white border border-stone-300 hover:border-varena-gold text-stone-800 font-semibold text-[11px] text-center transition"
+              >
+                {memberProfile?.recipientName && memberProfile?.bankName ? 'Edit Profil' : 'Lengkapi Sekarang →'}
+              </Link>
+            </div>
+
+            {/* Step 2 */}
+            <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/70 flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span className="flex items-center gap-1.5 text-amber-950">
+                    <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-mono text-[11px] flex items-center justify-center font-bold">2</span>
+                    <span>Belanja Paket Perdana</span>
+                  </span>
+                  <span className="text-[10px] text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-full font-semibold">Belum Belanja</span>
+                </div>
+                <p className="text-[11px] text-amber-900 mt-1 leading-relaxed">
+                  Beli produk pertama Anda (First Pack) untuk mengaktifkan status kemitraan aktif dan hak bonus jaringan.
+                </p>
+              </div>
+              <Link
+                href="/checkout"
+                className="mt-2 py-1.5 px-3 rounded-lg bg-varena-espresso text-varena-gold-light hover:bg-stone-900 font-semibold text-[11px] text-center transition shadow-xs"
+              >
+                Beli Paket Perdana →
+              </Link>
+            </div>
+
+            {/* Step 3 */}
+            <div className="p-4 rounded-xl border border-stone-200 bg-stone-50 flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span className="flex items-center gap-1.5 text-stone-800">
+                    <span className="w-5 h-5 rounded-full bg-stone-700 text-white font-mono text-[11px] flex items-center justify-center font-bold">3</span>
+                    <span>Bagikan Link Referral</span>
+                  </span>
+                  <span className="text-[10px] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-semibold">Siap Pakai</span>
+                </div>
+                <p className="text-[11px] text-stone-600 mt-1 leading-relaxed">
+                  Ajak mitra baru atau tawarkan produk ke konsumen ritel dengan link referral pribadi Anda.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(referralLink)}
+                className="mt-2 py-1.5 px-3 rounded-lg bg-varena-gold text-varena-espresso font-semibold text-[11px] hover:bg-varena-gold-hover text-center transition flex items-center justify-center gap-1"
+              >
+                <Copy className="w-3 h-3" />
+                <span>Salin Link Referral</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Section: Pesanan & Pengiriman Saya (Sinkronisasi Logistik) */}
       <div id="pesanan" className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4 scroll-mt-20">
         <div className="flex items-center justify-between">
@@ -625,7 +801,7 @@ export default function MemberDashboardPage() {
             className="px-3 py-1.5 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center gap-1.5 shadow"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Belanja Lagi</span>
+            <span>{personalOrders.length > 0 ? 'Belanja Lagi' : 'Mulai Belanja'}</span>
           </Link>
         </div>
 
@@ -700,25 +876,12 @@ export default function MemberDashboardPage() {
                     </td>
                     <td className="py-2.5 px-3">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold inline-block ${
-                          po.orderStatus === 'COMPLETED'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : po.orderStatus === 'SHIPPED'
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
-                            : po.orderStatus === 'PAID'
-                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                            : 'bg-amber-100 text-amber-800 border border-amber-300'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold inline-block border ${(() => {
+                          const badge = getOrderStatusBadge(po.orderStatus, po.paymentConfirmationStatus);
+                          return `${badge.bg} ${badge.text} ${badge.border}`;
+                        })()}`}
                       >
-                        {po.orderStatus === 'PENDING_PAYMENT'
-                          ? 'Menunggu Pembayaran'
-                          : po.orderStatus === 'PAID'
-                          ? 'Diproses (Sedang Dikemas)'
-                          : po.orderStatus === 'SHIPPED'
-                          ? 'Sedang Dikirim Kurir'
-                          : po.orderStatus === 'COMPLETED'
-                          ? 'Pesanan Selesai'
-                          : po.orderStatus}
+                        {formatOrderStatus(po.orderStatus, po.paymentConfirmationStatus)}
                       </span>
                     </td>
                     <td className="py-2.5 px-3">
@@ -739,7 +902,23 @@ export default function MemberDashboardPage() {
                       )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      {po.orderStatus === 'PENDING_PAYMENT' && (
+                      {po.orderStatus === 'PENDING_PAYMENT' && po.paymentConfirmationStatus === 'SUBMITTED' && (
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-blue-100 border border-blue-300 text-blue-800 font-semibold text-[11px] whitespace-nowrap">
+                            <CheckCircle className="w-3 h-3 text-blue-600" />
+                            <span>Menunggu Verifikasi</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(po)}
+                            className="text-[10px] text-stone-500 hover:text-varena-espresso underline"
+                          >
+                            Detail Pesanan
+                          </button>
+                        </div>
+                      )}
+
+                      {po.orderStatus === 'PENDING_PAYMENT' && po.paymentConfirmationStatus !== 'SUBMITTED' && (
                         <div className="flex flex-col items-end gap-1">
                           <button
                             type="button"
@@ -826,83 +1005,114 @@ export default function MemberDashboardPage() {
             </div>
           </>
         ) : (
-          <div className="text-center py-8 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
-            Anda belum memiliki riwayat pesanan pribadi. Klik <strong>Belanja Lagi</strong> untuk memesan produk VARENA Kopi Sehat.
+          <div className="text-center py-8 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30 space-y-2">
+            <div>Anda belum memiliki riwayat pesanan pribadi.</div>
+            <Link
+              href="/checkout"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-varena-gold text-varena-espresso font-semibold hover:bg-varena-gold-hover transition shadow-xs text-xs"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Beli Paket Perdana Kemitraan Sekarang</span>
+            </Link>
           </div>
         )}
       </div>
 
       {/* Section: Penjualan dari Referral Saya */}
-      {referralOrders.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-varena-gold" />
-                <span>Penjualan dari Link Referral Saya</span>
-              </h2>
-              <p className="text-xs text-varena-taupe mt-0.5">
-                Pesanan yang dihasilkan melalui pembagian tautan referral Anda beserta bonus komisi yang diperoleh.
-              </p>
-            </div>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-varena-gold/20 text-varena-espresso">
-              {referralOrders.length} Transaksi Referral
-            </span>
+      <div id="referral-sales" className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-varena-gold" />
+              <span>Penjualan dari Link Referral Saya</span>
+            </h2>
+            <p className="text-xs text-varena-taupe mt-0.5">
+              Pesanan konsumen atau mitra baru yang berbelanja melalui tautan referral Anda beserta komisi yang diperoleh.
+            </p>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left min-w-[560px]">
-              <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
-                <tr>
-                  <th className="py-2.5 px-3">No. Pesanan</th>
-                  <th className="py-2.5 px-3">Nama Pembeli</th>
-                  <th className="py-2.5 px-3">Tipe Pembelian</th>
-                  <th className="py-2.5 px-3">Total Belanja</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Komisi Diterima</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-varena-taupe/10">
-                {paginatedReferralOrders.map((ro) => (
-                  <tr key={ro.id} className="hover:bg-varena-ivory-light/40">
-                    <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{ro.orderNumber}</td>
-                    <td className="py-2.5 px-3 font-medium text-varena-espresso">{ro.buyerName}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
-                        {formatOrderType(ro.orderType)}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 font-mono">Rp{ro.total.toLocaleString('id-ID')}</td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          ro.orderStatus === 'PAID' || ro.orderStatus === 'SHIPPED' || ro.orderStatus === 'COMPLETED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {formatOrderStatus(ro.orderStatus)}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
-                      Rp{ro.commissionEarned.toLocaleString('id-ID')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2">
-            <Pagination
-              currentPage={referralOrdersPage}
-              totalPages={referralTotalPages}
-              totalItems={referralOrders.length}
-              onPageChange={(p) => setReferralOrdersPage(p)}
-            />
-          </div>
+          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-varena-gold/20 text-varena-espresso">
+            {referralOrders.length} Transaksi Referral
+          </span>
         </div>
-      )}
+
+        {referralOrders.length > 0 ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left min-w-[560px]">
+                <thead className="bg-varena-ivory-light text-varena-taupe uppercase font-semibold border-b border-varena-taupe/20">
+                  <tr>
+                    <th className="py-2.5 px-3">No. Pesanan</th>
+                    <th className="py-2.5 px-3">Nama Pembeli</th>
+                    <th className="py-2.5 px-3">Tipe Pembelian</th>
+                    <th className="py-2.5 px-3">Total Belanja</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-right">Komisi Diterima</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-varena-taupe/10">
+                  {paginatedReferralOrders.map((ro) => (
+                    <tr key={ro.id} className="hover:bg-varena-ivory-light/40">
+                      <td className="py-2.5 px-3 font-mono font-bold text-varena-espresso">{ro.orderNumber}</td>
+                      <td className="py-2.5 px-3 font-medium text-varena-espresso">{ro.buyerName}</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-varena-ivory text-varena-espresso border border-varena-taupe/20">
+                          {formatOrderType(ro.orderType)}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono">Rp{ro.total.toLocaleString('id-ID')}</td>
+                      <td className="py-2.5 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            ro.orderStatus === 'PAID' || ro.orderStatus === 'SHIPPED' || ro.orderStatus === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {formatOrderStatus(ro.orderStatus)}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
+                        Rp{ro.commissionEarned.toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-2">
+              <Pagination
+                currentPage={referralOrdersPage}
+                totalPages={referralTotalPages}
+                totalItems={referralOrders.length}
+                onPageChange={(p) => setReferralOrdersPage(p)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-8 bg-varena-ivory-light/50 rounded-xl border border-dashed border-varena-taupe/30 space-y-2">
+            <Share2 className="w-8 h-8 text-varena-taupe/40 mx-auto" />
+            <p className="text-xs font-semibold text-varena-espresso">Belum ada penjualan dari link referral Anda</p>
+            <p className="text-[11px] text-varena-taupe max-w-md mx-auto">
+              Bagikan tautan referral Anda kepada rekan atau calon pelanggan. Setiap pesanan yang masuk melalui tautan Anda akan otomatis tercatat di sini dan menghasilkan komisi.
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  copyToClipboard(referralLink);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-varena-gold text-varena-espresso font-semibold text-xs hover:bg-varena-gold-hover transition shadow-sm"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-800" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Tautan Berhasil Disalin!' : 'Salin Tautan Referral Saya'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Quick Action Buttons */}
       <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
@@ -961,7 +1171,14 @@ export default function MemberDashboardPage() {
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-base text-white">Detail Pesanan & Pengiriman</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-serif font-bold text-base text-white">Detail Pesanan & Pengiriman</h3>
+                    {modalBreakdown?.isAgentRestock && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                        Pasokan Grosir Agen
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-varena-gold-light/80 font-mono flex items-center gap-1.5 mt-0.5">
                     <span>{selectedOrder.orderNumber}</span>
                     <button
@@ -1154,7 +1371,9 @@ export default function MemberDashboardPage() {
                   <div className="relative flex gap-3">
                     <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${
                       selectedOrder.orderStatus === 'PENDING_PAYMENT'
-                        ? 'bg-amber-500 ring-2 ring-amber-300 ring-offset-1 animate-pulse'
+                        ? selectedOrder.paymentConfirmationStatus === 'SUBMITTED'
+                          ? 'bg-blue-500 ring-2 ring-blue-300 ring-offset-1 animate-pulse'
+                          : 'bg-amber-500 ring-2 ring-amber-300 ring-offset-1 animate-pulse'
                         : 'bg-stone-400'
                     }`}>
                       <ShoppingBag className="w-3.5 h-3.5 text-white" />
@@ -1162,10 +1381,21 @@ export default function MemberDashboardPage() {
                     <div className="pt-0.5 flex-1">
                       <div className="font-bold text-xs text-stone-700">
                         Pesanan Dibuat
-                        {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+                        {selectedOrder.orderStatus === 'PENDING_PAYMENT' && selectedOrder.paymentConfirmationStatus === 'SUBMITTED' && (
+                          <span className="ml-1.5 text-[10px] font-normal bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Menunggu Verifikasi Admin</span>
+                        )}
+                        {selectedOrder.orderStatus === 'PENDING_PAYMENT' && selectedOrder.paymentConfirmationStatus !== 'SUBMITTED' && (
                           <span className="ml-1.5 text-[10px] font-normal bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Menunggu Pembayaran</span>
                         )}
                       </div>
+                      {selectedOrder.orderStatus === 'PENDING_PAYMENT' && selectedOrder.paymentConfirmationStatus === 'SUBMITTED' && (
+                        <div className="text-[11px] text-blue-700 mt-1 font-medium bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
+                          <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-600" />
+                          <span>
+                            Konfirmasi transfer dari <strong>{selectedOrder.senderBankName}</strong> a.n. <strong>{selectedOrder.senderAccountName}</strong> telah dikirim. Menunggu verifikasi Tim Finance VARENA.
+                          </span>
+                        </div>
+                      )}
                       <div className="text-[11px] text-stone-500 mt-0.5">
                         No. Pesanan: <span className="font-mono font-semibold">{selectedOrder.orderNumber}</span>
                       </div>
@@ -1284,43 +1514,119 @@ export default function MemberDashboardPage() {
 
               {/* Rincian Pembayaran (Payment Breakdown) */}
               <div className="p-4 rounded-xl bg-varena-ivory-light border border-varena-taupe/20 space-y-2">
-                <div className="font-bold text-varena-espresso text-xs flex items-center gap-1.5 border-b border-varena-taupe/20 pb-2">
-                  <CreditCard className="w-4 h-4 text-varena-gold" />
-                  <span>Rincian Pembayaran</span>
+                <div className="font-bold text-varena-espresso text-xs flex items-center justify-between border-b border-varena-taupe/20 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-varena-gold" />
+                    <span>Rincian Pembayaran</span>
+                  </div>
+                  {modalBreakdown?.isAgentRestock && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-200">
+                      Pasokan Agen Grosir
+                    </span>
+                  )}
                 </div>
+
                 <div className="space-y-1.5 text-[11px]">
                   <div className="flex justify-between text-stone-600">
-                    <span>Subtotal Harga Produk:</span>
+                    <span>{modalBreakdown?.isAgentRestock ? 'Subtotal Pasokan:' : 'Subtotal Harga Produk:'}</span>
                     <span className="font-mono font-medium text-varena-espresso">
-                      Rp{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.uniqueCode || 0)).toLocaleString('id-ID')}
+                      Rp{(modalBreakdown?.subtotal || selectedOrder.subtotal || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <div className="flex justify-between text-stone-600">
-                    <span>Biaya Ongkos Kirim:</span>
-                    <span className="font-mono text-emerald-700 font-semibold">
-                      {selectedOrder.shippingCost && selectedOrder.shippingCost > 0
-                        ? `Rp${selectedOrder.shippingCost.toLocaleString('id-ID')}`
-                        : 'Gratis Ongkir (Promo Korporasi)'}
-                    </span>
-                  </div>
-                  {selectedOrder.uniqueCode > 0 && (
-                    <div className="flex justify-between text-stone-600">
-                      <span>Kode Unik Pembayaran:</span>
-                      <span className="font-mono text-amber-800 font-semibold">
-                        +Rp{selectedOrder.uniqueCode}
+
+                  {modalBreakdown && modalBreakdown.discount > 0 && (
+                    <div className="flex justify-between text-purple-700 font-medium">
+                      <span>{modalBreakdown.isAgentRestock ? 'Potongan Diskon Agen:' : 'Potongan Diskon:'}</span>
+                      <span className="font-mono">
+                        -Rp{modalBreakdown.discount.toLocaleString('id-ID')}
                       </span>
                     </div>
                   )}
+
+                  <div className="flex justify-between items-center text-stone-600">
+                    <span>
+                      {modalBreakdown?.isAgentRestock ? 'Ongkos Kirim Pusat ke Agen:' : 'Biaya Ongkos Kirim:'}
+                    </span>
+                    {modalBreakdown?.isAgentRestock ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="line-through text-stone-400 font-mono text-[10px]">Rp50.000</span>
+                        <span className="font-bold text-emerald-700 uppercase">GRATIS</span>
+                      </div>
+                    ) : (
+                      <span className="font-mono text-emerald-700 font-semibold">
+                        {selectedOrder.shippingCost && selectedOrder.shippingCost > 0
+                          ? `Rp${selectedOrder.shippingCost.toLocaleString('id-ID')}`
+                          : 'Gratis Ongkir (Promo Korporasi)'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Skema Hybrid */}
+                  {modalBreakdown?.isHybrid && (
+                    <div className="mt-2 pt-2 border-t border-stone-200 space-y-1.5 bg-purple-50/70 p-2.5 rounded-lg border border-purple-100 text-[11px]">
+                      <div className="text-[10px] uppercase font-bold text-purple-950 tracking-wider">
+                        Rincian Pembayaran Metode Hybrid:
+                      </div>
+                      <div className="flex justify-between text-emerald-800 font-medium">
+                        <span>• Bayar dari Saldo Kas Deposit:</span>
+                        <span className="font-mono font-bold">-Rp{modalBreakdown.depositUsed.toLocaleString('id-ID')} (Lunas / Terpotong)</span>
+                      </div>
+                      <div className="flex justify-between text-purple-900">
+                        <span>• Sisa Tagihan Pokok:</span>
+                        <span className="font-mono font-semibold">
+                          Rp{(modalBreakdown.netSubtotal - modalBreakdown.depositUsed).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                      {modalBreakdown.uniqueCode > 0 && (
+                        <div className="flex justify-between text-amber-800">
+                          <span>• Kode Unik Transfer Manual (3 Digit):</span>
+                          <span className="font-mono font-bold">+Rp{modalBreakdown.uniqueCode}</span>
+                        </div>
+                      )}
+                      <div className="pt-1 border-t border-purple-200 flex justify-between font-bold text-purple-950">
+                        <span>Total Transfer Bank Manual (Exact):</span>
+                        <span className="font-mono">Rp{modalBreakdown.manualAmount.toLocaleString('id-ID')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jika bukan Hybrid tapi ada kode unik */}
+                  {!modalBreakdown?.isHybrid && modalBreakdown && modalBreakdown.uniqueCode > 0 && (
+                    <div className="flex justify-between text-amber-800">
+                      <span>Kode Unik Transfer:</span>
+                      <span className="font-mono font-bold">
+                        +Rp{modalBreakdown.uniqueCode}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Jika 100% deposit */}
+                  {modalBreakdown?.isDepositFull && (
+                    <div className="mt-1.5 pt-1.5 border-t border-stone-200 flex justify-between text-emerald-800 font-semibold bg-emerald-50/60 p-2 rounded">
+                      <span>• Potong Saldo Kas Deposit:</span>
+                      <span className="font-mono font-bold">-Rp{modalBreakdown.depositUsed.toLocaleString('id-ID')} (Lunas 100%)</span>
+                    </div>
+                  )}
+
                   <div className="pt-2 border-t border-varena-taupe/20 flex justify-between items-center text-xs">
-                    <span className="font-bold text-varena-espresso">Total Tagihan:</span>
-                    <span className="font-serif font-bold text-base text-varena-espresso">
-                      Rp{selectedOrder.total.toLocaleString('id-ID')}
+                    <span className="font-bold text-varena-espresso">Total Akhir Tagihan:</span>
+                    <span className="font-serif font-bold text-base text-varena-espresso font-mono">
+                      Rp{(modalBreakdown?.total || selectedOrder.total).toLocaleString('id-ID')}
                     </span>
                   </div>
                 </div>
 
                 <div className="pt-2 border-t border-varena-taupe/20 text-[10px] text-stone-500 space-y-1">
-                  <div>Metode Pembayaran: <strong>Transfer Bank BRI (Operasional Resmi)</strong></div>
+                  <div>
+                    Metode Pembayaran:{' '}
+                    <strong>
+                      {modalBreakdown?.isHybrid
+                        ? 'Hybrid (Saldo Kas Deposit + Transfer Bank BRI)'
+                        : modalBreakdown?.isDepositFull
+                        ? 'Saldo Kas Deposit Agen (100% Lunas)'
+                        : 'Transfer Bank BRI (Operasional Resmi)'}
+                    </strong>
+                  </div>
                   <div>Waktu Pemesanan: {new Date(selectedOrder.createdAt).toLocaleString('id-ID')}</div>
                   {selectedOrder.paidAt && (
                     <div>Waktu Lunas: {new Date(selectedOrder.paidAt).toLocaleString('id-ID')}</div>
@@ -1328,9 +1634,15 @@ export default function MemberDashboardPage() {
                 </div>
               </div>
 
-              {/* Instruksi Transfer Bank (Tampil HANYA jika PENDING_PAYMENT) */}
-              {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
+              {/* Instruksi Transfer Bank (Tampil HANYA jika PENDING_PAYMENT dan butuh transfer manual) */}
+              {selectedOrder.orderStatus === 'PENDING_PAYMENT' && !modalBreakdown?.isDepositFull && (
                 <div className="space-y-3 pt-1">
+                  {modalBreakdown?.isHybrid && (
+                    <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-medium">
+                      Saldo deposit sebesar <strong>Rp{modalBreakdown.depositUsed.toLocaleString('id-ID')}</strong> telah dipotong otomatis. Silakan transfer sisa tagihan manual di bawah ini:
+                    </div>
+                  )}
+
                   {/* Bank Destination Card */}
                   <div className="p-3.5 rounded-xl bg-white border border-varena-gold/40 space-y-2 shadow-xs">
                     <div className="flex items-center justify-between">
@@ -1382,7 +1694,7 @@ export default function MemberDashboardPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard?.writeText(String(selectedOrder.total));
+                          navigator.clipboard?.writeText(String(modalBreakdown?.manualAmount || selectedOrder.total));
                           setCopiedAmountModal(true);
                           setTimeout(() => setCopiedAmountModal(false), 2000);
                         }}
@@ -1401,12 +1713,12 @@ export default function MemberDashboardPage() {
                         )}
                       </button>
                     </div>
-                    <div className="font-serif text-2xl font-bold text-varena-gold-light tracking-tight">
-                      Rp{selectedOrder.total.toLocaleString('id-ID')}
+                    <div className="font-serif text-2xl font-bold text-varena-gold-light tracking-tight font-mono">
+                      Rp{(modalBreakdown?.manualAmount || selectedOrder.total).toLocaleString('id-ID')}
                     </div>
-                    {selectedOrder.uniqueCode > 0 && (
+                    {modalBreakdown && modalBreakdown.uniqueCode > 0 && (
                       <div className="text-[11px] text-varena-gold-light/85 mt-1 font-medium">
-                        (termasuk kode unik: +Rp{selectedOrder.uniqueCode} untuk verifikasi otomatis)
+                        (termasuk kode unik: +Rp{modalBreakdown.uniqueCode} untuk verifikasi otomatis)
                       </div>
                     )}
                   </div>
@@ -1430,12 +1742,21 @@ export default function MemberDashboardPage() {
 
             {/* Modal Footer Actions */}
             <div className="p-4 bg-stone-50 border-t border-varena-taupe/20 flex flex-row flex-wrap gap-2 justify-between items-center flex-shrink-0">
-              <Link
-                href={`/checkout?orderNumber=${selectedOrder.orderNumber}`}
-                className="text-center py-2 px-3 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium text-xs"
-              >
-                Halaman Invoice Lengkap →
-              </Link>
+              {modalBreakdown?.isAgentRestock ? (
+                <Link
+                  href={`/agent/checkout?orderNumber=${selectedOrder.orderNumber}`}
+                  className="text-center py-2 px-3 rounded-lg bg-purple-700 hover:bg-purple-800 text-white transition font-bold text-xs shadow-xs"
+                >
+                  Buka Portal Pelacakan Pasokan Agen →
+                </Link>
+              ) : (
+                <Link
+                  href={`/checkout?orderNumber=${selectedOrder.orderNumber}`}
+                  className="text-center py-2 px-3 rounded-lg border border-varena-taupe/30 text-varena-espresso hover:bg-varena-ivory transition font-medium text-xs"
+                >
+                  Halaman Invoice Lengkap →
+                </Link>
+              )}
 
               <div className="flex gap-2">
                 {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (

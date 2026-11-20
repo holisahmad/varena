@@ -11,18 +11,19 @@ export default function HomePage() {
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#B18A55_1px,transparent_1px)] [background-size:16px_16px]"></div>
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-varena-gold/40 bg-varena-espresso-dark/60 text-varena-gold-light text-xs tracking-widest uppercase mb-6 font-medium">
-            <Sparkles className="w-3.5 h-3.5 text-varena-gold" />
-            <span>Platform Direct Selling & Kemitraan Modern</span>
+          {/* Card Penegasan Resmi & Anti-Ponzi */}
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-varena-gold/50 bg-black/40 backdrop-blur-sm text-varena-gold-light text-xs tracking-wide mb-6 font-semibold shadow-inner">
+            <ShieldCheck className="w-4 h-4 text-varena-gold flex-shrink-0" />
+            <span>Distribusi Penjualan Langsung Resmi · Komisi Berbasis Omzet Produk Nyata</span>
           </div>
 
-          <h1 className="font-serif text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-varena-ivory-light max-w-4xl mx-auto leading-tight">
-            Grow Together. <br className="hidden sm:inline" />
-            <span className="text-varena-gold-light italic">Build Value.</span>
+          <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-varena-ivory-light max-w-4xl mx-auto leading-tight">
+            Bisnis Riil. Produk Nyata. <br className="hidden sm:inline" />
+            <span className="text-varena-gold-light italic">Komisi Transparan & Adil.</span>
           </h1>
 
-          <p className="mt-6 text-base sm:text-lg text-varena-ivory/80 max-w-2xl mx-auto leading-relaxed">
-            Membangun nilai melalui produk herbal premium berkhasiat nyata, transparansi kemitraan, dan ekosistem bisnis berkeadilan sesuai regulasi resmi.
+          <p className="mt-5 text-sm sm:text-base text-varena-ivory/85 max-w-2xl mx-auto leading-relaxed">
+            Distribusi resmi produk kopi fermentasi dan herbal berizin. Beli eceran tanpa syarat anggota, atau bangun jaringan kemitraan dengan pembagian hasil transparan sesuai Permendag RI No. 70/2019.
           </p>
 
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -42,23 +43,38 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {/* Trust badges */}
-          <div className="mt-14 pt-8 border-t border-[#4A3B30] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-4xl mx-auto text-xs text-varena-ivory/70">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-varena-gold-light flex-shrink-0" />
-              <span>Kepatuhan Permendag 70/2019</span>
+          {/* 4 Pilar Integritas Bisnis Anti-AI-Slop */}
+          <div className="mt-12 pt-8 border-t border-[#4A3B30] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-left max-w-4xl mx-auto">
+            <div className="p-3.5 rounded-xl bg-varena-espresso-dark/60 border border-varena-gold/25 flex items-start gap-3">
+              <ShieldCheck className="w-4 h-4 text-varena-gold flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold text-varena-ivory">Taat Permendag 70/2019</div>
+                <div className="text-[10px] text-varena-ivory/65 mt-0.5 leading-snug">Komisi dari selisih margin penjualan, Rp0 biaya pendaftaran</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <Award className="w-5 h-5 text-varena-gold-light flex-shrink-0" />
-              <span>BPOM & Halal Resmi</span>
+
+            <div className="p-3.5 rounded-xl bg-varena-espresso-dark/60 border border-varena-gold/25 flex items-start gap-3">
+              <Award className="w-4 h-4 text-varena-gold flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold text-varena-ivory">Izin P-IRT & Sertifikasi Halal</div>
+                <div className="text-[10px] text-varena-ivory/65 mt-0.5 leading-snug">Produk fisik teruji higienis & layak konsumsi resmi</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <ShoppingBag className="w-5 h-5 text-varena-gold-light flex-shrink-0" />
-              <span>Konsumen Bebas Beli Tanpa Syarat</span>
+
+            <div className="p-3.5 rounded-xl bg-varena-espresso-dark/60 border border-varena-gold/25 flex items-start gap-3">
+              <ShoppingBag className="w-4 h-4 text-varena-gold flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold text-varena-ivory">Konsumen Bebas Belanja</div>
+                <div className="text-[10px] text-varena-ivory/65 mt-0.5 leading-snug">Beli eceran tanpa syarat & tanpa paksaan jadi member</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <Sparkles className="w-5 h-5 text-varena-gold-light flex-shrink-0" />
-              <span>Buku Besar Transparan & Akurat</span>
+
+            <div className="p-3.5 rounded-xl bg-varena-espresso-dark/60 border border-varena-gold/25 flex items-start gap-3">
+              <Building2 className="w-4 h-4 text-varena-gold flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-xs font-bold text-varena-ivory">Buku Besar Transparan</div>
+                <div className="text-[10px] text-varena-ivory/65 mt-0.5 leading-snug">Mutasi komisi real-time & cair langsung ke rekening bank</div>
+              </div>
             </div>
           </div>
         </div>
@@ -69,10 +85,10 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="font-serif text-3xl font-bold text-varena-espresso tracking-tight">
-              Ekosistem Terintegrasi VARENA
+              Layanan & Akses Sistem VARENA
             </h2>
             <p className="mt-3 text-sm text-varena-taupe-dark">
-              Model branded house yang kokoh menyatukan perdagangan riil, kemitraan berjenjang, edukasi, dan tata kelola perusahaan.
+              Portal terpadu untuk belanja konsumen langsung, manajemen jaringan kemitraan, edukasi bisnis, dan tata kelola operasional resmi.
             </p>
           </div>
 
@@ -198,6 +214,7 @@ export default function HomePage() {
                   src="/brand/kopi-matahari.jpeg"
                   alt="Kopi Matahari — Robusta Fermentasi Premium"
                   fill
+                  sizes="(max-width: 640px) 256px, 320px"
                   className="object-cover"
                 />
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/90 to-transparent px-4 py-4 text-center">
@@ -220,11 +237,11 @@ export default function HomePage() {
             <div className="font-serif text-xl font-bold text-varena-gold-light uppercase tracking-wider">
               VARENA
             </div>
-            <p className="mt-2 text-varena-ivory/70">
-              Grow Together. Build Value.
+            <p className="mt-2 text-varena-gold-light/90 font-medium">
+              Bisnis Riil. Produk Nyata. Komisi Adil.
             </p>
-            <p className="mt-4 text-[11px] leading-relaxed">
-              Platform direct selling beretika dan terpercaya di Indonesia. Berfokus pada keaslian produk dan kepatuhan regulasi.
+            <p className="mt-3 text-[11px] leading-relaxed text-varena-ivory/70">
+              Distribusi produk herbal & kopi fermentasi resmi. Mengutamakan mutu produk fisik, perlindungan konsumen, dan transparansi bagi hasil kemitraan.
             </p>
           </div>
           <div>

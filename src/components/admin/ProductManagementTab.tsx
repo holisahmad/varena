@@ -23,8 +23,10 @@ import {
   Coffee,
   HelpCircle,
   RefreshCw,
+  Upload,
 } from 'lucide-react';
 import { formatProductCategory } from '@/lib/formatters';
+import { compressImageToWebP } from '@/lib/image-compression';
 
 interface ProductManagementTabProps {
   authHeaders: Record<string, string>;
@@ -96,6 +98,8 @@ export default function ProductManagementTab({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState<'GENERAL' | 'PACK' | 'SINGLE' | 'COMMISSION'>('GENERAL');
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageCompressInfo, setImageCompressInfo] = useState('');
 
   // Form State
   const [form, setForm] = useState<ProductForm>({
@@ -462,6 +466,7 @@ export default function ProductManagementTab({
                         src={p.imageUrl || '/brand/kopi-matahari.jpeg'}
                         alt={p.name}
                         fill
+                        sizes="(max-width: 640px) 112px, 200px"
                         className="object-cover"
                       />
                       <div className="absolute top-2 left-2">
@@ -779,28 +784,87 @@ export default function ProductManagementTab({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-varena-espresso mb-1">
-                      URL / Jalur Gambar Kemasan
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={form.imageUrl}
-                        onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-                        placeholder="/brand/kopi-matahari.jpeg"
-                        className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
-                      />
-                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 flex-shrink-0 relative">
-                        <Image
-                          src={form.imageUrl || '/brand/kopi-matahari.jpeg'}
-                          alt="Preview"
-                          fill
-                          className="object-cover"
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-varena-espresso">
+                        Foto Produk (Otomatis Kompresi ke WebP Ringan)
+                      </label>
+                      {imageCompressInfo && (
+                        <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          ✓ {imageCompressInfo}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex gap-2 items-center">
+                        <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-slate-300 hover:border-varena-gold rounded-lg cursor-pointer bg-slate-50 text-slate-700 text-xs transition">
+                          <Upload className="w-4 h-4 text-varena-gold" />
+                          <span className="font-semibold">
+                            {uploadingImage ? 'Mengompresi ke WebP & Mengunggah...' : 'Pilih Foto Produk dari Perangkat'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={uploadingImage}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingImage(true);
+                              try {
+                                // 1. Auto kompresi client-side ke WebP (maks 1000px)
+                                const comp = await compressImageToWebP(file, { maxWidth: 1000, quality: 0.82 });
+                                setImageCompressInfo(`${comp.originalSizeKb} KB ➔ ${comp.compressedSizeKb} KB WebP (${comp.compressionRatio})`);
+
+                                // 2. Upload file WebP ringan ke server
+                                const fd = new FormData();
+                                fd.append('file', comp.file);
+                                fd.append('category', 'products');
+
+                                const res = await fetch('/api/v1/upload', {
+                                  method: 'POST',
+                                  headers: {
+                                    ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+                                    ...(authHeaders['x-user-id'] ? { 'x-user-id': authHeaders['x-user-id'] } : {}),
+                                  },
+                                  body: fd,
+                                });
+                                const data = await res.json();
+                                if (!res.ok || !data.url) throw new Error(data.error || 'Gagal mengunggah foto produk.');
+
+                                setForm({ ...form, imageUrl: data.url });
+                                showToast('Foto produk berhasil dikompresi ke WebP dan diunggah!', 'success');
+                              } catch (err: any) {
+                                showToast(err.message || 'Gagal memproses foto produk.', 'error');
+                              } finally {
+                                setUploadingImage(false);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={form.imageUrl}
+                          onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                          placeholder="/brand/kopi-matahari.jpeg"
+                          className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
                         />
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 flex-shrink-0 relative">
+                          <Image
+                            src={form.imageUrl || '/brand/kopi-matahari.jpeg'}
+                            alt="Preview"
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                          />
+                        </div>
                       </div>
                     </div>
                     <span className="text-[10px] text-slate-500 mt-1 block">
-                      Pastikan file gambar telah tersimpan di direktori public atau gunakan URL gambar valid.
+                      Foto dari galeri/kamera HP akan di-resize dan dikonversi otomatis ke format WebP ringan (~40-60 KB) agar cepat dimuat di aplikasi mobile.
                     </span>
                   </div>
                 </div>

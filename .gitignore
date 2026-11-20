@@ -3,11 +3,19 @@ node_modules/
 out/
 build/
 dist/
+.postgres_data/
+dev.db*
 *.log
 .env
 .env.local
+.env.*.local
 prisma/dev.db
 prisma/dev.db-journal
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
+tsconfig.tsbuildinfo
 
+# Uploads
+public/uploads/proof/*
+!public/uploads/proof/.gitkeep

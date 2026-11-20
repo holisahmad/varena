@@ -96,24 +96,41 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
   let totalDistributed = 0;
   let unallocatedTotal = 0;
 
-  // A. Check Order Type & Calculate
-  // Is this First Pack or Repeat Purchase?
-  const packItems = order.items.filter((it) => it.variant.packSize >= 10 || it.variant.allowFirstPack);
-  const hasFirstPack = packItems.length > 0;
-  const singleItems = order.items.filter((it) => it.variant.packSize === 1);
-  const totalSachets = singleItems.reduce((acc, it) => acc + it.quantity, 0);
+  // A. Determine First Pack Activation vs Repeat Purchase Portion
+  // Aturan Bisnis VARENA:
+  // - Mitra baru wajib order minimal 1 produk paket perdana (Kopi Premium Rp500.000).
+  // - Dari 1 pack perdana tersebut: Bonus Sponsor Rp50.000 ke upline langsung, dan Bonus Pengembangan Rp10.000 x 10 level (Rp100.000).
+  // - Kelebihan qty atau produk lain yang dibeli bersamaan dinilai sebagai Repeat Order:
+  //   Hanya menghasilkan bonus jaringan sesuai setting produk (misal Rp2.000 per level x 10 level), tanpa bonus sponsor ganda.
+  const firstPackItemIndex = order.items.findIndex(
+    (it) => it.variant.allowFirstPack || it.variant.price >= 500000 || it.variant.packSize >= 10
+  );
+  const hasFirstPack = firstPackItemIndex >= 0 && order.orderType === 'FIRST_PACK';
 
-  // --- REWARD 1: DIRECT SPONSOR REWARD ---
+  // --- REWARD 1: DIRECT SPONSOR REWARD (Hanya dari 1 Pack Perdana Pertama) ---
   if (hasFirstPack) {
-    // Sponsor of the buyer member or the referring member gets the direct reward
-    const directSponsor = await getDirectSponsor(referralMember.id);
-    const sponsorBeneficiary = directSponsor || referralMember;
+    let sponsorBeneficiary: any = null;
 
-    // Use variant-specific sponsorReward or fallback to marketing plan
-    const firstPackItem = packItems[0];
+    if (order.buyerUserId) {
+      const buyerMember = await prisma.member.findUnique({
+        where: { userId: order.buyerUserId },
+      });
+      if (buyerMember) {
+        const uplineSponsor = await getDirectSponsor(buyerMember.id);
+        if (uplineSponsor && uplineSponsor.memberStatus === 'ACTIVE') {
+          sponsorBeneficiary = uplineSponsor;
+        }
+      }
+    }
+
+    if (!sponsorBeneficiary) {
+      sponsorBeneficiary = referralMember;
+    }
+
+    const primaryFirstPack = order.items[firstPackItemIndex];
     const sponsorRewardAmount =
-      firstPackItem?.variant?.sponsorReward !== undefined && firstPackItem?.variant?.sponsorReward > 0
-        ? firstPackItem.variant.sponsorReward
+      primaryFirstPack?.variant?.sponsorReward !== undefined && primaryFirstPack?.variant?.sponsorReward > 0
+        ? primaryFirstPack.variant.sponsorReward
         : plan.firstPackDirectReward; // Rp50.000
 
     itemsToCreate.push({
@@ -127,19 +144,18 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
     totalDistributed += sponsorRewardAmount;
   }
 
-  // --- REWARD 2: DEVELOPMENT PLACEMENT REWARD (Up to 10 Levels Upline) ---
-  const firstPackItem = packItems[0];
-  const maxLevels =
-    firstPackItem?.variant?.maxCommissionLevels && firstPackItem.variant.maxCommissionLevels > 0
-      ? firstPackItem.variant.maxCommissionLevels
-      : plan.firstPackDevMaxLevels; // 10
+  // Upline Network Structure (Up to 10 Levels)
+  const maxLevels = plan.firstPackDevMaxLevels || 10;
   const uplines = await getPlacementUplines(referralMember.id, maxLevels);
 
+  // --- REWARD 2: FIRST PACK DEVELOPMENT REWARD (10 Level dari 1 Pack Perdana) ---
   if (hasFirstPack) {
+    const primaryFirstPack = order.items[firstPackItemIndex];
     const devAmountPerLevel =
-      firstPackItem?.variant?.uplineRewardPerLevel !== undefined && firstPackItem?.variant?.uplineRewardPerLevel > 0
-        ? firstPackItem.variant.uplineRewardPerLevel
+      primaryFirstPack?.variant?.uplineRewardPerLevel !== undefined && primaryFirstPack?.variant?.uplineRewardPerLevel > 0
+        ? primaryFirstPack.variant.uplineRewardPerLevel
         : plan.firstPackDevReward; // Rp10.000
+
     for (let lvl = 1; lvl <= maxLevels; lvl++) {
       const uplineAtLevel = uplines.find((u) => u.level === lvl);
       if (uplineAtLevel && uplineAtLevel.memberStatus === 'ACTIVE') {
@@ -153,7 +169,6 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
         });
         totalDistributed += devAmountPerLevel;
       } else {
-        // Unallocated slot -> reserve account
         itemsToCreate.push({
           beneficiaryId: null,
           rewardType: 'UNALLOCATED_DEV_RESERVE',
@@ -166,14 +181,41 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
     }
   }
 
-  // --- REWARD 3: REPEAT PURCHASE DEV REWARD ---
-  if (totalSachets > 0) {
-    const sampleSingle = singleItems[0];
-    const ratePerSachet =
-      sampleSingle?.variant?.uplineRewardPerLevel !== undefined && sampleSingle?.variant?.uplineRewardPerLevel > 0
-        ? sampleSingle.variant.uplineRewardPerLevel
-        : plan.repeatDevReward; // Rp2.000 baseline
-    const devSachetPerLevel = ratePerSachet * totalSachets;
+  // --- REWARD 3: REPEAT ORDER & MULTI-PRODUCT ADDITIONAL REWARD (Barang Selanjutnya / Kelebihannya) ---
+  // Menghitung akumulasi bonus jaringan untuk semua item di luar 1 pack perdana pertama:
+  let totalRepeatRewardPerLevel = 0;
+
+  if (hasFirstPack) {
+    const primaryFirstPack = order.items[firstPackItemIndex];
+    const excessQty = Math.max(0, primaryFirstPack.quantity - 1);
+    if (excessQty > 0) {
+      // Kelebihan qty dari pack perdana dinilai repeat order (default Rp2.000 / box)
+      const excessRate = plan.repeatDevReward || 2000;
+      totalRepeatRewardPerLevel += excessQty * excessRate;
+    }
+
+    // Seluruh item lain selain 1 pack perdana pertama
+    for (let i = 0; i < order.items.length; i++) {
+      if (i === firstPackItemIndex) continue;
+      const otherItem = order.items[i];
+      const rate =
+        otherItem.variant?.uplineRewardPerLevel !== undefined && otherItem.variant?.uplineRewardPerLevel > 0
+          ? otherItem.variant.uplineRewardPerLevel
+          : plan.repeatDevReward || 2000;
+      totalRepeatRewardPerLevel += otherItem.quantity * rate;
+    }
+  } else {
+    // Pesanan Repeat Purchase murni: seluruh item dihitung komisi repeat order
+    for (const item of order.items) {
+      const rate =
+        item.variant?.uplineRewardPerLevel !== undefined && item.variant?.uplineRewardPerLevel > 0
+          ? item.variant.uplineRewardPerLevel
+          : plan.repeatDevReward || 2000;
+      totalRepeatRewardPerLevel += item.quantity * rate;
+    }
+  }
+
+  if (totalRepeatRewardPerLevel > 0) {
     for (let lvl = 1; lvl <= maxLevels; lvl++) {
       const uplineAtLevel = uplines.find((u) => u.level === lvl);
       if (uplineAtLevel && uplineAtLevel.memberStatus === 'ACTIVE') {
@@ -182,19 +224,19 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
           beneficiaryCode: uplineAtLevel.memberCode,
           rewardType: 'DEVELOPMENT_PLACEMENT',
           levelNumber: lvl,
-          amount: devSachetPerLevel,
-          reasonCode: `REPEAT_DEV_L${lvl}_REWARD_${totalSachets}SCH_${order.orderNumber}`,
+          amount: totalRepeatRewardPerLevel,
+          reasonCode: `REPEAT_DEV_L${lvl}_REWARD_FROM_${order.orderNumber}`,
         });
-        totalDistributed += devSachetPerLevel;
+        totalDistributed += totalRepeatRewardPerLevel;
       } else {
         itemsToCreate.push({
           beneficiaryId: null,
           rewardType: 'UNALLOCATED_DEV_RESERVE',
           levelNumber: lvl,
-          amount: devSachetPerLevel,
+          amount: totalRepeatRewardPerLevel,
           reasonCode: `REPEAT_DEV_L${lvl}_UNALLOCATED_EMPTY`,
         });
-        unallocatedTotal += devSachetPerLevel;
+        unallocatedTotal += totalRepeatRewardPerLevel;
       }
     }
   }
@@ -213,7 +255,8 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
           orderNumber: order.orderNumber,
           referralMemberId: referralMember.id,
           hasFirstPack,
-          totalSachets,
+          itemsCount: order.items.length,
+          orderType: order.orderType,
         }),
       },
     });

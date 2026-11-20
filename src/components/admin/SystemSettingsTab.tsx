@@ -31,9 +31,9 @@ export default function SystemSettingsTab({
 
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
-    PRIMARY_BANK_NAME: 'BCA',
-    PRIMARY_BANK_ACCOUNT: '8830192831',
-    PRIMARY_BANK_HOLDER: 'PT VARENA BINA NUSANTARA',
+    PRIMARY_BANK_NAME: 'BRI',
+    PRIMARY_BANK_ACCOUNT: '3065 0102 4471 539',
+    PRIMARY_BANK_HOLDER: 'Sunariyo',
     MIN_PAYOUT_AMOUNT: '50000',
     DEFAULT_AGENT_MOQ: '10',
     DEFAULT_AGENT_DISCOUNT: '15.0',

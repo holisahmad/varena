@@ -24,9 +24,33 @@ export const ORDER_STATUS_BADGES: Record<string, { bg: string; text: string; bor
   REFUNDED: { bg: 'bg-stone-50', text: 'text-stone-700', border: 'border-stone-200' },
 };
 
-export function formatOrderStatus(status?: string | null): string {
+export function formatOrderStatus(status?: string | null, confirmationStatus?: string | null): string {
   if (!status) return '-';
+  if (status === 'PENDING_PAYMENT') {
+    if (confirmationStatus === 'SUBMITTED') {
+      return 'Menunggu Verifikasi Admin';
+    }
+    if (confirmationStatus === 'REJECTED') {
+      return 'Konfirmasi Ditolak (Perlu Bayar Ulang)';
+    }
+  }
   return ORDER_STATUS_LABELS[status] || status.replace(/_/g, ' ');
+}
+
+export function getOrderStatusBadge(status?: string | null, confirmationStatus?: string | null): {
+  bg: string;
+  text: string;
+  border: string;
+} {
+  if (status === 'PENDING_PAYMENT') {
+    if (confirmationStatus === 'SUBMITTED') {
+      return { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-300' };
+    }
+    if (confirmationStatus === 'REJECTED') {
+      return { bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-300' };
+    }
+  }
+  return ORDER_STATUS_BADGES[status || ''] || { bg: 'bg-stone-50', text: 'text-stone-700', border: 'border-stone-200' };
 }
 
 // 2. Tipe Pesanan (Order Type)

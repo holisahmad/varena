@@ -17,6 +17,7 @@ import {
   Check,
 } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
+import { compressImageToWebP } from '@/lib/image-compression';
 
 function ConfirmPaymentContent() {
   const searchParams = useSearchParams();
@@ -28,6 +29,9 @@ function ConfirmPaymentContent() {
   const [transferAmountPaid, setTransferAmountPaid] = useState('');
   const [transferNotes, setTransferNotes] = useState('');
   const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -47,21 +51,35 @@ function ConfirmPaymentContent() {
     }
   }, [searchParams]);
 
-  // Handle local image file upload and convert to base64 preview
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle auto-compression to WebP and upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file bukti transfer maksimal 5 MB.');
-      return;
-    }
+    setCompressing(true);
+    setErrorMessage(null);
+    try {
+      // 1. Auto kompresi client-side ke WebP (hemat ~98% ukuran)
+      const res = await compressImageToWebP(file, { maxWidth: 1000, quality: 0.82 });
+      setProofPreview(res.previewUrl);
+      setCompressionInfo(`${res.originalSizeKb} KB ➔ ${res.compressedSizeKb} KB WebP (${res.compressionRatio})`);
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPaymentProofUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+      // 2. Upload file WebP ringan ke server
+      const fd = new FormData();
+      fd.append('file', res.file);
+      fd.append('category', 'proof');
+
+      const upRes = await fetch('/api/v1/upload', { method: 'POST', body: fd });
+      const upData = await upRes.json();
+      if (!upRes.ok || !upData.url) {
+        throw new Error(upData.error || 'Gagal mengunggah gambar bukti transfer.');
+      }
+      setPaymentProofUrl(upData.url);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal memproses gambar bukti transfer.');
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -281,9 +299,16 @@ function ConfirmPaymentContent() {
             </div>
 
             <div>
-              <label className="block font-semibold text-varena-espresso mb-1">
-                Upload Foto Bukti Transfer / Slip Bank (Maks. 5 MB) *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-varena-espresso text-xs">
+                  Upload Foto Bukti Transfer / Slip Bank *
+                </label>
+                {compressionInfo && (
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    ✓ {compressionInfo}
+                  </span>
+                )}
+              </div>
               <div className="border-2 border-dashed border-varena-taupe/30 rounded-xl p-4 text-center hover:border-varena-gold transition bg-slate-50">
                 <input
                   type="file"
@@ -297,24 +322,27 @@ function ConfirmPaymentContent() {
                   className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
                 >
                   <Upload className="w-6 h-6 text-varena-gold" />
-                  <span className="font-semibold text-varena-espresso">Pilih file foto bukti transfer</span>
-                  <span className="text-[10px] text-varena-taupe">Format JPG, PNG, atau screenshot m-banking</span>
+                  <span className="font-semibold text-varena-espresso">
+                    {compressing ? 'Mengompresi ke WebP & Mengunggah...' : 'Pilih file foto bukti transfer'}
+                  </span>
+                  <span className="text-[10px] text-varena-taupe">Format JPG, PNG, atau screenshot m-banking (otomatis dikompres)</span>
                 </label>
               </div>
 
               {paymentProofUrl && (
                 <div className="mt-3 p-2 rounded-lg border border-varena-taupe/20 bg-white flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={paymentProofUrl}
+                    src={proofPreview || paymentProofUrl}
                     alt="Bukti Transfer"
                     className="w-16 h-16 object-cover rounded border"
                   />
                   <div className="text-[11px] text-varena-taupe space-y-0.5">
                     <div className="font-semibold text-emerald-700 flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Foto bukti berhasil dipilih</span>
+                      <span>Foto bukti berhasil dikompresi WebP & siap diverifikasi</span>
                     </div>
-                    <div>Siap dikirimkan ke tim verifikasi keuangan</div>
+                    <div className="text-[10px] text-stone-500 font-mono">Tersimpan: {paymentProofUrl}</div>
                   </div>
                 </div>
               )}

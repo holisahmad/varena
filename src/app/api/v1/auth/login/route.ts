@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateUser } from '@/lib/auth';
+import { signSessionToken, buildSessionCookie } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import {
   checkRateLimit,
@@ -116,10 +117,15 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({
+    // Sign JWT token dan set cookie
+    const token = await signSessionToken(session);
+    const response = NextResponse.json({
       success: true,
       user: session,
+      token,
     });
+    response.headers.set('Set-Cookie', buildSessionCookie(token));
+    return response;
   } catch (err: any) {
     console.error('Login error:', err);
     return NextResponse.json(

@@ -14,6 +14,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  Minus,
+  Trash2,
+  ShoppingCart,
   ArrowRight,
   ShieldCheck,
   Send,
@@ -42,9 +45,12 @@ export default function AgentPortalPage() {
   const [assignedOrders, setAssignedOrders] = useState<any[]>([]);
   const [depositTransactions, setDepositTransactions] = useState<any[]>([]);
 
-  // Restock form modal
+  // Restock form modal — multi-item cart
   const [restockModalOpen, setRestockModalOpen] = useState(false);
-  const [restockQty, setRestockQty] = useState(10);
+  // cart: { variantId, quantity }[]
+  const [restockCart, setRestockCart] = useState<{ variantId: string; quantity: number }[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState('');
+  const [availableVariants, setAvailableVariants] = useState<any[]>([]);
   const [restockPaymentMethod, setRestockPaymentMethod] = useState<'DEPOSIT' | 'MANUAL_TRANSFER'>('DEPOSIT');
   const [restockSubmitting, setRestockSubmitting] = useState(false);
 
@@ -66,6 +72,12 @@ export default function AgentPortalPage() {
   const [topupAmount, setTopupAmount] = useState('1000000');
   const [topupNotes, setTopupNotes] = useState('');
   const [topupSubmitting, setTopupSubmitting] = useState(false);
+  const [topupBankName, setTopupBankName] = useState('');
+  const [topupAccountNumber, setTopupAccountNumber] = useState('');
+  const [topupStep, setTopupStep] = useState<1 | 2>(1);
+  const [topupResult, setTopupResult] = useState<any>(null);
+  const [topupProofUrl, setTopupProofUrl] = useState('');
+  const [topupUploadingProof, setTopupUploadingProof] = useState(false);
 
   // Dispatch assigned order modal
   const [dispatchModalOrder, setDispatchModalOrder] = useState<any>(null);
@@ -74,6 +86,44 @@ export default function AgentPortalPage() {
   const [dispatchSubmitting, setDispatchSubmitting] = useState(false);
 
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Derived restock cart totals
+  const cartGross = restockCart.reduce((sum, ci) => {
+    const v = availableVariants.find((v) => v.id === ci.variantId);
+    return sum + (v ? v.price * ci.quantity : 0);
+  }, 0);
+  const cartBoxQty = restockCart.reduce((sum, ci) => sum + ci.quantity, 0);
+  const minRestockMoq = config?.minimumRestockBox || 10;
+  const isRestockBelowMoq = cartBoxQty < minRestockMoq;
+
+  const cartDiscount =
+    agentData?.agentDiscountType === 'PERCENTAGE'
+      ? Math.round((cartGross * (agentData?.agentDiscountValue ?? config.defaultDiscountValue ?? 15)) / 100)
+      : restockCart.reduce((s, ci) => s + (agentData?.agentDiscountValue ?? 0) * ci.quantity, 0);
+  const cartPayable = cartGross - cartDiscount;
+
+  const addToRestockCart = (variantId: string) => {
+    if (!variantId) return;
+    setRestockCart((prev) => {
+      const existing = prev.find((ci) => ci.variantId === variantId);
+      if (existing) {
+        return prev.map((ci) => ci.variantId === variantId ? { ...ci, quantity: ci.quantity + 1 } : ci);
+      }
+      return [...prev, { variantId, quantity: 1 }];
+    });
+  };
+
+  const updateCartQty = (variantId: string, qty: number) => {
+    if (qty <= 0) {
+      setRestockCart((prev) => prev.filter((ci) => ci.variantId !== variantId));
+    } else {
+      setRestockCart((prev) => prev.map((ci) => ci.variantId === variantId ? { ...ci, quantity: qty } : ci));
+    }
+  };
+
+  const removeFromCart = (variantId: string) => {
+    setRestockCart((prev) => prev.filter((ci) => ci.variantId !== variantId));
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
@@ -95,10 +145,14 @@ export default function AgentPortalPage() {
     if (!u) return;
     setLoading(true);
 
-    const headers: Record<string, string> = {
-      'x-user-id': u.userId || u.id || '',
-      'x-user-email': u.email || '',
-    };
+    // JWT-first auth
+    const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
+    const headers: Record<string, string> = token
+      ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      : {
+          'x-user-id': u.userId || u.id || '',
+          'x-user-email': u.email || '',
+        };
 
     try {
       // 1. Profile & Config
@@ -108,7 +162,6 @@ export default function AgentPortalPage() {
         setAgentData(profileData.agent);
         if (profileData.config) {
           setConfig(profileData.config);
-          setRestockQty(profileData.config.minimumRestockBox || 10);
         }
       }
 
@@ -122,6 +175,24 @@ export default function AgentPortalPage() {
       const depRes = await fetch(`/api/v1/agent/deposit?memberCode=${u.memberCode || ''}`, { headers });
       const depData = await depRes.json();
       if (depData.transactions) setDepositTransactions(depData.transactions);
+
+      // 4. Products catalog for restock variants
+      const catalogRes = await fetch('/api/v1/catalog/products');
+      const catalogData = await catalogRes.json();
+      if (catalogData.products) {
+        const vars: any[] = [];
+        catalogData.products.forEach((p: any) => {
+          (p.variants || []).forEach((v: any) => {
+            if (v.status === 'ACTIVE' && (v.allowAgentStock || v.variantType === 'PACK')) {
+              vars.push({ ...v, productName: p.name });
+            }
+          });
+        });
+        setAvailableVariants(vars);
+        if (vars.length > 0) {
+          setSelectedVariantId((prev) => prev || vars[0].id);
+        }
+      }
     } catch (e: any) {
       console.error('Failed to load agent portal data:', e);
     } finally {
@@ -132,6 +203,15 @@ export default function AgentPortalPage() {
   const handleRestockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (isRestockBelowMoq) {
+      setMessage({
+        text: `Minimal pemesanan pasokan agen adalah ${minRestockMoq} Box sesuai aturan kantor pusat. Saat ini baru ${cartBoxQty} Box.`,
+        type: 'error',
+      });
+      return;
+    }
+
     setRestockSubmitting(true);
     setMessage(null);
 
@@ -142,7 +222,7 @@ export default function AgentPortalPage() {
         body: JSON.stringify({
           action: 'CREATE_RESTOCK',
           memberCode: user.memberCode,
-          quantity: restockQty,
+          items: restockCart,
           paymentMethod: restockPaymentMethod,
         }),
       });
@@ -150,6 +230,7 @@ export default function AgentPortalPage() {
       if (data.success) {
         setMessage({ text: data.message, type: 'success' });
         setRestockModalOpen(false);
+        setRestockCart([]);
         loadAgentData();
       } else {
         setMessage({ text: data.error || 'Gagal memproses pasokan grosir.', type: 'error' });
@@ -214,13 +295,15 @@ export default function AgentPortalPage() {
           memberCode: user.memberCode,
           amount: topupAmount,
           notes: topupNotes,
+          bankName: topupBankName,
+          accountNumber: topupAccountNumber,
+          depositType: 'TOPUP_DEPOSIT',
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: data.message, type: 'success' });
-        setTopupModalOpen(false);
-        setTopupNotes('');
+        setTopupResult(data);
+        setTopupStep(2);
         loadAgentData();
       } else {
         setMessage({ text: data.error || 'Gagal mengajukan top up deposit.', type: 'error' });
@@ -229,6 +312,30 @@ export default function AgentPortalPage() {
       setMessage({ text: err.message || 'Terjadi kesalahan sistem.', type: 'error' });
     } finally {
       setTopupSubmitting(false);
+    }
+  };
+
+  const handleTopupProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !topupResult?.transactionId) return;
+    setTopupUploadingProof(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('transactionId', topupResult.transactionId);
+      formData.append('memberCode', user.memberCode);
+      const res = await fetch('/api/v1/agent/deposit/proof', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        setTopupProofUrl(data.proofUrl);
+        setMessage({ text: 'Bukti transfer berhasil diunggah!', type: 'success' });
+      } else {
+        setMessage({ text: data.error || 'Gagal upload bukti.', type: 'error' });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Gagal upload bukti transfer.', type: 'error' });
+    } finally {
+      setTopupUploadingProof(false);
     }
   };
 
@@ -342,13 +449,13 @@ export default function AgentPortalPage() {
               <Wallet className="w-4 h-4 text-varena-gold" />
               <span>Top Up Deposit</span>
             </button>
-            <button
-              onClick={() => setRestockModalOpen(true)}
+            <Link
+              href="/agent/checkout"
               className="px-4 py-2 rounded-xl bg-varena-gold hover:bg-varena-gold-hover text-varena-espresso font-bold text-xs transition shadow-md flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />
+              <ShoppingCart className="w-4 h-4" />
               <span>Order Pasokan Grosir</span>
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -520,13 +627,13 @@ export default function AgentPortalPage() {
                 <h3 className="font-serif font-bold text-base text-varena-espresso">Riwayat Pasokan Grosir dari Kantor Pusat</h3>
                 <p className="text-xs text-stone-500">Seluruh pasokan dikirim langsung dari pabrik/kantor pusat bebas biaya pengiriman.</p>
               </div>
-              <button
-                onClick={() => setRestockModalOpen(true)}
+              <Link
+                href="/agent/checkout"
                 className="py-2 px-3.5 rounded-xl bg-varena-espresso text-varena-gold font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center gap-1.5 shadow"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Pesan Pasokan Tambahan</span>
-              </button>
+                <span>Pesan Pasokan Grosir Baru</span>
+              </Link>
             </div>
 
             {restockOrders.length === 0 ? (
@@ -545,13 +652,19 @@ export default function AgentPortalPage() {
                       <th className="py-2.5 px-3">Status Pasokan</th>
                       <th className="py-2.5 px-3">Ekspedisi / Resi</th>
                       <th className="py-2.5 px-3">Tanggal Pesan</th>
+                      <th className="py-2.5 px-3 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y text-stone-700">
                     {restockOrders.map((o) => (
                       <tr key={o.id} className="hover:bg-stone-50/50">
                         <td className="py-3 px-3 font-mono font-semibold text-varena-espresso">
-                          {o.orderNumber}
+                          <Link
+                            href={`/agent/checkout?orderNumber=${o.orderNumber}`}
+                            className="hover:text-varena-gold hover:underline"
+                          >
+                            {o.orderNumber}
+                          </Link>
                         </td>
                         <td className="py-3 px-3 font-semibold">
                           {o.items?.reduce((sum: number, it: any) => sum + it.quantity, 0)} Box
@@ -588,6 +701,15 @@ export default function AgentPortalPage() {
                         </td>
                         <td className="py-3 px-3 text-stone-500">
                           {new Date(o.createdAt).toLocaleDateString('id-ID')}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <Link
+                            href={`/agent/checkout?orderNumber=${o.orderNumber}`}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-varena-espresso hover:text-varena-gold transition bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg"
+                          >
+                            <span>{o.orderStatus === 'SHIPPED' ? 'Terima Barang' : 'Lacak & Detail'}</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -729,14 +851,19 @@ export default function AgentPortalPage() {
                           {tx.referenceId || '-'}
                         </td>
                         <td className="py-3 px-3 font-semibold">
-                          {tx.type === 'TOPUP_DEPOSIT' ? 'Top Up Saldo Deposit' : tx.type === 'RESTOCK_PAYMENT' ? 'Pembayaran Pasokan Grosir' : tx.type}
+                          {tx.type === 'TOPUP_DEPOSIT' ? 'Top Up Saldo Deposit'
+                            : tx.type === 'RESTOCK_PAYMENT' ? 'Pembayaran Pasokan Grosir'
+                            : tx.type === 'RESTOCK_HYBRID_DEPOSIT' ? 'Pembayaran Pasokan (Bagian Deposit)'
+                            : tx.type === 'ADJUSTMENT_CREDIT' ? 'Penyesuaian Kredit'
+                            : tx.type === 'ADJUSTMENT_DEBIT' ? 'Penyesuaian Debit'
+                            : tx.type}
                         </td>
                         <td className="py-3 px-3 text-stone-600">
                           {tx.notes}
                         </td>
                         <td className="py-3 px-3 font-semibold">
-                          <span className={tx.type === 'TOPUP_DEPOSIT' || tx.type === 'ADJUSTMENT_CREDIT' ? 'text-emerald-700' : 'text-rose-700'}>
-                            {tx.type === 'TOPUP_DEPOSIT' || tx.type === 'ADJUSTMENT_CREDIT' ? '+' : '-'}Rp{tx.amount?.toLocaleString('id-ID')}
+                          <span className={['TOPUP_DEPOSIT', 'ADJUSTMENT_CREDIT'].includes(tx.type) ? 'text-emerald-700' : 'text-rose-700'}>
+                            {['TOPUP_DEPOSIT', 'ADJUSTMENT_CREDIT'].includes(tx.type) ? '+' : '-'}Rp{tx.amount?.toLocaleString('id-ID')}
                           </span>
                         </td>
                         <td className="py-3 px-3">
@@ -827,70 +954,145 @@ export default function AgentPortalPage() {
         )}
       </main>
 
-      {/* ── MODAL 1: ORDER PASOKAN GROSIR ── */}
+      {/* ── MODAL 1: ORDER PASOKAN GROSIR (Multi-Item Cart) ── */}
       {restockModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-varena-gold/40 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl border border-varena-gold/40 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-                <Package className="w-5 h-5 text-varena-gold" />
+                <ShoppingCart className="w-5 h-5 text-varena-gold" />
                 <span>Pemesanan Pasokan Grosir ke Kantor</span>
               </h3>
               <button onClick={() => setRestockModalOpen(false)} className="text-stone-400 hover:text-stone-700">✕</button>
             </div>
 
-            <form onSubmit={handleRestockSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-stone-600 font-semibold mb-1">
-                  Jumlah Pasokan (Minimal {config.minimumRestockBox} Box):
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={config.minimumRestockBox}
-                    value={restockQty}
-                    onChange={(e) => setRestockQty(Math.max(config.minimumRestockBox, parseInt(e.target.value, 10) || config.minimumRestockBox))}
-                    className="w-28 p-2 rounded-lg border border-stone-300 font-bold text-sm text-center outline-none focus:border-varena-gold"
-                    required
-                  />
-                  <span className="text-xs text-stone-500">Box (VARENA Kopi Sehat Premium)</span>
+            {/* Aturan Kantor Pusat: Batas Minimal Order */}
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                <span className="text-amber-900">
+                  Aturan Keagenan: Minimal pemesanan adalah <strong>{minRestockMoq} Box</strong> (bisa kombinasi produk).
+                </span>
+              </div>
+              <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 shrink-0">
+                MOQ: {minRestockMoq} Box
+              </span>
+            </div>
+
+            {/* Panel Tambah Produk */}
+            {availableVariants.length > 0 && (
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+                <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Tambah Produk ke Keranjang</p>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedVariantId}
+                    onChange={(e) => setSelectedVariantId(e.target.value)}
+                    className="flex-1 p-2 rounded-lg border border-stone-300 text-xs outline-none focus:border-varena-gold bg-white"
+                  >
+                    {availableVariants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.productName} — {v.name} (Rp{v.price.toLocaleString('id-ID')}/{v.unit || 'unit'})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => addToRestockCart(selectedVariantId)}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-varena-espresso text-varena-gold text-xs font-bold hover:bg-varena-espresso-dark transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Tambah
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Rincian Perhitungan Diskon & Bebas Ongkir */}
-              <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+            {/* Keranjang Item */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide flex items-center gap-1.5">
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Keranjang ({restockCart.length} jenis produk)
+              </p>
+              {restockCart.length === 0 ? (
+                <div className="text-center py-6 text-xs text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                  Belum ada produk. Pilih produk dan klik <strong>Tambah</strong> di atas.
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+                  {restockCart.map((ci) => {
+                    const v = availableVariants.find((av) => av.id === ci.variantId);
+                    if (!v) return null;
+                    const lineGross = v.price * ci.quantity;
+                    return (
+                      <div key={ci.variantId} className="flex items-center gap-3 px-3 py-2.5 bg-white hover:bg-stone-50 transition">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-xs text-varena-espresso truncate">{v.productName}</div>
+                          <div className="text-[10px] text-stone-400 truncate">{v.name} · Rp{v.price.toLocaleString('id-ID')}/{v.unit || 'unit'}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQty(ci.variantId, ci.quantity - 1)}
+                            className="w-6 h-6 rounded-md border border-stone-300 text-stone-600 flex items-center justify-center hover:bg-stone-100 text-xs font-bold"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            value={ci.quantity}
+                            onChange={(e) => updateCartQty(ci.variantId, parseInt(e.target.value, 10) || 1)}
+                            className="w-14 text-center text-xs font-bold border border-stone-300 rounded-md px-1 py-0.5 outline-none focus:border-varena-gold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateCartQty(ci.variantId, ci.quantity + 1)}
+                            className="w-6 h-6 rounded-md border border-stone-300 text-stone-600 flex items-center justify-center hover:bg-stone-100 text-xs font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="text-xs font-mono font-semibold text-varena-espresso w-24 text-right shrink-0">
+                          Rp{lineGross.toLocaleString('id-ID')}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(ci.variantId)}
+                          className="text-red-400 hover:text-red-600 ml-1 shrink-0"
+                          title="Hapus item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Rincian Harga */}
+            {restockCart.length > 0 && (
+              <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1.5 text-xs">
                 <div className="flex justify-between text-stone-600">
-                  <span>Harga Normal (@Rp500.000):</span>
-                  <span>Rp{(500000 * restockQty).toLocaleString('id-ID')}</span>
+                  <span>Subtotal Harga Normal:</span>
+                  <span className="font-mono">Rp{cartGross.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between text-purple-700 font-medium">
-                  <span>
-                    Diskon Agen Resmi ({agentData?.agentDiscountType === 'PERCENTAGE' ? `${agentData?.agentDiscountValue}%` : `Rp${agentData?.agentDiscountValue?.toLocaleString('id-ID')}/box`}):
-                  </span>
-                  <span>
-                    -Rp{(agentData?.agentDiscountType === 'PERCENTAGE'
-                      ? Math.round((500000 * restockQty * agentData?.agentDiscountValue) / 100)
-                      : (agentData?.agentDiscountValue || 0) * restockQty
-                    ).toLocaleString('id-ID')}
-                  </span>
+                  <span>Diskon Agen Resmi ({agentData?.agentDiscountType === 'PERCENTAGE' ? `${agentData?.agentDiscountValue}%` : `Rp${agentData?.agentDiscountValue?.toLocaleString('id-ID')}/unit`}):</span>
+                  <span className="font-mono">-Rp{cartDiscount.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between text-emerald-700 font-medium">
                   <span>Ongkir Kantor ke Agen:</span>
                   <span>GRATIS (Ditanggung Kantor)</span>
                 </div>
-                <div className="pt-2 border-t flex justify-between font-bold text-sm text-varena-espresso">
+                <div className="pt-2 border-t border-stone-200 flex justify-between font-bold text-sm text-varena-espresso">
                   <span>Total yang Harus Dibayar:</span>
-                  <span>
-                    Rp{(
-                      500000 * restockQty -
-                      (agentData?.agentDiscountType === 'PERCENTAGE'
-                        ? Math.round((500000 * restockQty * agentData?.agentDiscountValue) / 100)
-                        : (agentData?.agentDiscountValue || 0) * restockQty)
-                    ).toLocaleString('id-ID')}
-                  </span>
+                  <span className="font-mono">Rp{cartPayable.toLocaleString('id-ID')}</span>
                 </div>
               </div>
+            )}
 
+            <form onSubmit={handleRestockSubmit} className="space-y-4 text-xs">
               {/* Metode Pembayaran Pasokan */}
               <div>
                 <label className="block text-stone-600 font-semibold mb-1">Metode Pembayaran:</label>
@@ -934,10 +1136,14 @@ export default function AgentPortalPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={restockSubmitting}
+                  disabled={restockSubmitting || restockCart.length === 0 || isRestockBelowMoq}
                   className="py-2 px-5 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition disabled:opacity-50"
                 >
-                  {restockSubmitting ? 'Memproses...' : 'Konfirmasi Pemesanan Pasokan'}
+                  {restockSubmitting
+                    ? 'Memproses...'
+                    : isRestockBelowMoq
+                    ? `Min. Order ${minRestockMoq} Box (Saat ini: ${cartBoxQty} Box)`
+                    : `Konfirmasi Pemesanan (${cartBoxQty} Box)`}
                 </button>
               </div>
             </form>
@@ -1058,61 +1264,216 @@ export default function AgentPortalPage() {
       {/* ── MODAL 3: TOPUP SALDO DEPOSIT ── */}
       {topupModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-varena-gold/40">
-            <div className="flex items-center justify-between border-b pb-3">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-varena-gold/40 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b px-6 py-4">
               <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
                 <Wallet className="w-5 h-5 text-varena-gold" />
                 <span>Top Up Saldo Deposit Kas Agen</span>
               </h3>
-              <button onClick={() => setTopupModalOpen(false)} className="text-stone-400 hover:text-stone-700">✕</button>
+              <button
+                onClick={() => {
+                  setTopupModalOpen(false);
+                  setTopupStep(1);
+                  setTopupResult(null);
+                  setTopupProofUrl('');
+                  setTopupNotes('');
+                  setTopupBankName('');
+                  setTopupAccountNumber('');
+                }}
+                className="text-stone-400 hover:text-stone-700"
+              >✕</button>
             </div>
 
-            <form onSubmit={handleTopupSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-stone-600 font-semibold mb-1">Nominal Top Up:</label>
-                <input
-                  type="number"
-                  min={100000}
-                  step={50000}
-                  required
-                  value={topupAmount}
-                  onChange={(e) => setTopupAmount(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-stone-300 font-bold text-base text-varena-espresso outline-none focus:border-varena-gold"
-                />
+            {/* Step indicator */}
+            <div className="flex items-center px-6 pt-4 gap-3 text-xs font-semibold">
+              <div className={`flex items-center gap-1.5 ${topupStep === 1 ? 'text-varena-espresso' : 'text-emerald-700'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${topupStep === 1 ? 'bg-varena-gold text-varena-espresso' : 'bg-emerald-600 text-white'}`}>
+                  {topupStep === 1 ? '1' : '✓'}
+                </span>
+                Isi Formulir
               </div>
+              <div className="flex-1 h-px bg-stone-200" />
+              <div className={`flex items-center gap-1.5 ${topupStep === 2 ? 'text-varena-espresso' : 'text-stone-400'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${topupStep === 2 ? 'bg-varena-gold text-varena-espresso' : 'bg-stone-200 text-stone-500'}`}>
+                  2
+                </span>
+                Transfer &amp; Bukti
+              </div>
+            </div>
 
-              <div>
-                <label className="block text-stone-600 font-semibold mb-1">Catatan Transfer (Opsional):</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Transfer via BRImo / BCA a.n. Toko Agen"
-                  value={topupNotes}
-                  onChange={(e) => setTopupNotes(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-stone-300 outline-none"
-                />
-              </div>
+            <div className="p-6">
+              {topupStep === 1 ? (
+                /* ── STEP 1: FORM ── */
+                <form onSubmit={handleTopupSubmit} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-stone-600 font-semibold mb-1">Nominal Top Up (Rp):</label>
+                    <input
+                      type="number"
+                      min={100000}
+                      step={50000}
+                      required
+                      value={topupAmount}
+                      onChange={(e) => setTopupAmount(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 font-bold text-base text-varena-espresso outline-none focus:border-varena-gold"
+                    />
+                    <p className="text-stone-400 mt-1">Minimal Rp100.000</p>
+                  </div>
 
-              <div className="p-3 bg-stone-50 rounded-xl text-stone-600 text-[11px] leading-relaxed">
-                Silakan transfer ke Rekening Operasional Kantor: <strong>BRI 3065 0102 4471 539</strong> a.n. Sunariyo. Tim keuangan akan mengonfirmasi penambahan saldo Anda.
-              </div>
+                  <div>
+                    <label className="block text-stone-600 font-semibold mb-1">Nama Bank Pengirim:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: BRI / BCA / Mandiri / BNI"
+                      value={topupBankName}
+                      onChange={(e) => setTopupBankName(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 outline-none focus:border-varena-gold"
+                    />
+                  </div>
 
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTopupModalOpen(false)}
-                  className="py-2 px-4 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={topupSubmitting}
-                  className="py-2 px-5 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition disabled:opacity-50"
-                >
-                  {topupSubmitting ? 'Mengirim...' : 'Kirim Pengajuan Top Up'}
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <label className="block text-stone-600 font-semibold mb-1">Nomor Rekening Pengirim:</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nomor rekening Anda"
+                      value={topupAccountNumber}
+                      onChange={(e) => setTopupAccountNumber(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 outline-none focus:border-varena-gold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-600 font-semibold mb-1">Catatan (Opsional):</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Transfer via BRImo"
+                      value={topupNotes}
+                      onChange={(e) => setTopupNotes(e.target.value)}
+                      className="w-full p-2.5 rounded-lg border border-stone-300 outline-none focus:border-varena-gold"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-relaxed">
+                    <strong>Rekening Tujuan Transfer:</strong><br />
+                    BRI <span className="font-mono font-bold">3065 0102 4471 539</span> a.n. <strong>Sunariyo</strong>.<br />
+                    Kode unik 3-digit akan digenerate setelah Anda klik lanjut — gunakan nominal tepat sesuai instruksi.
+                  </div>
+
+                  <div className="pt-1 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setTopupModalOpen(false); setTopupBankName(''); setTopupAccountNumber(''); setTopupNotes(''); }}
+                      className="py-2 px-4 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={topupSubmitting}
+                      className="py-2 px-5 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition disabled:opacity-50"
+                    >
+                      {topupSubmitting ? 'Memproses...' : 'Lanjut →'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* ── STEP 2: TRANSFER INSTRUCTIONS + PROOF ── */
+                <div className="space-y-4 text-xs">
+                  {/* Transfer instruction card */}
+                  <div className="rounded-2xl bg-varena-espresso text-white p-5 space-y-3">
+                    <div className="text-varena-gold font-semibold text-[11px] uppercase tracking-widest">Instruksi Transfer</div>
+                    <div className="text-center">
+                      <div className="text-varena-gold/70 text-[11px] mb-1">Transfer TEPAT sejumlah</div>
+                      <div className="text-3xl font-bold font-mono tracking-tight">
+                        Rp{(topupResult?.transferTotal || 0).toLocaleString('id-ID')}
+                      </div>
+                      <div className="text-varena-gold/60 text-[10px] mt-1">
+                        (Rp{Number(topupAmount).toLocaleString('id-ID')} + kode unik Rp{topupResult?.uniqueCode})
+                      </div>
+                    </div>
+                    <div className="border-t border-white/10 pt-3 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Bank Tujuan</span>
+                        <span className="font-bold">BRI</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">No. Rekening</span>
+                        <span className="font-mono font-bold">3065 0102 4471 539</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Atas Nama</span>
+                        <span className="font-bold">Sunariyo</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Kode Unik</span>
+                        <span className="font-mono font-bold text-varena-gold">+Rp{topupResult?.uniqueCode}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Ref. Transaksi</span>
+                        <span className="font-mono text-[10px] text-varena-gold/80">{topupResult?.referenceId}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] leading-relaxed">
+                    ⚠️ Transfer <strong>harus tepat</strong> sesuai nominal di atas (termasuk kode unik). Transfer berbeda nominal tidak dapat diverifikasi otomatis.
+                  </div>
+
+                  {/* Proof upload */}
+                  <div>
+                    <label className="block font-semibold text-stone-700 mb-1.5">Upload Bukti Transfer:</label>
+                    {topupProofUrl ? (
+                      <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Bukti berhasil diunggah!</span>
+                      </div>
+                    ) : (
+                      <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-5 cursor-pointer transition ${topupUploadingProof ? 'border-stone-200 bg-stone-50' : 'border-varena-gold/40 hover:border-varena-gold bg-amber-50/40'}`}>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          disabled={topupUploadingProof}
+                          onChange={handleTopupProofUpload}
+                        />
+                        {topupUploadingProof ? (
+                          <span className="text-stone-500">Mengunggah...</span>
+                        ) : (
+                          <>
+                            <FileText className="w-6 h-6 text-varena-gold mb-1" />
+                            <span className="text-stone-600 font-semibold">Klik untuk pilih file bukti transfer</span>
+                            <span className="text-stone-400 text-[10px] mt-0.5">JPG / PNG / PDF — maks 5MB</span>
+                          </>
+                        )}
+                      </label>
+                    )}
+                    <p className="text-stone-400 mt-1 text-[10px]">Upload bukti transfer agar admin dapat memverifikasi lebih cepat.</p>
+                  </div>
+
+                  <div className="pt-1 flex justify-between items-center gap-2">
+                    <span className="text-stone-500 text-[11px]">Menunggu verifikasi admin setelah transfer.</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTopupModalOpen(false);
+                        setTopupStep(1);
+                        setTopupResult(null);
+                        setTopupProofUrl('');
+                        setTopupNotes('');
+                        setTopupBankName('');
+                        setTopupAccountNumber('');
+                      }}
+                      className="py-2 px-5 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition"
+                    >
+                      Selesai
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -71,12 +71,27 @@ export async function postLedgerTransaction(params: PostTransactionParams, txCli
 
     // 4. Create Entries and update account balance cache atomically
     for (const entry of entries) {
-      const account = await tx.ledgerAccount.findUnique({
+      let account = await tx.ledgerAccount.findUnique({
         where: { accountCode: entry.accountCode },
       });
 
       if (!account) {
-        throw new Error(`Ledger account not found for code: ${entry.accountCode}`);
+        // Auto-provision standard accounts if not yet seeded
+        const isLiability = entry.accountCode.startsWith('ACC-LIAB') || entry.accountCode.includes('UNALLOC') || entry.accountCode.startsWith('ACC-MBR');
+        const isAsset = entry.accountCode.includes('CASH') || entry.accountCode.includes('PAYOUT') || entry.accountCode.includes('BANK');
+        const isRevenue = entry.accountCode.includes('OPS') || entry.accountCode.includes('REV');
+        const accountType = isLiability ? 'LIABILITY' : isAsset ? 'ASSET' : isRevenue ? 'REVENUE' : 'LIABILITY';
+
+        account = await tx.ledgerAccount.create({
+          data: {
+            accountCode: entry.accountCode,
+            accountType,
+            ownerType: entry.accountCode.startsWith('ACC-MBR') ? 'MEMBER_WALLET' : 'COMPANY_OPERATIONS',
+            currency: 'IDR',
+            balance: 0,
+            status: 'ACTIVE',
+          },
+        });
       }
 
       await tx.ledgerEntry.create({
@@ -192,4 +207,87 @@ export async function getMemberWallet(memberCode: string) {
       referenceId: e.transaction.referenceId,
     })),
   };
+}
+
+/**
+ * Catat Jurnal Akuntansi Double-Entry untuk Penerimaan Topup Deposit
+ * DEBIT: ACC-COMP-CASH (Kas bertambah)
+ * CREDIT: ACC-LIAB-DEPOSIT-AGENT / ACC-LIAB-DEPOSIT-SHOPPING (Kewajiban bertambah)
+ */
+export async function recordDepositTopupLedger(params: {
+  transactionId: string;
+  memberCode: string;
+  amount: number;
+  isShoppingDeposit: boolean;
+  referenceId: string;
+  txClient?: any;
+}) {
+  const { transactionId, memberCode, amount, isShoppingDeposit, referenceId, txClient } = params;
+  if (amount <= 0) return null;
+
+  const liabilityAccount = isShoppingDeposit ? 'ACC-LIAB-DEPOSIT-SHOPPING' : 'ACC-LIAB-DEPOSIT-AGENT';
+  return postLedgerTransaction(
+    {
+      referenceType: isShoppingDeposit ? 'SHOPPING_DEPOSIT_TOPUP' : 'AGENT_DEPOSIT_TOPUP',
+      referenceId: transactionId,
+      idempotencyKey: `LEDGER-DEP-TOPUP-${transactionId}`,
+      memo: `Topup Saldo Deposit ${isShoppingDeposit ? 'Belanja' : 'Agen'} #${referenceId} oleh ${memberCode}`,
+      entries: [
+        {
+          accountCode: 'ACC-COMP-CASH',
+          direction: 'DEBIT',
+          amount,
+          memo: `Kas Bank Masuk dari Topup ${memberCode}`,
+        },
+        {
+          accountCode: liabilityAccount,
+          direction: 'CREDIT',
+          amount,
+          memo: `Kewajiban Titipan Saldo Deposit ${memberCode}`,
+        },
+      ],
+    },
+    txClient
+  );
+}
+
+/**
+ * Catat Jurnal Akuntansi Double-Entry saat Saldo Deposit Digunakan Belanja
+ * DEBIT: ACC-LIAB-DEPOSIT-AGENT / ACC-LIAB-DEPOSIT-SHOPPING (Kewajiban berkurang)
+ * CREDIT: ACC-COMP-OPS (Pendapatan terakui)
+ */
+export async function recordDepositUsageLedger(params: {
+  orderNumber: string;
+  memberCode: string;
+  amount: number;
+  isShoppingDeposit: boolean;
+  txClient?: any;
+}) {
+  const { orderNumber, memberCode, amount, isShoppingDeposit, txClient } = params;
+  if (amount <= 0) return null;
+
+  const liabilityAccount = isShoppingDeposit ? 'ACC-LIAB-DEPOSIT-SHOPPING' : 'ACC-LIAB-DEPOSIT-AGENT';
+  return postLedgerTransaction(
+    {
+      referenceType: 'DEPOSIT_USAGE_PAYMENT',
+      referenceId: orderNumber,
+      idempotencyKey: `LEDGER-DEP-USE-${orderNumber}`,
+      memo: `Penggunaan Saldo Deposit untuk Pesanan #${orderNumber} oleh ${memberCode}`,
+      entries: [
+        {
+          accountCode: liabilityAccount,
+          direction: 'DEBIT',
+          amount,
+          memo: `Pemotongan Kewajiban Saldo Deposit ${memberCode}`,
+        },
+        {
+          accountCode: 'ACC-COMP-OPS',
+          direction: 'CREDIT',
+          amount,
+          memo: `Pendapatan Penjualan Produk dari Saldo Deposit #${orderNumber}`,
+        },
+      ],
+    },
+    txClient
+  );
 }
