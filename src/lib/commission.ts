@@ -297,11 +297,20 @@ export async function calculateOrderCommissions(orderId: string): Promise<Commis
       // CREDIT Each Member's Wallet Account
       for (const item of itemsToCreate) {
         if (item.beneficiaryCode && item.amount > 0) {
+          let readableMemo = item.reasonCode;
+          if (item.rewardType === 'SPONSOR') {
+            readableMemo = `Bonus Sponsor Langsung - Pesanan ${order.orderNumber}`;
+          } else if (item.rewardType === 'DEVELOPMENT') {
+            readableMemo = `Bonus Pembinaan Tim (Level ${item.levelNumber}) - Pesanan ${order.orderNumber}`;
+          } else if (item.rewardType === 'REPEAT_ORDER') {
+            readableMemo = `Bonus Generasi RO (Level ${item.levelNumber}) - Pesanan ${order.orderNumber}`;
+          }
+
           ledgerEntries.push({
             accountCode: `ACC-MBR-${item.beneficiaryCode}`,
             direction: 'CREDIT',
             amount: item.amount,
-            memo: item.reasonCode,
+            memo: readableMemo,
           });
         }
       }

@@ -137,7 +137,11 @@ export const REFERENCE_TYPE_LABELS: Record<string, string> = {
   COMMISSION_DISTRIBUTION: 'Alokasi Distribusi Komisi Jaringan',
   COMMISSION_CREDIT: 'Kredit Saldo Dompet Mitra',
   PAYOUT_EXECUTION: 'Pencairan Dana Mitra (Payout)',
-  DEPOSIT_TOPUP: 'Topup Saldo Deposit Agen',
+  WITHDRAWAL_PAID: 'Pencairan Saldo Disetujui (Payout)',
+  DEPOSIT_TOPUP: 'Topup Saldo Deposit',
+  SHOPPING_DEPOSIT_TOPUP: 'Topup Saldo Deposit Belanja',
+  AGENT_DEPOSIT_TOPUP: 'Topup Saldo Kas Deposit Agen',
+  DEPOSIT_USAGE_PAYMENT: 'Pembayaran Pesanan via Saldo Deposit',
   DEPOSIT_PURCHASE: 'Pembelian Produk via Saldo Deposit',
   AGENT_REWARD_CASH: 'Reward Bonus Tunai Agen',
   AGENT_REWARD_ITEM: 'Reward Apresiasi Fisik Agen',
@@ -148,6 +152,91 @@ export const REFERENCE_TYPE_LABELS: Record<string, string> = {
 export function formatReferenceType(refType?: string | null): string {
   if (!refType) return '-';
   return REFERENCE_TYPE_LABELS[refType] || refType.replace(/_/g, ' ');
+}
+
+/**
+ * Format memo / deskripsi buku besar agar ramah pengguna (human-readable),
+ * mengubah kode teknis seperti 'REPEAT_DEV_L1_REWARD_FROM_VRN-xxx' menjadi
+ * penjelasan resmi dan jelas 'Bonus Generasi RO (Level 1) - Pesanan VRN-xxx'.
+ */
+export function formatLedgerMemo(memo?: string | null): string {
+  if (!memo) return '-';
+
+  // 1. Bonus Generasi Repeat Order: REPEAT_DEV_L1_REWARD_FROM_VRN-xxx
+  const repeatMatch = memo.match(/^REPEAT_DEV_L(\d+)_REWARD_FROM_(.+)$/i);
+  if (repeatMatch) {
+    return `Bonus Generasi RO (Level ${repeatMatch[1]}) - Pesanan ${repeatMatch[2]}`;
+  }
+
+  // 2. Bonus Pembinaan Upline: DEV_UPLINE_L1_REWARD_FROM_VRN-xxx
+  const devMatch = memo.match(/^DEV_UPLINE_L(\d+)_REWARD_FROM_(.+)$/i);
+  if (devMatch) {
+    return `Bonus Pembinaan Tim (Level ${devMatch[1]}) - Pesanan ${devMatch[2]}`;
+  }
+
+  // 3. Bonus Sponsor Langsung: DIRECT_SPONSOR_BONUS_FROM_VRN-xxx
+  const sponsorMatch = memo.match(/^DIRECT_SPONSOR_BONUS_FROM_(.+)$/i);
+  if (sponsorMatch) {
+    return `Bonus Sponsor Langsung - Pesanan ${sponsorMatch[1]}`;
+  }
+
+  // 4. Cadangan Tidak Dialokasikan
+  const devUnallocMatch = memo.match(/^DEV_UPLINE_L(\d+)_UNALLOCATED_(.+)$/i);
+  if (devUnallocMatch) {
+    return `Alokasi Cadangan Pembinaan Level ${devUnallocMatch[1]}`;
+  }
+
+  const repeatUnallocMatch = memo.match(/^REPEAT_DEV_L(\d+)_UNALLOCATED_(.+)$/i);
+  if (repeatUnallocMatch) {
+    return `Alokasi Cadangan RO Level ${repeatUnallocMatch[1]}`;
+  }
+
+  // 5. Withdrawal payout approved - ref TRF-xxx
+  const wdMatch = memo.match(/^Withdrawal payout approved - ref (.+)$/i);
+  if (wdMatch) {
+    return `Pencairan Saldo Disetujui - Ref ${wdMatch[1]}`;
+  }
+
+  // 6. Net bank transfer disbursement for WD xxx
+  const wdNetMatch = memo.match(/^Net bank transfer disbursement for WD (.+)$/i);
+  if (wdNetMatch) {
+    return `Pencairan Bersih Bank Transfer WD #${wdNetMatch[1]}`;
+  }
+
+  // 7. Commission expense for order
+  const commExpMatch = memo.match(/^Commission Expense for Order (.+)$/i);
+  if (commExpMatch) {
+    return `Alokasi Beban Komisi Pesanan ${commExpMatch[1]}`;
+  }
+
+  // 8. Auto Commission Disbursement for Order
+  const commDisbMatch = memo.match(/^Auto Commission Disbursement for Order (.+)$/i);
+  if (commDisbMatch) {
+    return `Distribusi Komisi Otomatis Pesanan ${commDisbMatch[1]}`;
+  }
+
+  // 9. Disbursement to BANK (ACC) ref: REF
+  const disbMatch = memo.match(/^Disbursement to (.+?) \((.+?)\) ref: (.+)$/i);
+  if (disbMatch) {
+    return `Pencairan ke ${disbMatch[1]} (${disbMatch[2]}) - Ref: ${disbMatch[3]}`;
+  }
+
+  // 10. Admin payout fee
+  const feeMatch = memo.match(/^Admin Payout Fee for WD (.+)$/i);
+  if (feeMatch) {
+    return `Biaya Administrasi Pencairan WD #${feeMatch[1]}`;
+  }
+
+  // 11. General UPPERCASE_WITH_UNDERSCORES check
+  if (/^[A-Z0-9_]{4,}$/.test(memo)) {
+    return memo
+      .toLowerCase()
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
+  return memo;
 }
 
 // 7. Sumber Pemenuhan Logistik (Fulfillment Source / Mode)

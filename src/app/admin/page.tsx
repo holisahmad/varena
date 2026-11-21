@@ -21,6 +21,7 @@ import {
   formatMemberStatus,
   formatAgentStatus,
   formatAgentType,
+  formatLedgerMemo,
   getOrderStatusBadge,
   ORDER_STATUS_BADGES,
 } from '@/lib/formatters';
@@ -1712,7 +1713,7 @@ export default function AdminPage() {
                         <div key={l.id} className="p-2 rounded bg-slate-50 border border-slate-200 flex justify-between items-center">
                           <div>
                             <span className="font-bold text-varena-espresso">{formatReferenceType(l.referenceType)}</span>
-                            <div className="text-[10px] text-varena-taupe">{l.memo}</div>
+                            <div className="text-[10px] text-varena-taupe">{formatLedgerMemo(l.memo)}</div>
                           </div>
                           <span className="font-mono text-[10px] text-varena-taupe">{new Date(l.createdAt).toLocaleDateString('id-ID')}</span>
                         </div>

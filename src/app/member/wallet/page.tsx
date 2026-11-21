@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/ui/Pagination';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { formatPayoutStatus } from '@/lib/formatters';
+import { formatPayoutStatus, formatReferenceType, formatLedgerMemo } from '@/lib/formatters';
 import { compressImageToWebP } from '@/lib/image-compression';
 import { calculatePayoutFees, PAYOUT_CONFIG } from '@/config/payout';
 import {
@@ -914,8 +914,8 @@ export default function MemberWalletPage() {
                             })}
                           </td>
                           <td className="py-2.5 px-3 font-medium text-varena-espresso">
-                            <div>{s.memo}</div>
-                            <div className="text-[10px] text-varena-taupe font-mono">{s.referenceType}</div>
+                            <div className="font-semibold">{formatLedgerMemo(s.memo)}</div>
+                            <div className="text-[10px] text-varena-taupe mt-0.5">{formatReferenceType(s.referenceType)}</div>
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             <span
