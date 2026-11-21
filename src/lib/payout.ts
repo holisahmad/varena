@@ -2,6 +2,8 @@ import prisma from './prisma';
 import { getMemberWallet, postLedgerTransaction } from './ledger';
 import { withTransactionRetry } from './security';
 import { dispatchWaMessage, templatePayoutDisbursed } from './whatsapp';
+import { calculatePayoutFees, PAYOUT_CONFIG } from '@/config/payout';
+import { executeXenditDisbursement } from './xendit-payout';
 
 export interface RequestPayoutParams {
   memberId: string;
@@ -81,12 +83,14 @@ export async function requestPayout(params: RequestPayoutParams) {
     }
   }
 
-  const fee = 6500; // Biaya transfer antar-bank / BI-FAST
-  const netAmount = amount - fee;
+  // Hitung potongan biaya admin 10% & biaya transfer Rp5.000
+  const fees = calculatePayoutFees(amount);
+  const fee = fees.totalFee;
+  const netAmount = fees.netAmount;
 
   if (netAmount <= 0) {
     throw new Error(
-      `Nominal penarikan (Rp${amount.toLocaleString('id-ID')}) harus lebih besar dari biaya transfer bank Rp${fee.toLocaleString('id-ID')}.`
+      `Nominal penarikan (Rp${amount.toLocaleString('id-ID')}) tidak mencukupi setelah dipotong biaya admin 10% (Rp${fees.adminFee.toLocaleString('id-ID')}) dan biaya transfer Rp${fees.transferFee.toLocaleString('id-ID')}.`
     );
   }
 
@@ -191,7 +195,7 @@ export async function approvePayout({
           accountCode: 'ACC-COMP-OPS',
           direction: 'CREDIT' as const,
           amount: withdrawal.fee,
-          memo: `Disbursement administrative transfer fee`,
+          memo: `Disbursement platform administrative fee (10% admin + transfer fee Rp5.000)`,
         }] : []),
       ],
     }, tx);
@@ -210,6 +214,23 @@ export async function approvePayout({
 
     return updated;
   });
+
+  // 3b. Trigger Xendit Instant Disbursement jika gateway diaktifkan via ENV
+  if (PAYOUT_CONFIG.xendit.enabled) {
+    try {
+      const xenditRes = await executeXenditDisbursement({
+        withdrawalId: withdrawal.id,
+        memberCode,
+        bankName: withdrawal.bankName,
+        accountNumber: withdrawal.member.bankAccountNumber || withdrawal.accountNumberMasked,
+        accountHolder: withdrawal.accountHolder,
+        netAmount: withdrawal.netAmount,
+      });
+      console.log('Xendit disbursement execution:', xenditRes.message);
+    } catch (xErr) {
+      console.warn('Xendit auto-disbursement execution warning:', xErr);
+    }
+  }
 
   // 4. Dispatch WhatsApp notification (Async/Non-blocking)
   const phone = withdrawal.member?.user?.phone;

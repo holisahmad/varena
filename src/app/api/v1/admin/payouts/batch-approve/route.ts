@@ -12,18 +12,16 @@ import { dispatchWaMessage, templatePayoutDisbursed } from '@/lib/whatsapp';
  */
 export async function POST(req: Request) {
   try {
-    const userId = req.headers.get('x-user-id');
-    const userEmail = req.headers.get('x-user-email');
-    const body = await req.json();
-    const { withdrawalIds, batchReference, actorUserId } = body;
-
-    const authUser = await getCorporateUser(userId || actorUserId, userEmail);
+    const authUser = await resolveCorporateAdmin(req);
     if (!authUser) {
       return NextResponse.json(
         { error: 'Akses ditolak: Hanya pengelola korporasi yang berhak menyetujui penarikan massal.' },
         { status: 403 }
       );
     }
+
+    const body = await req.json();
+    const { withdrawalIds, batchReference } = body;
 
     if (!withdrawalIds || !Array.isArray(withdrawalIds) || withdrawalIds.length === 0) {
       return NextResponse.json(
@@ -65,7 +63,7 @@ export async function POST(req: Request) {
           where: { id: w.id },
           data: {
             status: 'PAID',
-            reviewedBy: actorUserId || 'ADMIN_FINANCE_BATCH',
+            reviewedBy: authUser.userId || 'ADMIN_FINANCE_BATCH',
             reviewedAt: new Date(),
             paidAt: new Date(),
             providerReference: `${ref}-${w.id.slice(0, 4)}`,
@@ -98,7 +96,7 @@ export async function POST(req: Request) {
                       accountCode: 'ACC-COMP-OPS',
                       direction: 'CREDIT' as const,
                       amount: w.fee,
-                      memo: 'Disbursement administrative transfer fee',
+                      memo: 'Disbursement platform fee (10% admin + transfer fee Rp5.000)',
                     },
                   ]
                 : []),
@@ -110,7 +108,7 @@ export async function POST(req: Request) {
         // 3. Audit trail
         await tx.auditLog.create({
           data: {
-            actorUserId: authUser.id,
+            actorUserId: authUser.userId,
             action: 'PAYOUT_BATCH_APPROVED',
             entityType: 'WITHDRAWAL',
             entityId: w.id,

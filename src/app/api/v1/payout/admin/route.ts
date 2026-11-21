@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { approvePayout } from '@/lib/payout';
-import { verifyCorporateAdmin, getCorporateUser } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
@@ -50,8 +49,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Akses ditolak: User ID otorisator tidak memiliki peran korporasi untuk menyetujui pencairan.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
-    const { withdrawalId, actorUserId, providerReference } = body;
+    const { withdrawalId, providerReference } = body;
 
     if (!withdrawalId || !providerReference) {
       return NextResponse.json(
@@ -60,19 +67,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const userId = req.headers.get('x-user-id') || actorUserId;
-    const userEmail = req.headers.get('x-user-email');
-    const authUser = await getCorporateUser(userId, userEmail);
-    if (!authUser) {
-      return NextResponse.json(
-        { error: 'Akses ditolak: User ID otorisator tidak memiliki peran korporasi untuk menyetujui pencairan.' },
-        { status: 403 }
-      );
-    }
-
     const updated = await approvePayout({
       withdrawalId,
-      actorUserId: authUser.id,
+      actorUserId: authUser.userId,
       providerReference,
     });
 
@@ -88,4 +85,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

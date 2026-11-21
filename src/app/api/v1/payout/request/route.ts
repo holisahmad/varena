@@ -1,7 +1,28 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requestPayout } from '@/lib/payout';
-import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
+import { checkRateLimit } from '@/lib/security';
+import { calculatePayoutFees, PAYOUT_CONFIG } from '@/config/payout';
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const amount = parseInt(searchParams.get('amount') || '0', 10);
+    const fees = calculatePayoutFees(amount);
+    return NextResponse.json({
+      success: true,
+      config: {
+        adminFeePercent: PAYOUT_CONFIG.adminFeePercent,
+        transferFeeFlat: PAYOUT_CONFIG.transferFeeFlat,
+        minimumAmount: PAYOUT_CONFIG.minimumAmount,
+        xenditEnabled: PAYOUT_CONFIG.xendit.enabled,
+      },
+      calculation: fees,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+}
 
 export async function POST(req: Request) {
   try {

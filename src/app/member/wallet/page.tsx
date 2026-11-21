@@ -6,6 +6,7 @@ import Pagination from '@/components/ui/Pagination';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { formatPayoutStatus } from '@/lib/formatters';
 import { compressImageToWebP } from '@/lib/image-compression';
+import { calculatePayoutFees, PAYOUT_CONFIG } from '@/config/payout';
 import {
   Wallet,
   ArrowDownRight,
@@ -298,8 +299,8 @@ export default function MemberWalletPage() {
   const remainingUniqueCode = uniqueCodeBalance - eligibleUniqueCode;
   const totalWithdrawable = bonusBalance + eligibleUniqueCode;
   const enteredAmount = parseInt(amount, 10) || 0;
-  const adminFee = 6500;
-  const netEstimated = enteredAmount > adminFee ? enteredAmount - adminFee : 0;
+  const payoutFees = calculatePayoutFees(enteredAmount);
+  const netEstimated = payoutFees.netAmount;
 
   const paginatedWithdrawals = (wallet?.withdrawals || []).slice(
     (withdrawalPage - 1) * WITHDRAWALS_PER_PAGE,
@@ -632,20 +633,35 @@ export default function MemberWalletPage() {
 
                 {/* Real-time Net Transfer Calculation Preview */}
                 {enteredAmount >= 50000 && (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-1">
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 space-y-2">
                     <div className="flex justify-between items-center font-bold">
                       <span>Total Masuk Rekening Bank:</span>
-                      <span className="font-mono text-sm text-emerald-800">Rp{netEstimated.toLocaleString('id-ID')}</span>
+                      <span className="font-mono text-base text-emerald-800 font-extrabold">
+                        Rp{payoutFees.netAmount.toLocaleString('id-ID')}
+                      </span>
                     </div>
-                    <div className="text-[11px] text-emerald-700 font-mono">
-                      Rincian: Rp{enteredAmount.toLocaleString('id-ID')} - Biaya Admin Rp6.500 = Rp{netEstimated.toLocaleString('id-ID')}
+                    <div className="space-y-1 pt-1.5 border-t border-emerald-200/80 text-[11px] text-emerald-900 font-mono">
+                      <div className="flex justify-between">
+                        <span>Nominal Penarikan:</span>
+                        <span>Rp{enteredAmount.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600">
+                        <span>Biaya Admin ({payoutFees.adminFeePercent}%):</span>
+                        <span className="text-rose-700">-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600">
+                        <span>Biaya Transfer Bank:</span>
+                        <span className="text-rose-700">-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 <div className="text-[10px] text-stone-500 pt-1 border-t border-stone-100 flex items-center justify-between">
-                  <span>Biaya transfer antar bank:</span>
-                  <span className="font-mono font-semibold text-stone-700">Rp6.500 (otomatis dipotong)</span>
+                  <span>Kebijakan Potongan:</span>
+                  <span className="font-mono font-semibold text-stone-700">
+                    Admin 10% + Biaya Transfer Rp5.000
+                  </span>
                 </div>
 
                 <button
