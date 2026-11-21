@@ -71,6 +71,9 @@ import {
   Percent,
   Tag,
   Printer,
+  KeyRound,
+  LogIn,
+  UserCog,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -78,7 +81,7 @@ export default function AdminPage() {
   const { adminOrdersBadge, adminPayoutBadge, ackAdminOrders, ackAdminPayout, ackAdminMisc } = useNotifications();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'STOCKIST' | 'SETTINGS' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'PAYOUTS' | 'NETWORK' | 'MEMBERS' | 'STOCKIST' | 'SETTINGS' | 'LOGS' | 'OUTBOX'>('OVERVIEW');
 
   // Sidebar State (Expanded vs Collapsed & Mobile Drawer)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -262,6 +265,26 @@ export default function AdminPage() {
   const [editingDiscountAgent, setEditingDiscountAgent] = useState<any>(null);
   const [editDiscountType, setEditDiscountType] = useState('PERCENTAGE');
   const [editDiscountValue, setEditDiscountValue] = useState(15);
+
+  // Members Management Tab State
+  const [membersList, setMembersList] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersPage, setMembersPage] = useState(1);
+  const [membersTotalPages, setMembersTotalPages] = useState(1);
+  const [membersTotal, setMembersTotal] = useState(0);
+  const [membersSearch, setMembersSearch] = useState('');
+  const [membersFilter, setMembersFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'AGENT'>('ALL');
+  // Impersonation modal state
+  const [impersonateTarget, setImpersonateTarget] = useState<any>(null);
+  const [impersonateReason, setImpersonateReason] = useState('');
+  const [impersonateLoading, setImpersonateLoading] = useState(false);
+  // Reset password modal state
+  const [resetPwTarget, setResetPwTarget] = useState<any>(null);
+  const [resetPwValue, setResetPwValue] = useState('');
+  const [resetPwReason, setResetPwReason] = useState('');
+  const [resetPwLoading, setResetPwLoading] = useState(false);
+  const [resetPwResult, setResetPwResult] = useState<any>(null);
+  const [resetPwAutoGen, setResetPwAutoGen] = useState(true);
 
   // WhatsApp Outbox State
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
@@ -1278,6 +1301,87 @@ export default function AdminPage() {
 
   const handleSaveStockist = handleDirectAppointment;
 
+  // Members Management Handlers
+  const loadMembersList = async (page = 1, search = membersSearch, filter = membersFilter) => {
+    setMembersLoading(true);
+    try {
+      const headers = getAdminHeaders();
+      const params = new URLSearchParams({ page: String(page), limit: '20', q: search, status: filter });
+      const res = await fetch(`/api/v1/admin/members?${params}`, { headers });
+      const data = await res.json();
+      if (data.success) {
+        setMembersList(data.members);
+        setMembersPage(data.pagination.page);
+        setMembersTotalPages(data.pagination.totalPages);
+        setMembersTotal(data.pagination.total);
+      } else {
+        showToast(data.error || 'Gagal memuat daftar mitra.', 'error');
+      }
+    } catch {
+      showToast('Gagal memuat daftar mitra.', 'error');
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const generateRandomPassword = () => {
+    const adj = ['Varena', 'Mitra', 'Jaya', 'Prima', 'Emas'];
+    const num = String(Math.floor(1000 + Math.random() * 9000));
+    return adj[Math.floor(Math.random() * adj.length)] + '#' + num;
+  };
+
+  const handleImpersonate = async () => {
+    if (!impersonateTarget || !impersonateReason.trim()) return;
+    setImpersonateLoading(true);
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch('/api/v1/admin/impersonate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ memberId: impersonateTarget.id, reason: impersonateReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memulai inspeksi.');
+      // Simpan token admin sebagai backup SEBELUM switch
+      const currentToken = localStorage.getItem('varena_token');
+      const currentUser = localStorage.getItem('varena_user');
+      if (currentToken) localStorage.setItem('varena_admin_backup_token', currentToken);
+      if (currentUser) localStorage.setItem('varena_admin_backup_user', currentUser);
+      // Switch ke sesi mitra
+      localStorage.setItem('varena_token', data.token);
+      localStorage.setItem('varena_user', JSON.stringify(data.user));
+      setImpersonateTarget(null);
+      setImpersonateReason('');
+      window.location.href = data.redirectTo || '/member/wallet';
+    } catch (err: any) {
+      showToast(err.message || 'Gagal masuk ke akun mitra.', 'error');
+      setImpersonateLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPwTarget || !resetPwValue || resetPwValue.length < 6) {
+      showToast('Password minimal 6 karakter.', 'error');
+      return;
+    }
+    setResetPwLoading(true);
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch('/api/v1/admin/members/reset-password', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ memberId: resetPwTarget.id, newPassword: resetPwValue, reason: resetPwReason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal reset password.');
+      setResetPwResult(data);
+    } catch (err: any) {
+      showToast(err.message || 'Gagal reset password.', 'error');
+    } finally {
+      setResetPwLoading(false);
+    }
+  };
+
   // WhatsApp Outbox Loader
   const loadWaOutbox = async () => {
     setWaOutboxLoading(true);
@@ -1375,6 +1479,14 @@ export default function AdminPage() {
       icon: Users,
       badge: stats?.inactiveMembersCount > 0 ? `${stats.inactiveMembersCount}` : null,
       badgeColor: 'bg-amber-600',
+    },
+    {
+      id: 'MEMBERS',
+      label: 'Manajemen Mitra',
+      icon: UserCog,
+      badge: null,
+      badgeColor: '',
+      onSelect: () => loadMembersList(),
     },
     {
       id: 'STOCKIST',
@@ -3586,6 +3698,416 @@ export default function AdminPage() {
           )}
 
           {/* ==================================================================== */}
+          {/* TAB: MANAJEMEN MITRA */}
+          {activeTab === 'MEMBERS' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Manajemen Mitra</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Inspeksi akun &amp; reset password mitra. Total:{' '}
+                    <span className="font-semibold text-slate-700">{membersTotal} mitra</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => loadMembersList(1, membersSearch, membersFilter)}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Search & Filter */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari kode, nama, email, atau no. HP mitra..."
+                      value={membersSearch}
+                      onChange={(e) => setMembersSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && loadMembersList(1, membersSearch, membersFilter)}
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    />
+                  </div>
+                  <button
+                    onClick={() => loadMembersList(1, membersSearch, membersFilter)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Cari
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['ALL', 'ACTIVE', 'INACTIVE', 'AGENT'] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => { setMembersFilter(f); loadMembersList(1, membersSearch, f); }}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        membersFilter === f
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f === 'ALL' ? 'Semua' : f === 'ACTIVE' ? 'Aktif' : f === 'INACTIVE' ? 'Belum Aktif' : 'Agen'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Members Table */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                {membersLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+                    <span className="ml-2 text-slate-500 text-sm">Memuat data mitra...</span>
+                  </div>
+                ) : membersList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <Users className="w-10 h-10 mb-2" />
+                    <p className="text-sm">Belum ada data. Klik Refresh atau cari mitra.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Kode</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nama</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Email</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden lg:table-cell">No. HP</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden xl:table-cell">Upline</th>
+                          <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {membersList.map((member) => (
+                          <tr key={member.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                                {member.memberCode}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="font-medium text-slate-800 text-sm">{member.displayName || member.legalName || '-'}</p>
+                                {member.legalName && member.legalName !== member.displayName && (
+                                  <p className="text-xs text-slate-400">{member.legalName}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 hidden md:table-cell">
+                              <span className="text-xs text-slate-600">{member.email || '-'}</span>
+                            </td>
+                            <td className="px-4 py-3 hidden lg:table-cell">
+                              <span className="text-xs text-slate-600">{member.phone || '-'}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-1">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  member.isActive
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  {member.isActive ? 'Aktif' : 'Belum Aktif'}
+                                </span>
+                                {member.isAgent && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                                    Agen
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 hidden xl:table-cell">
+                              <span className="text-xs text-slate-500">
+                                {member.sponsorCode || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => { setImpersonateTarget(member); setImpersonateReason(''); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition-colors"
+                                  title="Inspeksi Akun Mitra"
+                                >
+                                  <LogIn className="w-3.5 h-3.5" />
+                                  Inspeksi
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const pwd = generateRandomPassword();
+                                    setResetPwTarget(member);
+                                    setResetPwValue(pwd);
+                                    setResetPwReason('');
+                                    setResetPwResult(null);
+                                    setResetPwAutoGen(true);
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+                                  title="Reset Password Mitra"
+                                >
+                                  <KeyRound className="w-3.5 h-3.5" />
+                                  Reset PW
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination */}
+              {membersTotalPages > 1 && (
+                <div className="flex justify-center">
+                  <Pagination
+                    currentPage={membersPage}
+                    totalPages={membersTotalPages}
+                    onPageChange={(p) => { setMembersPage(p); loadMembersList(p); }}
+                  />
+                </div>
+              )}
+
+              {/* ===== IMPERSONATION MODAL ===== */}
+              {impersonateTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-t-2xl p-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                          <LogIn className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-white text-lg">Inspeksi Akun Mitra</h3>
+                          <p className="text-amber-100 text-sm">Masuk tanpa mengganggu sesi aktif mitra</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                        <p className="text-xs text-amber-600 font-medium mb-1">Target Mitra</p>
+                        <p className="font-semibold text-slate-800">{impersonateTarget.displayName || impersonateTarget.legalName}</p>
+                        <p className="text-sm text-slate-500">{impersonateTarget.memberCode} · {impersonateTarget.email}</p>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-2">
+                        <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-700">
+                          Semua tindakan dalam mode inspeksi tercatat di Audit Log. Gunakan hanya untuk keperluan maintenance resmi.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Alasan Inspeksi <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={impersonateReason}
+                          onChange={(e) => setImpersonateReason(e.target.value)}
+                          rows={3}
+                          placeholder="Contoh: Mitra melaporkan saldo tidak update setelah transfer..."
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-1">
+                        <button
+                          onClick={() => { setImpersonateTarget(null); setImpersonateReason(''); }}
+                          className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={handleImpersonate}
+                          disabled={!impersonateReason.trim() || impersonateLoading}
+                          className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                        >
+                          {impersonateLoading ? (
+                            <><RefreshCw className="w-4 h-4 animate-spin" /> Memproses...</>
+                          ) : (
+                            <><LogIn className="w-4 h-4" /> Masuk ke Akun Mitra</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===== RESET PASSWORD MODAL ===== */}
+              {resetPwTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl p-5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                          <KeyRound className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-white text-lg">Reset Password Mitra</h3>
+                          <p className="text-blue-100 text-sm">Ganti password akun mitra</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      {resetPwResult ? (
+                        <div className="space-y-4">
+                          <div className="text-center py-2">
+                            <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-lg">Password Berhasil Direset!</h4>
+                          </div>
+                          <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Kode Mitra</span>
+                              <span className="font-semibold text-slate-800">{resetPwResult.memberCode}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Nama</span>
+                              <span className="font-semibold text-slate-800">{resetPwResult.memberName}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Email</span>
+                              <span className="font-semibold text-slate-800 text-xs">{resetPwResult.email}</span>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
+                              <span className="text-slate-500">Password Baru</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                                  {resetPwResult.newPassword}
+                                </span>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(resetPwResult.newPassword); showToast('Password disalin!', 'success'); }}
+                                  className="p-1 hover:bg-slate-200 rounded transition-colors"
+                                  title="Salin password"
+                                >
+                                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <button
+                              onClick={() => {
+                                const msg = `Halo Kak ${resetPwResult.memberName},\nPassword akun VARENA Anda telah direset:\n• Kode Mitra: ${resetPwResult.memberCode}\n• Email/User: ${resetPwResult.email}\n• Password Baru: ${resetPwResult.newPassword}\n\nLogin: https://varena-theta.vercel.app/login\n\nSilakan ganti password setelah masuk melalui menu Profil. 🙏`;
+                                navigator.clipboard.writeText(msg);
+                                showToast('Pesan WA disalin ke clipboard!', 'success');
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-medium hover:bg-green-100 transition-colors"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Salin Pesan WhatsApp
+                            </button>
+                            <button
+                              onClick={() => {
+                                const phone = (resetPwResult.phone || '').replace(/\D/g, '').replace(/^0/, '62');
+                                const msg = encodeURIComponent(`Halo Kak ${resetPwResult.memberName},\nPassword akun VARENA Anda telah direset:\n• Kode Mitra: ${resetPwResult.memberCode}\n• Email/User: ${resetPwResult.email}\n• Password Baru: ${resetPwResult.newPassword}\n\nLogin: https://varena-theta.vercel.app/login\n\nSilakan ganti password setelah masuk melalui menu Profil. 🙏`);
+                                window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors"
+                            >
+                              <PhoneCall className="w-4 h-4" />
+                              Buka WhatsApp
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => { setResetPwTarget(null); setResetPwResult(null); setResetPwValue(''); setResetPwReason(''); }}
+                            className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
+                          >
+                            Selesai
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                            <p className="text-xs text-blue-600 font-medium mb-1">Target Mitra</p>
+                            <p className="font-semibold text-slate-800">{resetPwTarget.displayName || resetPwTarget.legalName}</p>
+                            <p className="text-sm text-slate-500">{resetPwTarget.memberCode} · {resetPwTarget.email}</p>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">Auto Generate Password</p>
+                              <p className="text-xs text-slate-400">Password aman &amp; mudah diingat</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const next = !resetPwAutoGen;
+                                setResetPwAutoGen(next);
+                                if (next) setResetPwValue(generateRandomPassword());
+                              }}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                resetPwAutoGen ? 'bg-blue-600' : 'bg-slate-300'
+                              }`}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                resetPwAutoGen ? 'translate-x-6' : 'translate-x-1'
+                              }`} />
+                            </button>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                              Password Baru <span className="text-red-500">*</span>
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={resetPwValue}
+                                onChange={(e) => { setResetPwAutoGen(false); setResetPwValue(e.target.value); }}
+                                placeholder="Minimal 6 karakter"
+                                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 font-mono"
+                              />
+                              <button
+                                onClick={() => { setResetPwValue(generateRandomPassword()); setResetPwAutoGen(true); }}
+                                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+                                title="Generate ulang"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            </div>
+                            {resetPwValue.length > 0 && resetPwValue.length < 6 && (
+                              <p className="text-xs text-red-500 mt-1">Password minimal 6 karakter</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Alasan Reset (Opsional)</label>
+                            <input
+                              type="text"
+                              value={resetPwReason}
+                              onChange={(e) => setResetPwReason(e.target.value)}
+                              placeholder="Contoh: Mitra lupa password"
+                              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400"
+                            />
+                          </div>
+                          <div className="flex gap-3 pt-1">
+                            <button
+                              onClick={() => { setResetPwTarget(null); setResetPwResult(null); setResetPwValue(''); setResetPwReason(''); }}
+                              className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              onClick={handleResetPassword}
+                              disabled={!resetPwValue || resetPwValue.length < 6 || resetPwLoading}
+                              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                            >
+                              {resetPwLoading ? (
+                                <><RefreshCw className="w-4 h-4 animate-spin" /> Memproses...</>
+                              ) : (
+                                <><KeyRound className="w-4 h-4" /> Reset Password</>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 6: KEAGENAN RESMI WILAYAH (REGIONAL AGENTS) */}
           {/* ==================================================================== */}
           {activeTab === 'STOCKIST' && (

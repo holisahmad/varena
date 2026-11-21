@@ -68,6 +68,18 @@ export const CORPORATE_ADMIN_ROLES = [
   'AUDITOR',
 ];
 
+// Role yang memiliki wewenang untuk Maintenance: Inspeksi Akun (Impersonation) & Reset Password Mitra
+export const MAINTENANCE_ADMIN_ROLES = [
+  'OWNER',
+  'OPERATIONS',
+  'ADMIN_1',
+  'ADMIN_2',
+];
+
+export function isMaintenanceAdmin(roles: string[]): boolean {
+  return roles.some((r) => MAINTENANCE_ADMIN_ROLES.includes(r));
+}
+
 export async function getCorporateUser(
   userId?: string | null,
   userEmail?: string | null

@@ -3,6 +3,7 @@ import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import PwaInstallPrompt from '@/components/layout/PwaInstallPrompt';
+import ImpersonationBanner from '@/components/layout/ImpersonationBanner';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-varena-ivory text-varena-espresso pb-16 md:pb-0" suppressHydrationWarning>
         <NotificationProvider>
+          <ImpersonationBanner />
           <PwaInstallPrompt />
           <Navbar />
           <main className="flex-1 flex flex-col">{children}</main>

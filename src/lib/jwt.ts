@@ -17,6 +17,10 @@ export interface AuthSession {
   agentCity?: string;
   sponsorCode?: string;
   sponsorName?: string;
+  isImpersonated?: boolean;
+  impersonatedBy?: string;
+  impersonatorName?: string;
+  impersonatorEmail?: string;
 }
 
 function getSecret(): Uint8Array {
