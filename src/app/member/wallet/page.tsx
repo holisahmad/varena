@@ -75,6 +75,22 @@ export default function MemberWalletPage() {
     expired: boolean;
   } | null>(null);
 
+  // Copy state & helper
+  const [copiedBank, setCopiedBank] = useState(false);
+  const [copiedAmount, setCopiedAmount] = useState(false);
+
+  const copyAccountNumber = (accountNum: string) => {
+    navigator.clipboard?.writeText(accountNum.replace(/\s+/g, ''));
+    setCopiedBank(true);
+    setTimeout(() => setCopiedBank(false), 2000);
+  };
+
+  const copyAmount = (amount: number | string) => {
+    navigator.clipboard?.writeText(String(amount));
+    setCopiedAmount(true);
+    setTimeout(() => setCopiedAmount(false), 2000);
+  };
+
   // 24-hour countdown timer for deposit transfer
   useEffect(() => {
     if (!shopDepositResult || shopDepositStep !== 2) {
@@ -962,9 +978,9 @@ export default function MemberWalletPage() {
 
       {/* ── MODAL: TOP UP SALDO BELANJA ── */}
       {shopDepositModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-blue-200 overflow-hidden">
-            <div className="flex items-center justify-between border-b px-6 py-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-blue-200 overflow-hidden max-h-[90vh] flex flex-col my-auto">
+            <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
               <h3 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-blue-500" />
                 <span>Top Up Saldo Deposit Belanja</span>
@@ -976,7 +992,7 @@ export default function MemberWalletPage() {
             </div>
 
             {/* Step indicator */}
-            <div className="flex items-center px-6 pt-4 gap-3 text-xs font-semibold">
+            <div className="flex items-center px-6 pt-4 gap-3 text-xs font-semibold shrink-0">
               <div className={`flex items-center gap-1.5 ${shopDepositStep === 1 ? 'text-varena-espresso' : 'text-emerald-700'}`}>
                 <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${shopDepositStep === 1 ? 'bg-blue-500 text-white' : 'bg-emerald-600 text-white'}`}>
                   {shopDepositStep === 1 ? '1' : '✓'}
@@ -992,7 +1008,7 @@ export default function MemberWalletPage() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               {shopDepositStep === 1 ? (
                 <form onSubmit={handleShopDepositSubmit} className="space-y-4 text-xs">
                   <div>
@@ -1143,8 +1159,28 @@ export default function MemberWalletPage() {
                     </div>
                     <div className="text-center">
                       <div className="text-blue-200 text-[11px] mb-1">Transfer TEPAT sejumlah:</div>
-                      <div className="text-3xl font-bold font-mono tracking-tight text-white">
-                        Rp{(shopDepositResult?.transferTotal || 0).toLocaleString('id-ID')}
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-3xl font-bold font-mono tracking-tight text-white">
+                          Rp{(shopDepositResult?.transferTotal || 0).toLocaleString('id-ID')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyAmount(shopDepositResult?.transferTotal || 0)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-950 bg-white hover:bg-blue-50 px-2.5 py-1 rounded-lg transition shadow-xs cursor-pointer"
+                          title="Salin Angka Nominal Transfer"
+                        >
+                          {copiedAmount ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-emerald-700 font-bold">Tersalin</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-blue-900" />
+                              <span>Salin</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                       <div className="text-blue-200 text-[10px] mt-1">
                         (Rp{Number(shopDepositAmount).toLocaleString('id-ID')} + kode unik verifikasi Rp{shopDepositResult?.uniqueCode})
@@ -1157,7 +1193,27 @@ export default function MemberWalletPage() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-white/70">Nomor Rekening:</span>
-                        <span className="font-mono font-bold text-sm tracking-wide">3065 0102 4471 539</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-sm tracking-wide">3065 0102 4471 539</span>
+                          <button
+                            type="button"
+                            onClick={() => copyAccountNumber('306501024471539')}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-950 bg-blue-100 hover:bg-white px-2 py-0.5 rounded transition cursor-pointer"
+                            title="Salin Nomor Rekening"
+                          >
+                            {copiedBank ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span className="text-emerald-700 font-bold">Tersalin</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-blue-900" />
+                                <span>Salin</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-white/70">Atas Nama:</span>
