@@ -96,7 +96,7 @@ export async function requestPayout(params: RequestPayoutParams) {
 
   // Mask account number: e.g. "1234567890" -> "123****890"
   const cleanAcc = effectiveAcc.trim();
-  const masked = cleanAcc.length > 6 
+  const masked = cleanAcc.length > 6
     ? `${cleanAcc.slice(0, 3)}****${cleanAcc.slice(-3)}`
     : '****' + cleanAcc.slice(-2);
 

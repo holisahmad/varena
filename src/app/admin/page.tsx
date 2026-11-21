@@ -256,6 +256,12 @@ export default function AdminPage() {
   const [configDiscountType, setConfigDiscountType] = useState('PERCENTAGE');
   const [configDiscountValue, setConfigDiscountValue] = useState(15);
 
+  // Edit Agent Individual Discount Modal State
+  const [editDiscountModalOpen, setEditDiscountModalOpen] = useState(false);
+  const [editingDiscountAgent, setEditingDiscountAgent] = useState<any>(null);
+  const [editDiscountType, setEditDiscountType] = useState('PERCENTAGE');
+  const [editDiscountValue, setEditDiscountValue] = useState(15);
+
   // WhatsApp Outbox State
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
   const [waOutboxLoading, setWaOutboxLoading] = useState(false);
@@ -1071,6 +1077,78 @@ export default function AdminPage() {
       loadAgents();
     } catch (err: any) {
       showToast(err.message || 'Gagal menyimpan konfigurasi.', 'error');
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleApplyBulkAgentDiscount = () => {
+    const formattedVal =
+      configDiscountType === 'PERCENTAGE'
+        ? `${configDiscountValue}%`
+        : `Rp${Number(configDiscountValue).toLocaleString('id-ID')}/box`;
+
+    showConfirm({
+      title: 'Terapkan Diskon ke Semua Agen Aktif',
+      message: `Apakah Anda yakin ingin menerapkan diskon ${formattedVal} ke SELURUH mitra agen aktif yang sudah terdaftar? Kebijakan ini akan memperbarui profil diskon semua agen secara serentak.`,
+      confirmText: 'Ya, Terapkan ke Semua Agen',
+      variant: 'amber',
+      icon: 'shield',
+      onConfirm: async () => {
+        setAgentLoading(true);
+        const authHeaders = getAdminHeaders();
+        try {
+          const res = await fetch('/api/v1/admin/agents/bulk-discount', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify({
+              discountType: configDiscountType,
+              discountValue: configDiscountValue,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Gagal menerapkan diskon massal.');
+          showToast(data.message || `Diskon ${formattedVal} berhasil diterapkan ke seluruh agen aktif!`, 'success');
+          loadAgents();
+        } catch (err: any) {
+          showToast(err.message || 'Gagal menerapkan diskon massal.', 'error');
+        } finally {
+          setAgentLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleSaveIndividualDiscount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDiscountAgent) return;
+    setAgentLoading(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({
+          action: 'UPDATE_AGENT_DISCOUNT',
+          memberId: editingDiscountAgent.id,
+          discountType: editDiscountType,
+          discountValue: editDiscountValue,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal mengubah diskon agen.');
+      showToast(data.message || 'Diskon agen berhasil diperbarui!', 'success');
+      setEditDiscountModalOpen(false);
+      if (monitoringAgent && monitoringAgent.id === editingDiscountAgent.id) {
+        setMonitoringAgent({
+          ...monitoringAgent,
+          discountType: editDiscountType,
+          discountValue: editDiscountValue,
+        });
+      }
+      loadAgents();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengubah diskon agen.', 'error');
     } finally {
       setAgentLoading(false);
     }
@@ -3730,12 +3808,15 @@ export default function AdminPage() {
                             {agents.map((a: any) => (
                               <tr key={a.id} className="hover:bg-varena-ivory-light/40 transition">
                                 <td className="py-2.5 px-3">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-mono font-bold text-varena-espresso">{a.memberCode}</span>
                                     <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
                                       a.type === 'MASTER_AGENT' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'
                                     }`}>
                                       {a.type === 'MASTER_AGENT' ? 'MASTER' : 'WILAYAH'}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                      Diskon: {a.discountType === 'PERCENTAGE' ? `${a.discountValue}%` : `Rp${Number(a.discountValue).toLocaleString('id-ID')}/box`}
                                     </span>
                                   </div>
                                   <div className="font-semibold text-varena-espresso text-sm mt-0.5">{a.displayName}</div>
@@ -3807,6 +3888,20 @@ export default function AdminPage() {
                                   >
                                     <Eye className="w-3 h-3" />
                                     <span>Detail &amp; Progres</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingDiscountAgent(a);
+                                      setEditDiscountType(a.discountType || 'PERCENTAGE');
+                                      setEditDiscountValue(a.discountValue ?? 15);
+                                      setEditDiscountModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-semibold text-[11px] transition inline-flex items-center gap-1 shadow-xs"
+                                    title="Ubah Diskon Pasokan Khusus Agen Ini"
+                                  >
+                                    <Sliders className="w-3 h-3" />
+                                    <span>Diskon</span>
                                   </button>
                                   <button
                                     type="button"
@@ -4495,13 +4590,22 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 flex flex-wrap items-center gap-3">
                       <button
                         type="submit"
                         disabled={agentLoading}
                         className="py-2.5 px-6 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition shadow"
                       >
                         {agentLoading ? 'Menyimpan...' : 'Simpan Konfigurasi Aturan'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={agentLoading}
+                        onClick={handleApplyBulkAgentDiscount}
+                        className="py-2.5 px-5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow flex items-center gap-1.5"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>Terapkan Diskon ke Semua Agen Aktif</span>
                       </button>
                     </div>
                   </form>
@@ -4984,8 +5088,24 @@ export default function AdminPage() {
                           </div>
                           <div>
                             <div className="text-stone-500 text-[11px]">Parameter Keagenan:</div>
-                            <div className="font-semibold text-varena-espresso mt-0.5">
-                              Diskon: {monitoringAgent.discountType === 'PERCENTAGE' ? `${monitoringAgent.discountValue}%` : `Rp${monitoringAgent.discountValue}/box`}
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-semibold text-varena-espresso">
+                                Diskon: {monitoringAgent.discountType === 'PERCENTAGE' ? `${monitoringAgent.discountValue}%` : `Rp${Number(monitoringAgent.discountValue).toLocaleString('id-ID')}/box`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDiscountAgent(monitoringAgent);
+                                  setEditDiscountType(monitoringAgent.discountType || 'PERCENTAGE');
+                                  setEditDiscountValue(monitoringAgent.discountValue ?? 15);
+                                  setEditDiscountModalOpen(true);
+                                }}
+                                className="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-semibold transition inline-flex items-center gap-1"
+                                title="Ubah diskon agen ini"
+                              >
+                                <Sliders className="w-2.5 h-2.5" />
+                                <span>Ubah</span>
+                              </button>
                             </div>
                             <div className="text-stone-600 text-[11px] mt-1">
                               Saldo Kas Deposit: <strong>Rp{(monitoringAgent.depositBalance || 0).toLocaleString('id-ID')}</strong>
@@ -5391,6 +5511,84 @@ export default function AdminPage() {
                           className="px-5 py-2 rounded-lg bg-blue-700 text-white font-bold hover:bg-blue-800 shadow"
                         >
                           {agentLoading ? 'Mengalihkan...' : 'Konfirmasi Alihkan Pengiriman'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: EDIT INDIVIDUAL AGENT DISCOUNT */}
+              {editDiscountModalOpen && editingDiscountAgent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+                  <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-varena-gold/40 space-y-4 text-xs">
+                    <div className="flex items-center justify-between border-b border-varena-taupe/20 pb-3">
+                      <h4 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                        <Sliders className="w-5 h-5 text-varena-espresso" />
+                        <span>Ubah Diskon Agen: {editingDiscountAgent.displayName}</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setEditDiscountModalOpen(false)}
+                        className="text-varena-taupe hover:text-varena-espresso p-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
+                      <div className="font-semibold text-varena-espresso">{editingDiscountAgent.displayName} ({editingDiscountAgent.memberCode})</div>
+                      <div className="text-[11px] text-stone-500">{editingDiscountAgent.city}, {editingDiscountAgent.province}</div>
+                      <div className="text-[11px] text-stone-600 mt-1">
+                        Diskon Saat Ini: <strong>{editingDiscountAgent.discountType === 'PERCENTAGE' ? `${editingDiscountAgent.discountValue}%` : `Rp${Number(editingDiscountAgent.discountValue).toLocaleString('id-ID')}/box`}</strong>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSaveIndividualDiscount} className="space-y-4">
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">Tipe Diskon Pasokan *</label>
+                        <select
+                          value={editDiscountType}
+                          onChange={(e) => setEditDiscountType(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 bg-white"
+                        >
+                          <option value="PERCENTAGE">Persentase (%)</option>
+                          <option value="NOMINAL">Nominal Potongan per Box (Rp)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-varena-espresso mb-1">
+                          Nilai Diskon * {editDiscountType === 'PERCENTAGE' ? '(%)' : '(Rp/box)'}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step={editDiscountType === 'PERCENTAGE' ? '0.5' : '1000'}
+                            min="0"
+                            max={editDiscountType === 'PERCENTAGE' ? 50 : undefined}
+                            value={editDiscountValue}
+                            onChange={(e) => setEditDiscountValue(parseFloat(e.target.value) || 0)}
+                            className="w-full px-3 py-2 rounded-lg border border-varena-taupe/30 font-mono text-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditDiscountModalOpen(false)}
+                          className="px-4 py-2 rounded-lg border border-varena-taupe/30 text-slate-700"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={agentLoading}
+                          className="px-5 py-2 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition shadow"
+                        >
+                          {agentLoading ? 'Menyimpan...' : 'Simpan Diskon Agen'}
                         </button>
                       </div>
                     </form>

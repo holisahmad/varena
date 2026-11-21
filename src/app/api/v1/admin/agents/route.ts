@@ -458,6 +458,45 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // 5b. UPDATE_AGENT_DISCOUNT (Ubah Tipe & Nilai Diskon Agen Spesifik)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (action === 'UPDATE_AGENT_DISCOUNT') {
+      const { memberId, agentMemberId, discountType, discountValue } = body;
+      const targetId = memberId || agentMemberId;
+      if (!targetId) {
+        return NextResponse.json({ error: 'ID Mitra Agen wajib disertakan.' }, { status: 400 });
+      }
+
+      const normalizedType = discountType === 'FLAT_PER_BOX' ? 'NOMINAL' : (discountType || 'PERCENTAGE');
+      const val = parseFloat(discountValue) || 0;
+
+      const updatedMember = await prisma.member.update({
+        where: { id: targetId },
+        data: {
+          agentDiscountType: normalizedType,
+          agentDiscountValue: val,
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          actorUserId: authUser.userId,
+          action: 'UPDATE_AGENT_DISCOUNT',
+          entityType: 'MEMBER',
+          entityId: targetId,
+          afterJson: JSON.stringify({ discountType: normalizedType, discountValue: val }),
+          reason: `Diskon khusus agen ${updatedMember.displayName} diubah menjadi ${normalizedType === 'PERCENTAGE' ? `${val}%` : `Rp${val.toLocaleString('id-ID')}/box`}`,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Diskon agen ${updatedMember.displayName} berhasil diperbarui.`,
+        agent: updatedMember,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // 6. APPROVE_TOPUP / APPROVE_DEPOSIT_TOPUP (Konfirmasi Topup Saldo Deposit)
     // ──────────────────────────────────────────────────────────────────────────
     if (action === 'APPROVE_TOPUP' || action === 'APPROVE_DEPOSIT_TOPUP') {

@@ -13,6 +13,7 @@ import {
   Info,
   DollarSign,
   Percent,
+  Users,
 } from 'lucide-react';
 
 interface SystemSettingsTabProps {
@@ -28,6 +29,7 @@ export default function SystemSettingsTab({
 }: SystemSettingsTabProps) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBulkApplying, setIsBulkApplying] = useState(false);
 
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
@@ -108,6 +110,45 @@ export default function SystemSettingsTab({
           showToast(err.message || 'Gagal menyimpan pengaturan', 'error');
         } finally {
           setIsSaving(false);
+        }
+      },
+    });
+  };
+
+  const handleApplyToAllAgents = () => {
+    const formattedVal =
+      agentConfig.defaultDiscountType === 'PERCENTAGE'
+        ? `${agentConfig.defaultDiscountValue}%`
+        : `Rp${Number(agentConfig.defaultDiscountValue).toLocaleString('id-ID')}/box`;
+
+    showConfirm({
+      title: 'Terapkan Diskon ke Semua Agen Aktif',
+      message: `Apakah Anda yakin ingin menerapkan kebijakan diskon ${formattedVal} ke SELURUH mitra agen aktif yang sudah terdaftar? Pengaturan diskon individual mereka akan diselaraskan dengan kebijakan baru ini.`,
+      confirmText: 'Ya, Terapkan ke Semua Agen',
+      variant: 'amber',
+      icon: 'shield',
+      onConfirm: async () => {
+        setIsBulkApplying(true);
+        try {
+          const res = await fetch('/api/v1/admin/agents/bulk-discount', {
+            method: 'POST',
+            headers: {
+              ...authHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              discountType: agentConfig.defaultDiscountType,
+              discountValue: agentConfig.defaultDiscountValue,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          showToast(data.message || `Berhasil menerapkan diskon ${formattedVal} ke semua agen aktif!`, 'success');
+        } catch (err: any) {
+          showToast(err.message || 'Gagal menerapkan diskon massal ke agen', 'error');
+        } finally {
+          setIsBulkApplying(false);
         }
       },
     });
@@ -265,6 +306,21 @@ export default function SystemSettingsTab({
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="text-[11px] text-amber-900">
+                <span className="font-semibold block sm:inline">Perbarui Kebijakan Seluruh Agen:</span> Ubah diskon semua agen yang ada saat ini sesuai nilai di atas.
+              </div>
+              <button
+                type="button"
+                disabled={isBulkApplying}
+                onClick={handleApplyToAllAgents}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold flex items-center gap-1.5 transition self-start sm:self-auto shrink-0 shadow-xs disabled:opacity-50"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>{isBulkApplying ? 'Menerapkan...' : 'Terapkan ke Semua Agen Aktif'}</span>
+              </button>
             </div>
 
             <div className="pt-2">

@@ -34,7 +34,11 @@ export default function AgentPortalPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [agentData, setAgentData] = useState<any>(null);
-  const [config, setConfig] = useState<any>({ minimumRestockBox: 10, defaultDiscountValue: 15 });
+  const [config, setConfig] = useState<any>({
+    minimumRestockBox: 10,
+    defaultDiscountType: 'PERCENTAGE',
+    defaultDiscountValue: 15,
+  });
   const [loading, setLoading] = useState(true);
 
   // Tab state
