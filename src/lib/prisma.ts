@@ -2,12 +2,22 @@ import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// Tambahkan connection_limit ke URL agar tidak exhausted di Vercel serverless
+// Mengambil URL database pooled untuk mencegah "Too many connections" di Vercel serverless
 function buildDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL || '';
-  // Prisma Postgres (prisma.io) pakai URL khusus, jangan modif
-  if (url.includes('prisma.io') || url.includes('accelerate')) return url;
-  // Tambahkan connection_limit jika belum ada
+  // 1. Prioritaskan DATABASE_URL_POOLED (bawaan integrasi Prisma Postgres di Vercel)
+  let url = process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL || '';
+
+  // 2. Jika URL masih mengarah ke direct db.prisma.io tanpa pooled, otomatis alihkan ke pooled.db.prisma.io
+  if (url.includes('@db.prisma.io') && !url.includes('@pooled.db.prisma.io')) {
+    url = url.replace('@db.prisma.io', '@pooled.db.prisma.io');
+  }
+
+  // 3. Jika pakai Prisma Cloud / Accelerate, biarkan URL apa adanya
+  if (url.includes('prisma.io') || url.includes('accelerate')) {
+    return url;
+  }
+
+  // 4. Untuk PostgreSQL umum lainnya, pasang limit koneksi agar serverless aman
   try {
     const u = new URL(url);
     if (!u.searchParams.has('connection_limit')) {
