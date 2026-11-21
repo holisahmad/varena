@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
 import { validateUploadedFile } from '@/lib/file-security';
+import { saveUploadedFile } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,16 +35,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'proof');
-    await mkdir(uploadDir, { recursive: true });
-
     // Cryptographically secure random filename preventing path traversal
     const safeExt = validation.sanitizedExt || 'jpg';
     const fileName = `proof-${transactionId}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${safeExt}`;
-    const filePath = path.join(uploadDir, fileName);
 
-    await writeFile(filePath, buffer);
-    const proofUrl = `/uploads/proof/${fileName}`;
+    // Universal storage: Vercel Blob in Production, Local in Development
+    const uploadResult = await saveUploadedFile('proof', fileName, buffer, validation.detectedMime);
+    const proofUrl = uploadResult.url;
 
     // Update transaction with proofUrl
     await prisma.agentDepositTransaction.update({
@@ -53,7 +49,11 @@ export async function POST(req: NextRequest) {
       data: { proofUrl },
     });
 
-    return NextResponse.json({ success: true, proofUrl });
+    return NextResponse.json({
+      success: true,
+      proofUrl,
+      storageProvider: uploadResult.storageProvider,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Upload gagal.' }, { status: 500 });
   }

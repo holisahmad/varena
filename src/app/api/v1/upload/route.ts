@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
 import { validateUploadedFile } from '@/lib/file-security';
+import { saveUploadedFile } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,26 +27,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', safeCategory);
-    await mkdir(uploadDir, { recursive: true });
-
     // Cryptographically secure random filename preventing path traversal and collision
     const safeExt = validation.sanitizedExt || 'webp';
     const cleanName = `${safeCategory}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${safeExt}`;
-    const filePath = path.join(uploadDir, cleanName);
 
-    await writeFile(filePath, buffer);
-
-    const publicUrl = `/uploads/${safeCategory}/${cleanName}`;
+    // Universal storage: Vercel Blob in Production, Local in Development
+    const uploadResult = await saveUploadedFile(safeCategory, cleanName, buffer, validation.detectedMime);
 
     return NextResponse.json({
       success: true,
-      url: publicUrl,
+      url: uploadResult.url,
       fileName: cleanName,
+      storageProvider: uploadResult.storageProvider,
       sizeKb: Math.round(buffer.length / 1024),
     });
   } catch (err: any) {
     console.error('File upload error:', err);
-    return NextResponse.json({ error: err.message || 'Gagal mengunggah gambar.' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Gagal mengunggah file.' }, { status: 500 });
   }
 }
