@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getMemberFromJWT } from '@/lib/auth';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,18 @@ export async function GET(req: Request) {
     const memberCode = searchParams.get('memberCode');
     if (!memberCode) {
       return NextResponse.json({ error: 'memberCode required.' }, { status: 400 });
+    }
+
+    // Auth guard
+    const adminSession = await resolveCorporateAdmin(req);
+    if (!adminSession) {
+      const memberSession = await getMemberFromJWT(req);
+      if (!memberSession) {
+        return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+      }
+      if (memberSession.memberCode !== memberCode) {
+        return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
+      }
     }
 
     const member = await prisma.member.findUnique({ where: { memberCode } });
@@ -40,8 +54,15 @@ export async function GET(req: Request) {
 // POST: Ajukan deposit belanja mitra
 export async function POST(req: Request) {
   try {
+    // Auth guard: Ambil memberCode dari JWT
+    const memberSession = await getMemberFromJWT(req);
+    if (!memberSession || !memberSession.memberCode) {
+      return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+    }
+    const memberCode = memberSession.memberCode;
+
     const body = await req.json();
-    const { memberCode, amount, notes, proofUrl, bankName, accountNumber } = body;
+    const { amount, notes, proofUrl, bankName, accountNumber } = body;
 
     const nominal = parseInt(amount, 10);
     if (!nominal || nominal < 50000) {

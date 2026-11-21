@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/v1/orders/confirm-payment
@@ -33,6 +36,14 @@ export async function POST(req: Request) {
 
     // Handle Admin REJECT action
     if (action === 'REJECT') {
+      const admin = await resolveCorporateAdmin(req);
+      if (!admin) {
+        return NextResponse.json(
+          { error: 'Akses ditolak. Hanya admin yang dapat menolak konfirmasi pembayaran.' },
+          { status: 403 }
+        );
+      }
+
       const orderToReject = await prisma.order.findFirst({
         where: orderId ? { id: orderId } : { orderNumber: orderNumber?.trim() },
       });
@@ -48,6 +59,7 @@ export async function POST(req: Request) {
 
       await prisma.auditLog.create({
         data: {
+          actorUserId: admin.userId,
           action: 'PAYMENT_PROOF_REJECTED',
           entityType: 'ORDER',
           entityId: orderToReject.id,

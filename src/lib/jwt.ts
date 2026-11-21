@@ -18,7 +18,15 @@ export interface AuthSession {
 }
 
 function getSecret(): Uint8Array {
-  const secret = process.env.JWT_SECRET || 'varena-fallback-dev-secret-change-in-production';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET environment variable wajib diset di lingkungan produksi.');
+    }
+    // Hanya di development — tampilkan peringatan
+    console.warn('[VARENA WARNING] JWT_SECRET tidak diset. Menggunakan secret development. JANGAN gunakan di produksi!');
+    return new TextEncoder().encode('varena-fallback-dev-secret-change-in-production');
+  }
   return new TextEncoder().encode(secret);
 }
 

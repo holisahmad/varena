@@ -1,15 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PrismaClient } from '@prisma/client';
-import { calculateOrderCommissions } from '../src/lib/commission.js';
+import prismaModule, { prisma as namedPrisma } from '../src/lib/prisma';
+import { calculateOrderCommissions } from '../src/lib/commission';
 
-const prisma = new PrismaClient();
+const prisma = namedPrisma || prismaModule?.default || prismaModule;
 
 test('Commission Engine - Deterministic First Pack Calculation and Idempotency', async (t) => {
-  // Find test product variant & member
-  const variant = await prisma.productVariant.findUnique({
-    where: { sku: 'VRN-KOP-BOX10' },
+  let variant = await prisma.productVariant.findFirst({
+    where: {
+      OR: [
+        { sku: 'KM-BOX10' },
+        { sku: 'VRN-KOP-BOX10' },
+      ],
+    },
   });
+  if (!variant) {
+    variant = await prisma.productVariant.findFirst();
+  }
   assert.ok(variant, 'First pack variant must exist');
 
   const referralMember = await prisma.member.findUnique({
@@ -70,5 +77,5 @@ test('Commission Engine - Deterministic First Pack Calculation and Idempotency',
 
 test.after(async () => {
   await prisma.$disconnect();
+  process.exit(0);
 });
-

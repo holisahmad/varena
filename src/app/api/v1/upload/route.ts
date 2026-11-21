@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
+import { validateUploadedFile } from '@/lib/file-security';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,27 +16,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File gambar wajib disertakan.' }, { status: 400 });
     }
 
-    // Sanitize category (only allow proof or products)
+    // Sanitize category (strictly whitelist proof or products)
     const safeCategory = category === 'products' ? 'products' : 'proof';
-
-    // Verify MIME type is image
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Hanya file gambar yang diperbolehkan.' }, { status: 400 });
-    }
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Deep security validation (Magic bytes signature, dangerous extension prevention, file size)
+    const validation = validateUploadedFile(file, buffer, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', safeCategory);
     await mkdir(uploadDir, { recursive: true });
 
-    // Determine extension: prefer webp if image/webp or clean extension
-    let ext = 'webp';
-    if (file.type === 'image/jpeg' || file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')) ext = 'jpg';
-    else if (file.type === 'image/png' || file.name.endsWith('.png')) ext = 'png';
-    else if (file.type === 'image/webp' || file.name.endsWith('.webp')) ext = 'webp';
-
-    const cleanName = `${safeCategory}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    // Cryptographically secure random filename preventing path traversal and collision
+    const safeExt = validation.sanitizedExt || 'webp';
+    const cleanName = `${safeCategory}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${safeExt}`;
     const filePath = path.join(uploadDir, cleanName);
 
     await writeFile(filePath, buffer);

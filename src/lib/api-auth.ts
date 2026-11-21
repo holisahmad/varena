@@ -3,21 +3,26 @@
  * 
  * Strategy: Backward compatible migration
  * - Accept both JWT (Bearer token / cookie) AND legacy x-user-id/x-user-email headers
- * - JWT takes priority; headers as fallback (for gradual migration)
- * - Once all frontend pages send JWT, remove the header fallback
+ * - JWT takes priority; headers as fallback in development only
+ * - In production, header fallback is blocked to prevent spoofing
  */
 import { getCorporateUser, getCorporateUserFromJWT, type AuthSession } from './auth';
 
 /**
  * Resolve corporate admin from request.
- * Accepts JWT (priority) or legacy plain headers (fallback).
+ * Accepts JWT (priority) or legacy plain headers (development fallback only).
  */
 export async function resolveCorporateAdmin(req: Request): Promise<AuthSession | null> {
   // 1. Try JWT first (secure)
   const jwtSession = await getCorporateUserFromJWT(req);
   if (jwtSession) return jwtSession;
 
-  // 2. Fallback to legacy headers (backward compat — remove once frontend migrated)
+  // 2. Block header fallback in production
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
+  // 3. Fallback to legacy headers (development only)
   const userId = req.headers.get('x-user-id');
   const userEmail = req.headers.get('x-user-email');
   if (!userId && !userEmail) return null;
@@ -36,10 +41,9 @@ export async function resolveCorporateAdmin(req: Request): Promise<AuthSession |
 
 /**
  * Resolve member from request.
- * Accepts JWT (priority) or legacy headers (fallback).
+ * Accepts JWT.
  */
 export async function resolveMemberFromRequest(req: Request): Promise<AuthSession | null> {
-  // 1. Try JWT first (secure)
   const { getMemberFromJWT } = await import('./auth');
   const jwtSession = await getMemberFromJWT(req);
   if (jwtSession) return jwtSession;

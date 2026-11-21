@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getMemberFromJWT } from '@/lib/auth';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const memberCode = searchParams.get('memberCode') || 'VRN-0001';
+
+    // Auth guard
+    const adminSession = await resolveCorporateAdmin(req);
+    if (!adminSession) {
+      const memberSession = await getMemberFromJWT(req);
+      if (!memberSession) {
+        return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+      }
+      if (memberSession.memberCode !== memberCode) {
+        return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
+      }
+    }
 
     const member = await prisma.member.findUnique({
       where: { memberCode },
@@ -44,4 +60,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

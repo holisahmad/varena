@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
+import { getMemberFromJWT } from '@/lib/auth';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/v1/member/bank-account?memberCode=VRN-0001
@@ -13,6 +17,18 @@ export async function GET(req: Request) {
 
     if (!memberCode) {
       return NextResponse.json({ error: 'Kode member diperlukan.' }, { status: 400 });
+    }
+
+    // Auth guard: Admin korporasi boleh akses semua, member hanya miliknya sendiri
+    const adminSession = await resolveCorporateAdmin(req);
+    if (!adminSession) {
+      const memberSession = await getMemberFromJWT(req);
+      if (!memberSession) {
+        return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+      }
+      if (memberSession.memberCode !== memberCode) {
+        return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
+      }
     }
 
     const member = await prisma.member.findUnique({
@@ -68,8 +84,15 @@ export async function POST(req: Request) {
       );
     }
 
+    // Auth guard: Ambil member dari JWT session
+    const memberSession = await getMemberFromJWT(req);
+    if (!memberSession || !memberSession.memberCode) {
+      return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+    }
+    const memberCode = memberSession.memberCode;
+
     const body = await req.json();
-    const { memberCode, bankName, accountNumber, accountHolder } = body;
+    const { bankName, accountNumber, accountHolder } = body;
 
     // 2. Suspicious injection check
     const rawInputs = [memberCode, bankName, accountNumber, accountHolder].filter(Boolean).join(' ');
@@ -80,7 +103,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!memberCode || !bankName || !accountNumber || !accountHolder) {
+    if (!bankName || !accountNumber || !accountHolder) {
       return NextResponse.json(
         { error: 'Semua kolom (Nama Bank, Nomor Rekening, dan Nama Pemilik Rekening) wajib diisi.' },
         { status: 400 }

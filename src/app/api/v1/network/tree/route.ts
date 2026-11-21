@@ -1,10 +1,26 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getMemberFromJWT } from '@/lib/auth';
+import { resolveCorporateAdmin } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const rootCode = searchParams.get('rootCode') || 'VRN-LDR-03';
+
+    // Auth guard: Admin korporasi boleh lihat tree siapa saja, member hanya miliknya sendiri
+    const adminSession = await resolveCorporateAdmin(req);
+    if (!adminSession) {
+      const memberSession = await getMemberFromJWT(req);
+      if (!memberSession) {
+        return NextResponse.json({ error: 'Sesi tidak valid. Silakan login kembali.' }, { status: 401 });
+      }
+      if (memberSession.memberCode !== rootCode) {
+        return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
+      }
+    }
 
     // Find the focal node
     const focalMember = await prisma.member.findUnique({
@@ -64,4 +80,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
