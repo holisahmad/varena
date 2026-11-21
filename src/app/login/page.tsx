@@ -165,6 +165,20 @@ function LoginForm() {
             </div>
           </div>
 
+          {/* Lupa Password */}
+          <div className="flex justify-end -mt-1 mb-1">
+            <button
+              type="button"
+              onClick={() => {
+                const wa = 'https://wa.me/6281234567890?text=' + encodeURIComponent('Halo Admin VARENA, saya lupa password akun saya. Mohon bantuannya untuk reset password.\n\nNama: \nKode Mitra / Email: ');
+                window.open(wa, '_blank');
+              }}
+              className="text-xs text-varena-gold hover:underline"
+            >
+              Lupa password?
+            </button>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
