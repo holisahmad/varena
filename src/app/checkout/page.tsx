@@ -142,6 +142,35 @@ function CheckoutContent() {
         setConfirmAccountNumber(m.bankAccountNumber);
         setConfirmAccountHolder(m.bankAccountHolder || m.displayName || m.legalName || '');
       }
+
+      // Tandai sebagai member jika ada memberCode
+      if (m && m.memberCode) {
+        setIsExistingMember(true);
+      }
+
+      // Load upline sponsor jika member sudah login
+      if (m && m.sponsor && m.sponsor.code) {
+        setReferralCode(m.sponsor.code);
+        setReferralInfo({
+          name: m.sponsor.name,
+          code: m.sponsor.code,
+          isUpline: true,
+        });
+        try {
+          const raw = localStorage.getItem('varena_user');
+          if (raw) {
+            const u = JSON.parse(raw);
+            localStorage.setItem(
+              'varena_user',
+              JSON.stringify({
+                ...u,
+                sponsorCode: m.sponsor.code,
+                sponsorName: m.sponsor.name,
+              })
+            );
+          }
+        } catch {}
+      }
     } catch (err) {
       console.warn('Could not load profile address:', err);
     }
@@ -352,12 +381,22 @@ function CheckoutContent() {
     // 2. Prepopulate buyer info if logged in
     const storedUser = localStorage.getItem('varena_user');
     let loggedInMemberCode = '';
+    let parsedUserObj: any = null;
     if (storedUser) {
       try {
         const u = JSON.parse(storedUser);
+        parsedUserObj = u;
         loggedInMemberCode = (u.memberCode || '').toUpperCase();
         if (u.memberCode || u.isActiveMember || u.role === 'MEMBER' || u.role === 'STOCKIST') {
           setIsExistingMember(true);
+        }
+        if (u.sponsorCode) {
+          setReferralCode(u.sponsorCode);
+          setReferralInfo({
+            code: u.sponsorCode,
+            name: u.sponsorName || 'Upline Sponsor',
+            isUpline: true,
+          });
         }
         if (u.displayName) setBuyerName((prev) => prev || u.displayName);
         if (u.email) setBuyerEmail((prev) => prev || u.email);
@@ -386,7 +425,7 @@ function CheckoutContent() {
           setAddressMode('SAVED');
         }
 
-        // Fetch fresh address dari database
+        // Fetch fresh address & sponsor dari database
         loadProfileAddress(u.memberCode, u.userId || u.id);
 
         // Fetch saldo deposit belanja member
@@ -409,19 +448,30 @@ function CheckoutContent() {
       }
     }
 
-    // 3. Prepopulate referral code if stored or param (cegah self-referral jika belanja pribadi)
+    // 3. Prepopulate referral code if stored or param
     const paramRef = searchParams?.get('ref');
     const storedRef = localStorage.getItem('varena_referral_code');
-    let initialRef = (paramRef || storedRef || '').toUpperCase();
-    if (loggedInMemberCode && initialRef === loggedInMemberCode) {
-      initialRef = '';
-    } else if (!initialRef && !loggedInMemberCode) {
-      initialRef = 'VRN-LDR-03';
-    }
+    let initialRef = '';
 
-    if (initialRef) {
-      setReferralCode(initialRef);
-      validateReferral(initialRef);
+    if (loggedInMemberCode) {
+      // Member sudah login: otomatis gunakan upline sponsor resminya jika ada
+      if (parsedUserObj?.sponsorCode) {
+        initialRef = String(parsedUserObj.sponsorCode).toUpperCase();
+        setReferralCode(initialRef);
+        setReferralInfo({
+          code: initialRef,
+          name: parsedUserObj.sponsorName || 'Upline Sponsor',
+          isUpline: true,
+        });
+      }
+      // loadProfileAddress di atas akan otomatis melengkapi jika sponsorCode belum tercache
+    } else {
+      // Belum login (calon mitra baru atau konsumen umum non-login): gunakan link ref, cookie ref, atau default pusat
+      initialRef = (paramRef || storedRef || 'VRN-LDR-03').toUpperCase();
+      if (initialRef) {
+        setReferralCode(initialRef);
+        validateReferral(initialRef);
+      }
     }
 
     // 4. Load existing order details if orderNumber query param is present
@@ -705,7 +755,16 @@ function CheckoutContent() {
                       label="Masuk Google"
                       sponsorCode={referralCode}
                       onSuccess={(data) => {
-                        const d = data as { user?: { displayName?: string; email?: string; phone?: string; memberCode?: string } };
+                        const d = data as {
+                          user?: {
+                            displayName?: string;
+                            email?: string;
+                            phone?: string;
+                            memberCode?: string;
+                            sponsorCode?: string;
+                            sponsorName?: string;
+                          };
+                        };
                         if (d.user?.displayName) {
                           setBuyerName(d.user.displayName);
                           setRecipientName((prev) => prev || d.user!.displayName!);
@@ -716,6 +775,14 @@ function CheckoutContent() {
                           setRecipientPhone((prev) => prev || d.user!.phone!);
                         }
                         if (d.user?.memberCode) setIsExistingMember(true);
+                        if (d.user?.sponsorCode) {
+                          setReferralCode(d.user.sponsorCode);
+                          setReferralInfo({
+                            code: d.user.sponsorCode,
+                            name: d.user.sponsorName || 'Upline Sponsor',
+                            isUpline: true,
+                          });
+                        }
                         const uid = (d.user as any)?.id || (d.user as any)?.userId;
                         if (d.user?.memberCode || uid) {
                           loadProfileAddress(d.user?.memberCode, uid);
@@ -1191,38 +1258,70 @@ function CheckoutContent() {
             <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-xs text-varena-espresso">Kode Referral Mitra (Upline/Sponsor):</span>
-                {referralInfo && (
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                {isExistingMember && referralCode ? (
+                  <span className="text-[10px] text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full font-semibold border border-blue-200 flex items-center gap-1">
+                    <span>✓</span> Upline Resmi Anda
+                  </span>
+                ) : referralInfo ? (
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">
                     Terverifikasi
                   </span>
-                )}
+                ) : null}
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={referralCode}
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase();
-                    setReferralCode(val);
-                    validateReferral(val);
-                  }}
-                  placeholder="Kode Sponsor (misal: VRN-0001)"
-                  className="flex-1 px-3 py-2 text-xs font-mono rounded-lg border border-varena-taupe/30 uppercase focus:outline-none focus:border-varena-gold"
-                />
-              </div>
-
-              {referralInfo ? (
-                <div className="p-2.5 rounded-lg bg-varena-ivory-light border border-varena-gold/30 text-xs">
-                  <div className="text-varena-taupe text-[11px]">Sponsor Rujukan:</div>
-                  <div className="font-semibold text-varena-espresso">
-                    {referralInfo.name} ({referralInfo.code})
+              {isExistingMember && referralCode ? (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/50 border border-blue-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800">
+                      Upline Sponsor Jaringan Anda
+                    </span>
+                    <span className="font-mono text-xs font-bold text-blue-900 bg-white px-2.5 py-0.5 rounded-lg border border-blue-200 shadow-2xs">
+                      {referralCode}
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-varena-espresso">
+                    {referralInfo?.name || 'Sponsor Terverifikasi'}
+                  </div>
+                  <p className="text-[10px] text-blue-700/90 leading-relaxed">
+                    * Otomatis terhubung ke upline sponsor resmi Anda di jaringan VARENA untuk perhitungan bonus sponsor & pembinaan tim.
+                  </p>
+                </div>
+              ) : isExistingMember && !referralCode ? (
+                <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-600">
+                  <div className="font-bold text-stone-800 mb-0.5">Akun Utama / Tanpa Upline Sponsor</div>
+                  <div className="text-[10px] text-stone-500">
+                    Transaksi ini tercatat langsung di bawah operasional kantor pusat.
                   </div>
                 </div>
               ) : (
-                <div className="text-[11px] text-varena-taupe">
-                  * Transaksi tanpa kode sponsor akan otomatis diarahkan ke operasional resmi pusat.
-                </div>
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setReferralCode(val);
+                        validateReferral(val);
+                      }}
+                      placeholder="Kode Sponsor (misal: VRN-0001)"
+                      className="flex-1 px-3 py-2 text-xs font-mono rounded-lg border border-varena-taupe/30 uppercase focus:outline-none focus:border-varena-gold"
+                    />
+                  </div>
+
+                  {referralInfo ? (
+                    <div className="p-2.5 rounded-lg bg-varena-ivory-light border border-varena-gold/30 text-xs">
+                      <div className="text-varena-taupe text-[11px]">Sponsor Rujukan:</div>
+                      <div className="font-semibold text-varena-espresso">
+                        {referralInfo.name} ({referralInfo.code})
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-varena-taupe">
+                      * Transaksi tanpa kode sponsor akan otomatis diarahkan ke operasional resmi pusat.
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

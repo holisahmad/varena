@@ -106,6 +106,18 @@ export async function createOrder(payload: CheckoutPayload) {
     }
   }
 
+  // Jika pembeli adalah member terdaftar dan belum ada referralMemberId (misal referralCode kosong atau mencoba self-referral),
+  // otomatis kaitkan ke Upline Sponsor langsungnya di jaringan
+  if (!referralMemberId && buyerMember) {
+    const sponsorRel = await prisma.sponsorRelationship.findUnique({
+      where: { memberId: buyerMember.id },
+      include: { sponsor: true },
+    });
+    if (sponsorRel?.sponsor && sponsorRel.sponsor.memberStatus === 'ACTIVE') {
+      referralMemberId = sponsorRel.sponsor.id;
+    }
+  }
+
   // 2. Fetch variants & calculate totals with server-side price authority
   const variantIds = items.map((i) => i.variantId);
   const variants = await prisma.productVariant.findMany({

@@ -98,7 +98,13 @@ export async function POST(req: Request) {
       where: { email },
       include: {
         userRoles: { include: { role: true } },
-        member: true,
+        member: {
+          include: {
+            sponsorRel: {
+              include: { sponsor: true },
+            },
+          },
+        },
       },
     });
 
@@ -114,6 +120,7 @@ export async function POST(req: Request) {
 
       const roles = user.userRoles.map((ur) => ur.role.code);
       const member = user.member;
+      const uplineSponsor = member?.sponsorRel?.sponsor;
 
       const session = {
         userId: user.id,
@@ -125,6 +132,8 @@ export async function POST(req: Request) {
         isAgent: member?.isAgent || false,
         agentStatus: member?.agentStatus || 'NONE',
         agentCity: member?.agentCity || undefined,
+        sponsorCode: uplineSponsor?.memberCode || undefined,
+        sponsorName: uplineSponsor?.displayName || uplineSponsor?.legalName || undefined,
       };
 
       const token = await signSessionToken(session);
@@ -144,6 +153,8 @@ export async function POST(req: Request) {
           isAgent: member?.isAgent || false,
           agentStatus: member?.agentStatus || 'NONE',
           agentCity: member?.agentCity || null,
+          sponsorCode: uplineSponsor?.memberCode || null,
+          sponsorName: uplineSponsor?.displayName || uplineSponsor?.legalName || null,
         },
         token,
       });

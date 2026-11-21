@@ -13,7 +13,13 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
       userRoles: {
         include: { role: true },
       },
-      member: true,
+      member: {
+        include: {
+          sponsorRel: {
+            include: { sponsor: true },
+          },
+        },
+      },
     },
   });
 
@@ -48,6 +54,8 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
     isAgent,
     agentStatus: user.member?.agentStatus || (isAgent ? 'ACTIVE' : undefined),
     agentCity: user.member?.agentCity || user.member?.stockistCity || undefined,
+    sponsorCode: user.member?.sponsorRel?.sponsor?.memberCode || undefined,
+    sponsorName: user.member?.sponsorRel?.sponsor?.displayName || user.member?.sponsorRel?.sponsor?.legalName || undefined,
   };
 }
 

@@ -15,6 +15,8 @@ export interface AuthSession {
   isAgent?: boolean;
   agentStatus?: string;
   agentCity?: string;
+  sponsorCode?: string;
+  sponsorName?: string;
 }
 
 function getSecret(): Uint8Array {

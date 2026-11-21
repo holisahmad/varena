@@ -60,6 +60,18 @@ export async function GET(req: Request) {
         agentStatus: true,
         agentCity: true,
         agentInventory: true,
+        sponsorRel: {
+          select: {
+            sponsor: {
+              select: {
+                id: true,
+                memberCode: true,
+                displayName: true,
+                legalName: true,
+              },
+            },
+          },
+        },
         user: {
           select: {
             phone: true,
@@ -74,7 +86,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
     }
 
-    const { user, ...rest } = member;
+    const { user, sponsorRel, ...rest } = member;
 
     // Calculate profile completion percentage
     let completedSteps = 1; // Gmail / identity base = 1
@@ -92,6 +104,13 @@ export async function GET(req: Request) {
         phone: user?.phone || null,
         email: user?.email || null,
         completionPercent,
+        sponsor: sponsorRel?.sponsor
+          ? {
+              code: sponsorRel.sponsor.memberCode,
+              name: sponsorRel.sponsor.displayName || sponsorRel.sponsor.legalName,
+              id: sponsorRel.sponsor.id,
+            }
+          : null,
       },
     });
   } catch (err: any) {
