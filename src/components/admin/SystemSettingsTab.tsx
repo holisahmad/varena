@@ -226,23 +226,44 @@ export default function SystemSettingsTab({
               </span>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                Diskon Pasokan Grosir Default (%)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="50"
-                  value={agentConfig.defaultDiscountValue}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Tipe Diskon Pasokan Default
+                </label>
+                <select
+                  value={agentConfig.defaultDiscountType}
                   onChange={(e) =>
-                    setAgentConfig({ ...agentConfig, defaultDiscountValue: Number(e.target.value) })
+                    setAgentConfig({ ...agentConfig, defaultDiscountType: e.target.value })
                   }
-                  className="w-full pl-3 pr-8 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
-                />
-                <Percent className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold bg-white"
+                >
+                  <option value="PERCENTAGE">Persentase (%)</option>
+                  <option value="NOMINAL">Nominal Potongan per Box (Rp)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Nilai Diskon Default{agentConfig.defaultDiscountType === 'PERCENTAGE' ? ' (%)' : ' (Rp/box)'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step={agentConfig.defaultDiscountType === 'PERCENTAGE' ? '0.5' : '1000'}
+                    min="0"
+                    max={agentConfig.defaultDiscountType === 'PERCENTAGE' ? 50 : undefined}
+                    value={agentConfig.defaultDiscountValue}
+                    onChange={(e) =>
+                      setAgentConfig({ ...agentConfig, defaultDiscountValue: Number(e.target.value) })
+                    }
+                    className="w-full pl-3 pr-8 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+                  />
+                  {agentConfig.defaultDiscountType === 'PERCENTAGE' ? (
+                    <Percent className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                  ) : (
+                    <span className="text-[10px] text-slate-400 absolute right-2 top-2.5 font-semibold">Rp</span>
+                  )}
+                </div>
               </div>
             </div>
 
