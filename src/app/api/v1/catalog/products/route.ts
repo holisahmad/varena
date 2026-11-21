@@ -14,10 +14,18 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({
-      success: true,
-      products,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        products,
+      },
+      {
+        headers: {
+          // CDN edge cache 60 detik + stale-while-revalidate 5 menit untuk menghemat operasi database Prisma
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
