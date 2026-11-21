@@ -101,9 +101,10 @@ NEXTAUTH_URL=https://app.varena.id
 
 ### Rekomendasi Infrastruktur & Operasional:
 1. **Reverse Proxy & SSL:** Pastikan server berada di balik reverse proxy (Cloudflare / Nginx) dengan HTTPS aktif dan HTTP/2 atau HTTP/3.
-2. **Penyimpanan Berkas (Object Storage):** Saat ini file unggahan disimpan di `public/uploads/`. Untuk skala produksi tinggi dengan beberapa instance server, disarankan memindahkan penyimpanan ke S3/Cloudflare R2 atau Google Cloud Storage.
-3. **Backup Otomatis Basis Data:** Jadwalkan backup harian PostgreSQL (pg_dump) dengan retensi minimal 30 hari.
-4. **Monitoring Log:** Pasang layanan log monitoring seperti Sentry atau Datadog untuk memantau unhandled errors secara real-time.
+2. **Konfigurasi Domain Google OAuth:** Pada Google Cloud Console (OAuth 2.0 Client ID), daftarkan domain live server di menu **Authorized JavaScript origins** (misal: `https://app.varena.id`) dan **Authorized redirect URIs** (misal: `https://app.varena.id/api/auth/callback/google`) untuk mencegah error `403 The given origin is not allowed`.
+3. **Penyimpanan Berkas (Object Storage):** Saat ini file unggahan disimpan di `public/uploads/`. Untuk skala produksi tinggi dengan beberapa instance server, disarankan memindahkan penyimpanan ke S3/Cloudflare R2 atau Google Cloud Storage.
+4. **Backup Otomatis Basis Data:** Jadwalkan backup harian PostgreSQL (pg_dump) dengan retensi minimal 30 hari.
+5. **Monitoring Log:** Pasang layanan log monitoring seperti Sentry atau Datadog untuk memantau unhandled errors secara real-time.
 
 ---
 

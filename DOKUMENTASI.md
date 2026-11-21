@@ -12,6 +12,7 @@
 6. [Sistem Pasokan Grosir & Keagenan Wilayah](#6-sistem-pasokan-grosir--keagenan-wilayah)
 7. [Matriks Peran & Hak Akses Pengguna (Role-Based Access Control)](#7-matriks-peran--hak-akses-pengguna-role-based-access-control)
 8. [Daftar Akun Referensi (Hierarki Upline 10 Level & Tim Manajemen)](#8-daftar-akun-referensi-hierarki-upline-10-level--tim-manajemen)
+9. [Panduan Konfigurasi Go-Live & Google OAuth Sign-In](#9-panduan-konfigurasi-go-live--google-oauth-sign-in)
 
 ---
 
@@ -225,6 +226,32 @@ Ketika pesanan dibuat oleh anggota di bawah jaringan (misal: `VRN-0006`), komisi
 1. **Owner / Direksi (Root Access):** `owner@varena.id` / `Varena2026!`
 2. **Admin Logistik & Katalog Produk:** `admin1@varena.id` / `Varena2026!`
 3. **Admin Verifikasi & Layanan Operasional:** `admin2@varena.id` / `Varena2026!`
+
+---
+
+## 9. Panduan Konfigurasi Go-Live & Google OAuth Sign-In
+
+Saat aplikasi dideploy ke server produksi (live server), fitur **Google One-Tap / Login Google** memerlukan pendaftaran domain pada Google Cloud Console agar tidak mengalami error `403 Forbidden` (`[GSI_LOGGER]: The given origin is not allowed for the given client ID`).
+
+### Langkah-Langkah Konfigurasi di Google Cloud Console:
+1. Buka [Google Cloud Console - Credentials](https://console.cloud.google.com/apis/credentials).
+2. Pastikan proyek yang aktif adalah proyek Google Cloud aplikasi VARENA.
+3. Di tabel **OAuth 2.0 Client IDs**, klik nama Web Client ID yang digunakan (misal: `827044072858-...apps.googleusercontent.com`).
+4. **Authorized JavaScript origins (Asal JavaScript yang Diotorisasi):**
+   Klik **+ ADD URI** dan daftarkan semua URL basis yang digunakan untuk mengakses aplikasi:
+   - `http://localhost:3000` *(lingkungan development lokal)*
+   - `http://127.0.0.1:3000` *(lingkungan loopback lokal)*
+   - `https://app.varena.id` *(domain produksi utama — ganti sesuai domain resmi)*
+   - `https://varena.id` *(domain root alternatif bila ada)*
+   - *(PENTING: Jangan menyertakan trailing slash `/` di akhir URL origin)*
+5. **Authorized redirect URIs (URI Pengalihan yang Diotorisasi):**
+   Klik **+ ADD URI** dan daftarkan URL callback:
+   - `http://localhost:3000/api/auth/callback/google`
+   - `http://localhost:3000/login`
+   - `https://app.varena.id/api/auth/callback/google`
+   - `https://app.varena.id/login`
+6. Klik tombol **SAVE / SIMPAN** di bagian bawah halaman.
+7. **Waktu Propagasi:** Pengaturan baru dari Google memerlukan waktu propagasi sekitar **2–5 menit**. Setelah jeda waktu tersebut, refresh browser (*Ctrl + F5*) untuk memuat tombol Google Sign-In.
 
 ---
 *Dokumen ini diterbitkan oleh Komite Bisnis & Legal VARENA sebagai pedoman resmi tata kelola operasional, arsitektur teknis, dan kepatuhan sistem.*
