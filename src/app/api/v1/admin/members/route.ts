@@ -98,6 +98,8 @@ export async function GET(req: Request) {
       legalName: m.legalName,
       nik: m.nik,
       memberStatus: m.memberStatus,
+      // isActive: flat field agar mudah dibaca UI
+      isActive: m.memberStatus === 'ACTIVE',
       kycStatus: m.kycStatus,
       isAgent: m.isAgent,
       agentType: m.agentType,
@@ -111,6 +113,9 @@ export async function GET(req: Request) {
       phone: m.user?.phone || null,
       accountStatus: m.user?.status || 'ACTIVE',
       lastLoginAt: m.user?.lastLoginAt || null,
+      // sponsorCode flat agar mudah dibaca UI
+      sponsorCode: m.sponsorRel?.sponsor?.memberCode || null,
+      sponsorName: m.sponsorRel?.sponsor?.displayName || null,
       sponsor: m.sponsorRel?.sponsor
         ? {
             code: m.sponsorRel.sponsor.memberCode,

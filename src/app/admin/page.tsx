@@ -397,6 +397,14 @@ export default function AdminPage() {
     }
   }, [router]);
 
+  // Auto-load MEMBERS tab saat aktif
+  useEffect(() => {
+    if (activeTab === 'MEMBERS' && membersList.length === 0 && !membersLoading) {
+      loadMembersList(1, '', 'ALL');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   const getAdminHeaders = (customUser?: any): Record<string, string> => {
     // Always collect legacy user info first
     const user = customUser || currentUser;
