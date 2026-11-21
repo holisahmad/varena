@@ -7,6 +7,7 @@ import ConfirmDialog, { DialogVariant } from '@/components/ui/ConfirmDialog';
 import Toast from '@/components/ui/Toast';
 import ProductManagementTab from '@/components/admin/ProductManagementTab';
 import SystemSettingsTab from '@/components/admin/SystemSettingsTab';
+import ShippingLabelModal from '@/components/admin/ShippingLabelModal';
 import {
   formatOrderStatus,
   formatOrderType,
@@ -68,6 +69,7 @@ import {
   Gift,
   Percent,
   Tag,
+  Printer,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -150,6 +152,7 @@ export default function AdminPage() {
 
   // Order Detail Modal State
   const [viewOrderDetail, setViewOrderDetail] = useState<any | null>(null);
+  const [shippingLabelOrder, setShippingLabelOrder] = useState<any | null>(null);
 
   // Shipping Modal State
   const [shippingModalOrder, setShippingModalOrder] = useState<any | null>(null);
@@ -2247,35 +2250,68 @@ export default function AdminPage() {
                                 )}
 
                                 {o.orderStatus === 'PAID' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setShippingModalOrder(o);
-                                      setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
-                                    }}
-                                    className="px-2.5 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition shadow-sm flex items-center gap-1.5 ml-auto whitespace-nowrap"
-                                  >
-                                    <Truck className="w-3.5 h-3.5" />
-                                    <span>Input Resi & Kirim</span>
-                                  </button>
+                                  <div className="flex flex-col gap-1 items-end ml-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShippingModalOrder(o);
+                                        setTrackingNumber(`JNE-${Date.now().toString().slice(-8)}-ID`);
+                                      }}
+                                      className="px-2.5 py-1.5 rounded bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition shadow-sm flex items-center gap-1.5 whitespace-nowrap"
+                                    >
+                                      <Truck className="w-3.5 h-3.5" />
+                                      <span>Input Resi & Kirim</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShippingLabelOrder(o)}
+                                      className="px-2.5 py-1 rounded border border-stone-300 hover:border-black bg-white hover:bg-stone-50 text-stone-800 font-semibold text-[11px] transition shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+                                      title="Cetak label resi tempel box pengiriman"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-amber-700" />
+                                      <span>Cetak Label Resi</span>
+                                    </button>
+                                  </div>
                                 )}
 
                                 {o.orderStatus === 'SHIPPED' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCompleteOrder(o.id, o.orderNumber)}
-                                    disabled={actionLoading}
-                                    className="px-2.5 py-1.5 rounded border border-emerald-600 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition shadow-sm whitespace-nowrap"
-                                  >
-                                    Tandai Diterima
-                                  </button>
+                                  <div className="flex flex-col gap-1 items-end ml-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCompleteOrder(o.id, o.orderNumber)}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1.5 rounded border border-emerald-600 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition shadow-sm whitespace-nowrap"
+                                    >
+                                      Tandai Diterima
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShippingLabelOrder(o)}
+                                      className="px-2.5 py-1 rounded border border-stone-300 hover:border-black bg-white hover:bg-stone-50 text-stone-800 font-semibold text-[11px] transition shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+                                      title="Cetak ulang label resi tempel box"
+                                    >
+                                      <Printer className="w-3.5 h-3.5 text-amber-700" />
+                                      <span>Cetak Label Resi</span>
+                                    </button>
+                                  </div>
                                 )}
 
                                 {o.orderStatus === 'COMPLETED' && (
-                                  <span className="text-[10px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>Selesai</span>
-                                  </span>
+                                  <div className="flex flex-col gap-1 items-end ml-auto">
+                                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center justify-end gap-1">
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Selesai</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShippingLabelOrder(o)}
+                                      className="px-2 py-0.5 rounded border border-stone-300 hover:border-black bg-white text-stone-600 hover:text-black text-[10px] transition flex items-center gap-1 whitespace-nowrap"
+                                      title="Cetak arsip label resi"
+                                    >
+                                      <Printer className="w-3 h-3 text-stone-500" />
+                                      <span>Arsip Label</span>
+                                    </button>
+                                  </div>
                                 )}
 
                                 <button
@@ -2468,6 +2504,21 @@ export default function AdminPage() {
                         VARENA Order Management
                       </div>
                       <div className="flex gap-2">
+                        {/* Tombol Cetak Label Resi untuk pesanan yang sudah lunas / dikirim / selesai */}
+                        {(viewOrderDetail.orderStatus === 'PAID' || viewOrderDetail.orderStatus === 'SHIPPED' || viewOrderDetail.orderStatus === 'COMPLETED') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const o = viewOrderDetail;
+                              setShippingLabelOrder(o);
+                            }}
+                            className="py-2 px-3 rounded-lg border border-stone-300 hover:border-black bg-white hover:bg-stone-50 text-stone-800 font-semibold text-xs transition flex items-center gap-1.5 shadow-2xs"
+                            title="Cetak label resi tempel box pengiriman"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Cetak Label Resi</span>
+                          </button>
+                        )}
                         {viewOrderDetail.orderStatus === 'PENDING_PAYMENT' && (
                           <button
                             type="button"
@@ -5501,6 +5552,14 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Cetak Label Resi Pengiriman (Airway Bill) */}
+      {shippingLabelOrder && (
+        <ShippingLabelModal
+          order={shippingLabelOrder}
+          onClose={() => setShippingLabelOrder(null)}
+        />
       )}
     </div>
   );
