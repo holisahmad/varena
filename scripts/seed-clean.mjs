@@ -253,7 +253,7 @@ async function main() {
       isFeatured: false,
       bpomNumber: 'P-IRT 2083404061841-32',
       halalNumber: 'ID00110000234560125',
-      imageUrl: '/brand/kopi-matahari.jpeg',
+      imageUrl: '/brand/produk-teh.jpg',
       launchedAt: new Date(),
     },
   });
