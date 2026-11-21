@@ -195,50 +195,52 @@ function LoginForm() {
           </div>
         </div>
 
-        {/* Quick Demo Switcher */}
-        <div className="mt-6 pt-4 border-t border-varena-taupe/20">
-          <div className="text-[10px] font-semibold text-varena-taupe uppercase tracking-wider mb-2">
-            Akses Cepat Pengujian Role (Demo):
+        {/* Quick Demo Switcher — Otomatis Dihilangkan di Lingkungan Produksi (Vercel) */}
+        {process.env.NODE_ENV !== 'production' && (
+          <div className="mt-6 pt-4 border-t border-varena-taupe/20">
+            <div className="text-[10px] font-semibold text-varena-taupe uppercase tracking-wider mb-2">
+              Akses Cepat Pengujian Role (Demo Lokal):
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <button
+                type="button"
+                suppressHydrationWarning
+                onClick={() => handleLogin(undefined, 'leader3@varena.id')}
+                className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
+              >
+                <div className="font-semibold">Leader 3 (L8)</div>
+                <div className="text-[9px] text-varena-taupe font-mono">VRN-LDR-03 (Role Leader)</div>
+              </button>
+              <button
+                type="button"
+                suppressHydrationWarning
+                onClick={() => handleLogin(undefined, 'admin1@varena.id')}
+                className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
+              >
+                <div className="font-semibold">Admin Logistik</div>
+                <div className="text-[9px] text-varena-taupe font-mono">Staf Pusat</div>
+              </button>
+              <button
+                type="button"
+                suppressHydrationWarning
+                onClick={() => handleLogin(undefined, 'operasional@varena.id')}
+                className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
+              >
+                <div className="font-semibold">Operasional</div>
+                <div className="text-[9px] text-varena-taupe font-mono">Staf Pusat</div>
+              </button>
+              <button
+                type="button"
+                suppressHydrationWarning
+                onClick={() => handleLogin(undefined, 'owner@varena.id')}
+                className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
+              >
+                <div className="font-semibold">Owner Pusat</div>
+                <div className="text-[9px] text-varena-taupe font-mono">Hak Akses Penuh</div>
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <button
-              type="button"
-              suppressHydrationWarning
-              onClick={() => handleLogin(undefined, 'mitra1@varena.id')}
-              className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
-            >
-              <div className="font-semibold">Mitra 1 (Ahmad)</div>
-              <div className="text-[9px] text-varena-taupe font-mono">VRN-0001 (Role Mitra)</div>
-            </button>
-            <button
-              type="button"
-              suppressHydrationWarning
-              onClick={() => handleLogin(undefined, 'leader3@varena.id')}
-              className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
-            >
-              <div className="font-semibold">Leader 3 (L8)</div>
-              <div className="text-[9px] text-varena-taupe font-mono">VRN-LDR-03 (Role Leader)</div>
-            </button>
-            <button
-              type="button"
-              suppressHydrationWarning
-              onClick={() => handleLogin(undefined, 'operasional@varena.id')}
-              className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
-            >
-              <div className="font-semibold">Operasional</div>
-              <div className="text-[9px] text-varena-taupe font-mono">Staf Pusat</div>
-            </button>
-            <button
-              type="button"
-              suppressHydrationWarning
-              onClick={() => handleLogin(undefined, 'owner@varena.id')}
-              className="p-2 rounded bg-varena-ivory hover:bg-varena-gold/20 text-varena-espresso text-left border border-varena-taupe/20 transition"
-            >
-              <div className="font-semibold">Owner Pusat</div>
-              <div className="text-[9px] text-varena-taupe font-mono">Hak Akses Penuh</div>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

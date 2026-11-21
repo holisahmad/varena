@@ -52,7 +52,7 @@ function RegisterForm() {
 
     const paramRef = searchParams?.get('ref');
     const storedRef = typeof window !== 'undefined' ? localStorage.getItem('varena_referral_code') : null;
-    const initialRef = (paramRef || storedRef || 'VRN-0001').toUpperCase();
+    const initialRef = (paramRef || storedRef || 'VRN-LDR-03').toUpperCase();
     setSponsorCode(initialRef);
     checkSponsor(initialRef);
   }, [searchParams]);

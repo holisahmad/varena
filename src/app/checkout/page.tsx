@@ -416,7 +416,7 @@ function CheckoutContent() {
     if (loggedInMemberCode && initialRef === loggedInMemberCode) {
       initialRef = '';
     } else if (!initialRef && !loggedInMemberCode) {
-      initialRef = 'VRN-0001';
+      initialRef = 'VRN-LDR-03';
     }
 
     if (initialRef) {
@@ -739,7 +739,7 @@ function CheckoutContent() {
                     <span>Ingin harga lebih hemat & potensi bonus komisi belanja?</span>
                   </div>
                   <Link
-                    href={`/register?ref=${referralCode || 'VRN-0001'}`}
+                    href={`/register?ref=${referralCode || 'VRN-LDR-03'}`}
                     className="font-semibold text-varena-gold hover:text-varena-gold-hover hover:underline inline-flex items-center gap-1 whitespace-nowrap self-start sm:self-auto"
                   >
                     <span>Daftar Jadi Mitra VARENA</span>

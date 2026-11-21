@@ -11,6 +11,8 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:seed": "node scripts/seed.mjs",
+    "db:seed:clean": "node scripts/seed-clean.mjs",
+    "db:clean": "node scripts/seed-clean.mjs",
     "test": "npx tsx --test tests/file-security.test.mjs tests/auth.test.mjs tests/commission.test.mjs"
   },
   "dependencies": {
