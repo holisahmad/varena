@@ -2,12 +2,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Pagination from '@/components/ui/Pagination';
 import ConfirmDialog, { DialogVariant } from '@/components/ui/ConfirmDialog';
 import Toast from '@/components/ui/Toast';
-import ProductManagementTab from '@/components/admin/ProductManagementTab';
-import SystemSettingsTab from '@/components/admin/SystemSettingsTab';
-import ShippingLabelModal from '@/components/admin/ShippingLabelModal';
+
+// Dynamic lazy imports untuk memangkas ukuran bundle awal halaman admin
+const ProductManagementTab = dynamic(() => import('@/components/admin/ProductManagementTab'), {
+  loading: () => <div className="p-8 text-center text-slate-400">Memuat Master Produk...</div>,
+  ssr: false,
+});
+const SystemSettingsTab = dynamic(() => import('@/components/admin/SystemSettingsTab'), {
+  loading: () => <div className="p-8 text-center text-slate-400">Memuat Pengaturan Sistem...</div>,
+  ssr: false,
+});
+const ShippingLabelModal = dynamic(() => import('@/components/admin/ShippingLabelModal'), {
+  ssr: false,
+});
 import {
   formatOrderStatus,
   formatOrderType,
@@ -449,14 +460,13 @@ export default function AdminPage() {
       return res.json();
     };
 
+    // Hanya ambil data kritis untuk Overview, Orders, dan Payout badge saat pertama kali render
     Promise.all([
       fetch('/api/v1/admin/stats', { headers: authHeaders }).then(checkRes),
       fetch('/api/v1/payout/admin?page=1&limit=15', { headers: authHeaders }).then(checkRes),
       fetch('/api/v1/admin/orders?page=1&limit=15', { headers: authHeaders }).then(checkRes),
-      fetch(`/api/v1/admin/audit-logs?days=${logDays}&page=1&limit=20`, { headers: authHeaders }).then(checkRes),
-      fetch('/api/v1/admin/agents', { headers: authHeaders }).then(checkRes),
     ])
-      .then(([sData, wData, oData, lData, aData]) => {
+      .then(([sData, wData, oData]) => {
         if (sData?.stats) setStats(sData.stats);
         if (wData?.withdrawals) {
           setWithdrawals(wData.withdrawals);
@@ -471,26 +481,6 @@ export default function AdminPage() {
           setOrderPage(oData.pagination?.page || 1);
           setOrderTotalPages(oData.pagination?.totalPages || 1);
           setOrderTotal(oData.pagination?.total || oData.orders.length);
-        }
-        if (lData?.logs) {
-          setAuditLogs(lData.logs);
-          setAuditTotal(lData.totalCount);
-          setLogPage(lData.pagination?.page || 1);
-          setLogTotalPages(lData.pagination?.totalPages || 1);
-          setLogTotal(lData.pagination?.total || lData.totalCount);
-        }
-        if (aData?.success) {
-          setAgents(aData.agents || []);
-          setAgentApplications(aData.applications || []);
-          setRoutableOrders(aData.routableOrders || []);
-          if (aData.config) {
-            setAgentConfig(aData.config);
-            setConfigMoq(aData.config.minimumRestockBox);
-            setConfigDiscountType(aData.config.defaultDiscountType);
-            setConfigDiscountValue(aData.config.defaultDiscountValue);
-          }
-          setPendingAgentTopups(aData.pendingTopups || []);
-          setStockists(aData.agents || []);
         }
       })
       .catch((e) => console.error('Admin data fetch error:', e))
@@ -1517,6 +1507,7 @@ export default function AdminPage() {
       icon: FileText,
       badge: null,
       badgeColor: '',
+      onSelect: () => loadFilteredLogs(),
     },
     {
       id: 'OUTBOX',

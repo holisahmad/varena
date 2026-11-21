@@ -15,7 +15,19 @@ export async function GET(req: Request) {
       where: {
         orderStatus: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'COMPLETED'] },
       },
-      include: { items: true },
+      select: {
+        subtotal: true,
+        shippingCost: true,
+        shippingExpense: true,
+        buyerUserId: true,
+        referralMemberId: true,
+        items: {
+          select: {
+            hppSnapshot: true,
+            quantity: true,
+          },
+        },
+      },
     });
 
     let productSales = 0;
@@ -38,7 +50,13 @@ export async function GET(req: Request) {
     // 2. Pending Payment Orders (Receivables / Belum Bayar)
     const pendingOrders = await prisma.order.findMany({
       where: { orderStatus: 'PENDING_PAYMENT' },
-      include: {
+      select: {
+        id: true,
+        orderNumber: true,
+        buyerName: true,
+        buyerPhone: true,
+        total: true,
+        createdAt: true,
         referralMember: {
           select: { memberCode: true, displayName: true },
         },
@@ -50,7 +68,12 @@ export async function GET(req: Request) {
     const pendingOrdersAmount = pendingOrders.reduce((sum, o) => sum + o.total, 0);
 
     // 3. Commission Runs & Unallocated Reserve
-    const runs = await prisma.commissionRun.findMany();
+    const runs = await prisma.commissionRun.findMany({
+      select: {
+        totalCommission: true,
+        unallocatedAmount: true,
+      },
+    });
     const totalCommissionDistributed = runs.reduce((acc, r) => acc + r.totalCommission, 0);
     const totalUnallocatedReserve = runs.reduce((acc, r) => acc + r.unallocatedAmount, 0);
 
@@ -62,6 +85,7 @@ export async function GET(req: Request) {
       }),
       prisma.withdrawalRequest.findMany({
         where: { status: { in: ['REQUESTED', 'UNDER_REVIEW'] } },
+        select: { amount: true },
       }),
     ]);
 
@@ -72,10 +96,16 @@ export async function GET(req: Request) {
     const [totalUsers, allMembers, roles] = await Promise.all([
       prisma.user.count(),
       prisma.member.findMany({
-        include: {
+        select: {
+          id: true,
+          memberCode: true,
+          displayName: true,
+          userId: true,
+          joinedAt: true,
+          activatedAt: true,
           user: { select: { email: true, phone: true } },
           sponsorRel: {
-            include: {
+            select: {
               sponsor: {
                 select: {
                   id: true,
@@ -87,7 +117,8 @@ export async function GET(req: Request) {
             },
           },
           placementRel: {
-            include: {
+            select: {
+              parentMemberId: true,
               parent: { select: { id: true, memberCode: true, displayName: true } },
             },
           },
