@@ -83,14 +83,14 @@ export async function requestPayout(params: RequestPayoutParams) {
     }
   }
 
-  // Hitung potongan biaya admin 10% & biaya transfer Rp5.000
+  // Hitung potongan biaya penarikan (Manual Rp6.500 atau Gateway 10% + 5000)
   const fees = calculatePayoutFees(amount);
   const fee = fees.totalFee;
   const netAmount = fees.netAmount;
 
   if (netAmount <= 0) {
     throw new Error(
-      `Nominal penarikan (Rp${amount.toLocaleString('id-ID')}) tidak mencukupi setelah dipotong biaya admin 10% (Rp${fees.adminFee.toLocaleString('id-ID')}) dan biaya transfer Rp${fees.transferFee.toLocaleString('id-ID')}.`
+      `Nominal penarikan (Rp${amount.toLocaleString('id-ID')}) tidak mencukupi setelah dipotong ${fees.description}.`
     );
   }
 

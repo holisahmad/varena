@@ -1,25 +1,34 @@
 /**
  * Konfigurasi Penarikan Dana & Integrasi Gateway (Xendit / Pihak Ketiga)
  * 
- * Kebijakan Potongan:
- * - Biaya Admin Platform: 10% dari nominal penarikan
- * - Biaya Transfer Antar-Bank / Gateway: Rp5.000 flat per transaksi
- * - Minimal Penarikan Saldo: Rp50.000
+ * Mode Aktif Saat Ini:
+ * - MANUAL: Transfer bank manual oleh finance dengan biaya admin flat Rp6.500 (seperti sebelumnya).
  * 
- * Mode Integrasi:
- * - MANUAL: Transfer bank manual oleh finance via internet banking / CSV batch (Default)
- * - XENDIT: Otomatisasi pencairan instan via Xendit Disbursement API (Dapat diaktifkan via ENV)
+ * Persiapan Skema Pihak Ketiga / Xendit (Siap Diaktifkan Nanti):
+ * - Biaya Admin: 10%
+ * - Biaya Transfer: Rp5.000
+ * - Dapat diaktifkan kapan saja via ENV `PAYOUT_SCHEME=GATEWAY` atau `ENABLE_XENDIT_PAYOUT=true`
  */
 
 export const PAYOUT_CONFIG = {
-  // Kebijakan Tarif & Biaya
-  adminFeePercent: 10, // 10% dari nominal yang ditarik
-  transferFeeFlat: 5000, // Rp 5.000 per transaksi penarikan
-  minimumAmount: 50000, // Rp 50.000 minimal penarikan
+  // Skema aktif: 'MANUAL' (default saat ini) atau 'GATEWAY'
+  activeScheme: (process.env.PAYOUT_SCHEME === 'GATEWAY' || process.env.ENABLE_XENDIT_PAYOUT === 'true') ? 'GATEWAY' : 'MANUAL',
+
+  // Skema Manual Aktif (Biaya admin flat Rp6.500)
+  manual: {
+    feeFlat: 6500, // Rp 6.500 flat per transaksi penarikan
+  },
+
+  // Skema Xendit / Pihak Ketiga (Siap diaktifkan nanti setelah kerjasama selesai)
+  gateway: {
+    adminFeePercent: 10, // 10%
+    transferFeeFlat: 5000, // Rp 5.000
+  },
+
+  minimumAmount: 50000, // Minimal Rp50.000
 
   // Pengaturan Gateway Xendit / Pihak Ketiga
   xendit: {
-    // Flag aktifasi: cukup set ENV ENABLE_XENDIT_PAYOUT=true saat kerjasama resmi aktif
     enabled: process.env.ENABLE_XENDIT_PAYOUT === 'true' || process.env.XENDIT_DISBURSEMENT_ENABLED === 'true',
     apiKey: process.env.XENDIT_SECRET_KEY || '',
     baseUrl: process.env.XENDIT_BASE_URL || 'https://api.xendit.co',
@@ -30,29 +39,53 @@ export const PAYOUT_CONFIG = {
 
 export interface PayoutFeeCalculation {
   requestedAmount: number;
+  scheme: 'MANUAL' | 'GATEWAY';
   adminFeePercent: number;
   adminFee: number;
   transferFee: number;
   totalFee: number;
   netAmount: number;
+  description: string;
 }
 
 /**
- * Hitung rincian potongan penarikan dana secara transparan
+ * Hitung rincian potongan penarikan dana
+ * Menggunakan skema manual Rp6.500 (default) atau skema gateway (10% + 5000 jika diaktifkan)
  */
 export function calculatePayoutFees(amount: number): PayoutFeeCalculation {
   const cleanAmount = Math.max(0, Math.floor(amount || 0));
-  const adminFee = Math.round((cleanAmount * PAYOUT_CONFIG.adminFeePercent) / 100);
-  const transferFee = cleanAmount > 0 ? PAYOUT_CONFIG.transferFeeFlat : 0;
-  const totalFee = adminFee + transferFee;
+  const isGateway = PAYOUT_CONFIG.activeScheme === 'GATEWAY';
+
+  if (isGateway) {
+    const adminFee = Math.round((cleanAmount * PAYOUT_CONFIG.gateway.adminFeePercent) / 100);
+    const transferFee = cleanAmount > 0 ? PAYOUT_CONFIG.gateway.transferFeeFlat : 0;
+    const totalFee = adminFee + transferFee;
+    const netAmount = Math.max(0, cleanAmount - totalFee);
+
+    return {
+      requestedAmount: cleanAmount,
+      scheme: 'GATEWAY',
+      adminFeePercent: PAYOUT_CONFIG.gateway.adminFeePercent,
+      adminFee,
+      transferFee,
+      totalFee,
+      netAmount,
+      description: `Biaya Admin 10% (Rp${adminFee.toLocaleString('id-ID')}) + Biaya Transfer Rp5.000`,
+    };
+  }
+
+  // Skema Manual Aktif (Rp6.500)
+  const totalFee = cleanAmount > 0 ? PAYOUT_CONFIG.manual.feeFlat : 0;
   const netAmount = Math.max(0, cleanAmount - totalFee);
 
   return {
     requestedAmount: cleanAmount,
-    adminFeePercent: PAYOUT_CONFIG.adminFeePercent,
-    adminFee,
-    transferFee,
+    scheme: 'MANUAL',
+    adminFeePercent: 0,
+    adminFee: totalFee,
+    transferFee: 0,
     totalFee,
     netAmount,
+    description: `Biaya Admin Rp${totalFee.toLocaleString('id-ID')}`,
   };
 }

@@ -645,14 +645,23 @@ export default function MemberWalletPage() {
                         <span>Nominal Penarikan:</span>
                         <span>Rp{enteredAmount.toLocaleString('id-ID')}</span>
                       </div>
-                      <div className="flex justify-between text-stone-600">
-                        <span>Biaya Admin ({payoutFees.adminFeePercent}%):</span>
-                        <span className="text-rose-700">-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="flex justify-between text-stone-600">
-                        <span>Biaya Transfer Bank:</span>
-                        <span className="text-rose-700">-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
-                      </div>
+                      {payoutFees.scheme === 'GATEWAY' ? (
+                        <>
+                          <div className="flex justify-between text-stone-600">
+                            <span>Biaya Admin ({payoutFees.adminFeePercent}%):</span>
+                            <span className="text-rose-700">-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="flex justify-between text-stone-600">
+                            <span>Biaya Transfer Bank:</span>
+                            <span className="text-rose-700">-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between text-stone-600">
+                          <span>Biaya Admin Transfer:</span>
+                          <span className="text-rose-700">-Rp{payoutFees.totalFee.toLocaleString('id-ID')}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -660,7 +669,9 @@ export default function MemberWalletPage() {
                 <div className="text-[10px] text-stone-500 pt-1 border-t border-stone-100 flex items-center justify-between">
                   <span>Kebijakan Potongan:</span>
                   <span className="font-mono font-semibold text-stone-700">
-                    Admin 10% + Biaya Transfer Rp5.000
+                    {payoutFees.scheme === 'GATEWAY'
+                      ? 'Admin 10% + Biaya Transfer Rp5.000'
+                      : 'Biaya transfer antar bank: Rp6.500 (otomatis dipotong)'}
                   </span>
                 </div>
 

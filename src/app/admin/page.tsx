@@ -2859,12 +2859,12 @@ export default function AdminPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-blue-700 flex-shrink-0" />
-                    <span><strong>Kebijakan Payout:</strong> Potongan Admin 10% + Biaya Transfer Rp5.000 (Otomatis terhitung).</span>
+                    <span><strong>Kebijakan Payout:</strong> Mode Manual Aktif (Biaya Admin Rp6.500) · <em>Skema Xendit 10% + Rp5.000 siap diaktifkan via konfigurasi setelah kerja sama selesai.</em></span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-[11px] bg-white px-2.5 py-1 rounded-lg border border-blue-300 self-start sm:self-auto shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-stone-700 font-semibold">Mode: Transfer Manual</span>
-                    <span className="text-blue-700 font-bold">(Modul Xendit Siap)</span>
+                    <span className="text-stone-700 font-semibold">Mode: Transfer Manual (Rp6.500)</span>
+                    <span className="text-blue-700 font-bold">(Modul Xendit Standby)</span>
                   </div>
                 </div>
 
@@ -2929,7 +2929,7 @@ export default function AdminPage() {
                             <th className="py-2.5 px-3">Tanggal</th>
                             <th className="py-2.5 px-3">Mitra Pemohon</th>
                             <th className="py-2.5 px-3">Nominal Diminta</th>
-                            <th className="py-2.5 px-3">Potongan (Admin 10% + Trf 5rb)</th>
+                            <th className="py-2.5 px-3">Potongan Biaya</th>
                             <th className="py-2.5 px-3">Bersih Ditransfer</th>
                             <th className="py-2.5 px-3">Rekening Bank Tujuan</th>
                             <th className="py-2.5 px-3">Status Finance</th>

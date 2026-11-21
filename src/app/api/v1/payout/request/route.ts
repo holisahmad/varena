@@ -12,8 +12,10 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       config: {
-        adminFeePercent: PAYOUT_CONFIG.adminFeePercent,
-        transferFeeFlat: PAYOUT_CONFIG.transferFeeFlat,
+        activeScheme: PAYOUT_CONFIG.activeScheme,
+        manualFeeFlat: PAYOUT_CONFIG.manual.feeFlat,
+        gatewayAdminFeePercent: PAYOUT_CONFIG.gateway.adminFeePercent,
+        gatewayTransferFeeFlat: PAYOUT_CONFIG.gateway.transferFeeFlat,
         minimumAmount: PAYOUT_CONFIG.minimumAmount,
         xenditEnabled: PAYOUT_CONFIG.xendit.enabled,
       },
