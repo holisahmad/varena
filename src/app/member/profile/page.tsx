@@ -315,75 +315,83 @@ export default function MemberProfilePage() {
       </div>
 
       {/* Header banner */}
-      <div className="bg-white border border-varena-taupe/20 rounded-2xl p-6 sm:p-8 shadow-xs mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-varena-espresso text-varena-gold flex items-center justify-center font-serif text-2xl font-bold shadow-sm">
-              {displayName ? displayName.charAt(0).toUpperCase() : 'V'}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-serif text-2xl font-bold text-varena-espresso">
-                  {displayName || 'Pengaturan Akun'}
-                </h1>
-                <span className="font-mono text-xs font-bold bg-varena-gold/15 text-varena-espresso border border-varena-gold/40 px-2.5 py-0.5 rounded-full">
-                  {memberCode}
-                </span>
-                {memberStatus === 'ACTIVE' && (
-                  <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span>Mitra Aktif</span>
-                  </span>
-                )}
-                {memberStatus === 'PENDING' && (
-                  <span className="text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-600" />
-                    <span>Menunggu Aktivasi</span>
-                  </span>
-                )}
-                {memberStatus === 'SUSPENDED_WITHDRAWAL' && (
-                  <span className="text-[11px] font-semibold bg-orange-50 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-orange-600" />
-                    <span>WD Dinonaktifkan</span>
-                  </span>
-                )}
-                {(memberStatus === 'SUSPENDED_LOGIN' || memberStatus === 'SUSPENDED') && (
-                  <span className="text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <ShieldOff className="w-3 h-3 text-rose-600" />
-                    <span>Akun Ditangguhkan</span>
-                  </span>
-                )}
-                {memberStatus === 'TERMINATED' && (
-                  <span className="text-[11px] font-semibold bg-stone-100 text-stone-700 border border-stone-300 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Ban className="w-3 h-3 text-stone-500" />
-                    <span>Nonaktif</span>
-                  </span>
-                )}
-                <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  <span>KYC Terverifikasi</span>
-                </span>
-              </div>
-              <p className="text-xs text-varena-taupe mt-1 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-stone-400" />
-                <span>{email}</span>
-                <span className="text-stone-300">·</span>
-                <span className="text-emerald-700 font-medium">Akun Gmail Terhubung</span>
-              </p>
-            </div>
+      <div className="bg-white border border-varena-taupe/20 rounded-2xl p-5 sm:p-7 shadow-xs mb-6">
+        {/* Row 1: Avatar + Identity */}
+        <div className="flex items-center gap-3.5 sm:gap-4">
+          <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-varena-espresso-dark to-varena-espresso text-varena-gold flex items-center justify-center font-serif text-2xl font-bold shadow-xs shrink-0 border border-varena-gold/30">
+            {displayName ? displayName.charAt(0).toUpperCase() : 'V'}
           </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-serif text-lg sm:text-2xl font-bold text-varena-espresso truncate">
+                {displayName || 'Pengaturan Akun'}
+              </h1>
+              <span className="font-mono text-xs font-bold bg-varena-gold/15 text-varena-espresso border border-varena-gold/40 px-2 py-0.5 rounded-md shrink-0">
+                {memberCode}
+              </span>
+            </div>
+            <p className="text-xs text-varena-taupe mt-1 flex items-center gap-1.5 truncate">
+              <Mail className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+              <span className="truncate">{email}</span>
+            </p>
+          </div>
+        </div>
 
-          {/* Progress Bar */}
-          <div className="sm:text-right bg-varena-ivory-light sm:bg-transparent p-3 sm:p-0 rounded-xl border sm:border-0 border-varena-taupe/20">
-            <div className="text-xs text-varena-taupe mb-1 font-medium">
-              Kelengkapan Profil: <strong className="text-varena-espresso">{completionPercent}%</strong>
-            </div>
-            <div className="w-44 h-2.5 bg-stone-200 rounded-full overflow-hidden mx-auto sm:ml-auto">
-              <div
-                className="h-full bg-gradient-to-r from-varena-gold to-amber-500 rounded-full transition-all duration-500"
-                style={{ width: `${completionPercent}%` }}
-              ></div>
-            </div>
+        {/* Row 2: Status & Verification Chips */}
+        <div className="flex items-center gap-2 flex-wrap pt-3 mt-3 border-t border-stone-100">
+          {memberStatus === 'ACTIVE' && (
+            <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>Mitra Aktif</span>
+            </span>
+          )}
+          {memberStatus === 'PENDING' && (
+            <span className="text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <Clock className="w-3 h-3 text-amber-600" />
+              <span>Menunggu Aktivasi</span>
+            </span>
+          )}
+          {memberStatus === 'SUSPENDED_WITHDRAWAL' && (
+            <span className="text-[11px] font-semibold bg-orange-50 text-orange-800 border border-orange-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <Lock className="w-3 h-3 text-orange-600" />
+              <span>WD Dinonaktifkan</span>
+            </span>
+          )}
+          {(memberStatus === 'SUSPENDED_LOGIN' || memberStatus === 'SUSPENDED') && (
+            <span className="text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <ShieldOff className="w-3 h-3 text-rose-600" />
+              <span>Akun Ditangguhkan</span>
+            </span>
+          )}
+          {memberStatus === 'TERMINATED' && (
+            <span className="text-[11px] font-semibold bg-stone-100 text-stone-700 border border-stone-300 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+              <Ban className="w-3 h-3 text-stone-500" />
+              <span>Nonaktif</span>
+            </span>
+          )}
+          <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>KYC Terverifikasi</span>
+          </span>
+          <span className="text-[11px] font-medium bg-stone-50 text-stone-600 border border-stone-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Akun Gmail Terhubung</span>
+          </span>
+        </div>
+
+        {/* Row 3: Progress Bar Kelengkapan Profil */}
+        <div className="mt-3.5 pt-3.5 border-t border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center justify-between text-xs text-varena-taupe">
+            <span>Kelengkapan Data Profil: <strong className="text-varena-espresso font-bold">{completionPercent}%</strong></span>
+            <span className="text-[10px] text-stone-400 font-medium">
+              {completionPercent === 100 ? '✓ Profil Lengkap' : `${completionPercent}% Selesai`}
+            </span>
+          </div>
+          <div className="w-full sm:w-52 h-2.5 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60 shadow-inner">
+            <div
+              className="h-full bg-gradient-to-r from-varena-gold to-amber-500 rounded-full transition-all duration-500"
+              style={{ width: `${completionPercent}%` }}
+            ></div>
           </div>
         </div>
       </div>
