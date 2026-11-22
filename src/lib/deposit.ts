@@ -4,6 +4,10 @@ import { enqueueWaMessage } from './wa-queue';
 export const DEPOSIT_EXPIRATION_HOURS = 1;
 export const DEPOSIT_EXPIRATION_MS = DEPOSIT_EXPIRATION_HOURS * 60 * 60 * 1000;
 
+// In-memory throttle agar tidak spam write query ke DB di setiap request
+let lastSweepDepositTime = 0;
+const SWEEP_THROTTLE_MS = 2 * 60 * 1000; // Maksimal sweep 1x per 2 menit per instance
+
 export interface ConfirmDepositPayload {
   transactionId: string;
   memberCode?: string;
@@ -15,9 +19,16 @@ export interface ConfirmDepositPayload {
 
 /**
  * Sweep and expire deposit requests that are still in PENDING_PAYMENT status and past the 1-hour window.
+ * Dilengkapi in-memory throttle 2 menit agar hemat kuota query database free tier.
  */
 export async function sweepExpiredDeposits(): Promise<number> {
-  const cutoffTime = new Date(Date.now() - DEPOSIT_EXPIRATION_MS);
+  const now = Date.now();
+  if (now - lastSweepDepositTime < SWEEP_THROTTLE_MS) {
+    return 0; // Skip: baru saja di-sweep beberapa saat lalu
+  }
+  lastSweepDepositTime = now;
+
+  const cutoffTime = new Date(now - DEPOSIT_EXPIRATION_MS);
   const result = await prisma.agentDepositTransaction.updateMany({
     where: {
       status: 'PENDING_PAYMENT',
@@ -87,28 +98,30 @@ export async function confirmDepositPayment(payload: ConfirmDepositPayload) {
     },
   });
 
-  // Kirim notifikasi WA ke admin
-  try {
-    const adminSetting = await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } });
-    const adminPhone = adminSetting?.value;
-    if (adminPhone) {
-      const depositType = tx.type === 'SHOPPING_TOPUP' ? 'Deposit Belanja Mitra' : 'Kas Deposit Agen';
-      const proofLabel = proofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto* (cocokkan mutasi bank)';
-      await enqueueWaMessage({
-        to: adminPhone,
-        message:
-          `🔔 *KONFIRMASI TOPUP BARU* — ${depositType}\n\n` +
-          `👤 *Mitra:* ${tx.member.displayName} (${tx.member.memberCode})\n` +
-          `💰 *Nominal:* Rp${tx.amount.toLocaleString('id-ID')}\n` +
-          `🏦 *Bank Pengirim:* ${bankName || tx.bankName || '-'}\n` +
-          `📋 *Ref:* \`${tx.referenceId || tx.id}\`\n` +
-          `${proofLabel}\n\n` +
-          `Silakan verifikasi dan setujui / tolak di dashboard admin VARENA.`,
-      });
+  // Kirim notifikasi WA ke admin secara async & non-blocking (tidak membebani response user)
+  (async () => {
+    try {
+      const adminPhone = process.env.ADMIN_WA_NUMBER || 
+        (await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } }))?.value;
+      if (adminPhone) {
+        const depositType = tx.type === 'SHOPPING_TOPUP' ? 'Deposit Belanja Mitra' : 'Kas Deposit Agen';
+        const proofLabel = proofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto* (cocokkan mutasi bank)';
+        await enqueueWaMessage({
+          to: adminPhone,
+          message:
+            `🔔 *KONFIRMASI TOPUP BARU* — ${depositType}\n\n` +
+            `👤 *Mitra:* ${tx.member.displayName} (${tx.member.memberCode})\n` +
+            `💰 *Nominal:* Rp${tx.amount.toLocaleString('id-ID')}\n` +
+            `🏦 *Bank Pengirim:* ${bankName || tx.bankName || '-'}\n` +
+            `📋 *Ref:* \`${tx.referenceId || tx.id}\`\n` +
+            `${proofLabel}\n\n` +
+            `Silakan verifikasi dan setujui / tolak di dashboard admin VARENA.`,
+        });
+      }
+    } catch {
+      // Non-critical — silently ignore
     }
-  } catch {
-    // Non-critical — jangan gagalkan proses utama
-  }
+  })().catch(() => {});
 
   return updated;
 }

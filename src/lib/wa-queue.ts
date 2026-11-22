@@ -30,6 +30,13 @@ export async function enqueueWaMessage(msg: WaMessage): Promise<void> {
   const gatewayToken = process.env.WA_GATEWAY_TOKEN;
   const senderNumber = process.env.WA_SENDER_NUMBER;
 
+  if (!enabled) {
+    // Mode hemat kuota DB: Jika WA gateway dinonaktifkan, hindari write auditLog ke database
+    // Cukup log ringkas di server stdout
+    console.log(`[WA Notification - Off] To: ${msg.to} | ${msg.message.substring(0, 80)}...`);
+    return;
+  }
+
   if (enabled && gatewayUrl && gatewayToken) {
     try {
       const res = await fetch(gatewayUrl, {
@@ -54,14 +61,14 @@ export async function enqueueWaMessage(msg: WaMessage): Promise<void> {
     }
   }
 
-  // Fallback: audit log for manual follow-up
+  // Fallback: catat ke audit log hanya jika gateway gagal terkirim (untuk follow up manual)
   try {
     await prisma.auditLog.create({
       data: {
         action: 'WA_MESSAGE_QUEUED',
         entityType: 'NOTIFICATION',
         entityId: msg.to,
-        reason: `[WA OUTBOX - ${enabled ? 'GATEWAY_FAILED' : 'MANUAL_MODE'}] To: ${msg.to} | ${msg.message.substring(0, 300)}`,
+        reason: `[WA OUTBOX - GATEWAY_FAILED] To: ${msg.to} | ${msg.message.substring(0, 300)}`,
       },
     });
   } catch {

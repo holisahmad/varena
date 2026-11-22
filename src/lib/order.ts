@@ -763,11 +763,22 @@ export async function cancelExpiredOrder(orderIdOrNumber: string, reason?: strin
   });
 }
 
+// In-memory throttle agar tidak spam write query ke DB di setiap request admin
+let lastSweepOrderTime = 0;
+const SWEEP_ORDER_THROTTLE_MS = 2 * 60 * 1000; // Maksimal sweep 1x per 2 menit
+
 /**
  * Automatically sweep and cancel all expired orders (PENDING_PAYMENT, paymentConfirmationStatus != SUBMITTED, older than 1 hour)
+ * Dilengkapi in-memory throttle 2 menit agar hemat kuota query database free tier.
  */
 export async function sweepExpiredOrders(): Promise<number> {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const now = Date.now();
+  if (now - lastSweepOrderTime < SWEEP_ORDER_THROTTLE_MS) {
+    return 0; // Skip: baru saja di-sweep
+  }
+  lastSweepOrderTime = now;
+
+  const oneHourAgo = new Date(now - 60 * 60 * 1000);
   const expiredOrders = await prisma.order.findMany({
     where: {
       orderStatus: 'PENDING_PAYMENT',

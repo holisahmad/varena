@@ -507,7 +507,7 @@ export async function POST(req: Request) {
       const { transactionId } = body;
       const tx = await prisma.agentDepositTransaction.findUnique({
         where: { id: transactionId },
-        include: { member: true },
+        include: { member: { include: { user: { select: { phone: true } } } } },
       });
       if (!tx || (tx.status !== 'PENDING' && tx.status !== 'WAITING_VERIFICATION')) {
         return NextResponse.json(
@@ -580,28 +580,20 @@ export async function POST(req: Request) {
         });
       });
 
-      // Kirim notifikasi WA ke mitra bahwa deposit disetujui
-      try {
-        const memberWithUser = await prisma.member.findUnique({
-          where: { id: tx.memberId },
-          include: { user: { select: { phone: true } } },
-        });
-        const phone = memberWithUser?.user?.phone;
-        if (phone) {
-          const typeLabel = isShoppingDeposit ? 'Belanja' : 'Agen';
-          await enqueueWaMessage({
-            to: phone,
-            message:
-              `🎉 *TOPUP SALDO ${typeLabel.toUpperCase()} DISETUJUI!* ✅\n\n` +
-              `Halo *${tx.member.displayName}*,\n` +
-              `Deposit Anda telah diverifikasi dan saldo Anda sudah ditambahkan:\n\n` +
-              `💰 *Nominal:* Rp${tx.amount.toLocaleString('id-ID')}\n` +
-              `📋 *Ref:* \`${tx.referenceId || tx.id}\`\n\n` +
-              `Saldo ${typeLabel} Anda kini siap digunakan. Terima kasih! 🌿`,
-          });
-        }
-      } catch {
-        // Non-critical
+      // Kirim notifikasi WA ke mitra bahwa deposit disetujui (async/non-blocking tanpa query tambahan)
+      const phone = (tx.member as any)?.user?.phone;
+      if (phone) {
+        const typeLabel = isShoppingDeposit ? 'Belanja' : 'Agen';
+        enqueueWaMessage({
+          to: phone,
+          message:
+            `🎉 *TOPUP SALDO ${typeLabel.toUpperCase()} DISETUJUI!* ✅\n\n` +
+            `Halo *${tx.member.displayName}*,\n` +
+            `Deposit Anda telah diverifikasi dan saldo Anda sudah ditambahkan:\n\n` +
+            `💰 *Nominal:* Rp${tx.amount.toLocaleString('id-ID')}\n` +
+            `📋 *Ref:* \`${tx.referenceId || tx.id}\`\n\n` +
+            `Saldo ${typeLabel} Anda kini siap digunakan. Terima kasih! 🌿`,
+        }).catch(() => {});
       }
 
       return NextResponse.json({
@@ -618,7 +610,7 @@ export async function POST(req: Request) {
       const finalReason = rejectionReason || reason;
       const tx = await prisma.agentDepositTransaction.findUnique({
         where: { id: transactionId },
-        include: { member: true },
+        include: { member: { include: { user: { select: { phone: true } } } } },
       });
       if (!tx || (tx.status !== 'PENDING' && tx.status !== 'WAITING_VERIFICATION')) {
         return NextResponse.json(
@@ -650,26 +642,18 @@ export async function POST(req: Request) {
         });
       });
 
-      // Kirim notifikasi WA ke mitra bahwa deposit ditolak
-      try {
-        const memberWithUser = await prisma.member.findUnique({
-          where: { id: tx.memberId },
-          include: { user: { select: { phone: true } } },
-        });
-        const phone = memberWithUser?.user?.phone;
-        if (phone) {
-          await enqueueWaMessage({
-            to: phone,
-            message:
-              `⚠️ *PENGAJUAN DEPOSIT DITOLAK*\n\n` +
-              `Halo *${tx.member.displayName}*,\n` +
-              `Mohon maaf, pengajuan top up saldo Anda sebesar *Rp${tx.amount.toLocaleString('id-ID')}* ditolak oleh tim keuangan VARENA.\n\n` +
-              `📋 *Alasan:* ${finalReason || 'Bukti transfer tidak valid atau nominal tidak sesuai'}\n\n` +
-              `Silakan ajukan deposit ulang dengan bukti transfer yang valid. Hubungi admin jika ada pertanyaan.`,
-          });
-        }
-      } catch {
-        // Non-critical
+      // Kirim notifikasi WA ke mitra bahwa deposit ditolak (async/non-blocking tanpa query tambahan)
+      const phone = (tx.member as any)?.user?.phone;
+      if (phone) {
+        enqueueWaMessage({
+          to: phone,
+          message:
+            `⚠️ *PENGAJUAN DEPOSIT DITOLAK*\n\n` +
+            `Halo *${tx.member.displayName}*,\n` +
+            `Mohon maaf, pengajuan top up saldo Anda sebesar *Rp${tx.amount.toLocaleString('id-ID')}* ditolak oleh tim keuangan VARENA.\n\n` +
+            `📋 *Alasan:* ${finalReason || 'Bukti transfer tidak valid atau nominal tidak sesuai'}\n\n` +
+            `Silakan ajukan deposit ulang dengan bukti transfer yang valid. Hubungi admin jika ada pertanyaan.`,
+        }).catch(() => {});
       }
 
       return NextResponse.json({

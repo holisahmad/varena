@@ -163,26 +163,29 @@ export async function POST(req: Request) {
       },
     });
 
-    // Kirim notifikasi WA ke admin
-    try {
-      const adminSetting = await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } });
-      if (adminSetting?.value) {
-        const proofLabel = paymentProofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto*';
-        await enqueueWaMessage({
-          to: adminSetting.value,
-          message:
-            `🔔 *KONFIRMASI PEMBAYARAN PESANAN BARU*\n\n` +
-            `📦 *No. Pesanan:* ${order.orderNumber}\n` +
-            `👤 *Pembeli:* ${order.buyerName}\n` +
-            `💰 *Nominal Transfer:* Rp${amountPaid.toLocaleString('id-ID')}\n` +
-            `🏦 *Bank Pengirim:* ${senderBankName} (${senderAccountName})\n` +
-            `${proofLabel}\n\n` +
-            `Silakan verifikasi dan konfirmasi pembayaran di dashboard admin VARENA.`,
-        });
+    // Kirim notifikasi WA ke admin secara async/non-blocking
+    (async () => {
+      try {
+        const adminPhone = process.env.ADMIN_WA_NUMBER || 
+          (await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } }))?.value;
+        if (adminPhone) {
+          const proofLabel = paymentProofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto*';
+          await enqueueWaMessage({
+            to: adminPhone,
+            message:
+              `🔔 *KONFIRMASI PEMBAYARAN PESANAN BARU*\n\n` +
+              `📦 *No. Pesanan:* ${order.orderNumber}\n` +
+              `👤 *Pembeli:* ${order.buyerName}\n` +
+              `💰 *Nominal Transfer:* Rp${amountPaid.toLocaleString('id-ID')}\n` +
+              `🏦 *Bank Pengirim:* ${senderBankName} (${senderAccountName})\n` +
+              `${proofLabel}\n\n` +
+              `Silakan verifikasi dan konfirmasi pembayaran di dashboard admin VARENA.`,
+          });
+        }
+      } catch {
+        // Non-critical
       }
-    } catch {
-      // Non-critical
-    }
+    })().catch(() => {});
 
     return NextResponse.json({
       success: true,

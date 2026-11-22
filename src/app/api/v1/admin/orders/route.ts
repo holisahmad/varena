@@ -136,26 +136,18 @@ export async function POST(req: Request) {
         },
       });
 
-      // Kirim notifikasi WA ke pembeli bahwa pembayaran disetujui
-      try {
-        const paidOrder = await prisma.order.findUnique({
-          where: { id: orderId },
-          select: { orderNumber: true, buyerName: true, buyerPhone: true, total: true },
-        });
-        if (paidOrder?.buyerPhone) {
-          await enqueueWaMessage({
-            to: paidOrder.buyerPhone,
-            message:
-              `✅ *PEMBAYARAN PESANAN DIKONFIRMASI!*\n\n` +
-              `Halo *${paidOrder.buyerName}*,\n` +
-              `Pembayaran pesanan Anda telah diverifikasi oleh tim keuangan VARENA:\n\n` +
-              `📦 *No. Pesanan:* ${paidOrder.orderNumber}\n` +
-              `💰 *Total:* Rp${(paidOrder.total || 0).toLocaleString('id-ID')}\n\n` +
-              `Pesanan Anda sedang diproses dan akan segera dikirim. Terima kasih! 🌿`,
-          });
-        }
-      } catch {
-        // Non-critical
+      // Kirim notifikasi WA ke pembeli bahwa pembayaran disetujui (async/non-blocking tanpa query DB tambahan)
+      if (result?.order?.buyerPhone) {
+        enqueueWaMessage({
+          to: result.order.buyerPhone,
+          message:
+            `✅ *PEMBAYARAN PESANAN DIKONFIRMASI!*\n\n` +
+            `Halo *${result.order.buyerName}*,\n` +
+            `Pembayaran pesanan Anda telah diverifikasi oleh tim keuangan VARENA:\n\n` +
+            `📦 *No. Pesanan:* ${result.order.orderNumber}\n` +
+            `💰 *Total:* Rp${(result.order.total || 0).toLocaleString('id-ID')}\n\n` +
+            `Pesanan Anda sedang diproses dan akan segera dikirim. Terima kasih! 🌿`,
+        }).catch(() => {});
       }
 
       return NextResponse.json({
