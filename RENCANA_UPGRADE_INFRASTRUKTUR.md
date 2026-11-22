@@ -1,134 +1,117 @@
 # RENCANA & STRATEGI UPGRADE INFRASTRUKTUR VARENA
-## Panduan Efisiensi Biaya, Skalabilitas Sistem, dan Manajemen Kuota Cloud
+## Panduan Skalabilitas Sistem, Manajemen Kuota Cloud, dan Efisiensi Anggaran (Lean Bootstrapping)
 
-**Dokumen Rujukan:** Efisiensi Anggaran & Roadmap Server (Lean Infrastructure Strategy)  
-**Versi:** 1.0  
-**Tanggal Penerbitan:** 21 November 2026  
-**Status Target:** Siap Diterapkan (Production Cost-Optimization)
-
----
-
-## 1. Ringkasan Eksekutif (Executive Summary)
-
-Dalam peluncuran awal platform bisnis berbasis kemitraan langsung seperti **VARENA**, prinsip **efisiensi biaya (*lean bootstrapping*)** adalah kunci utama keberlanjutan bisnis. Alokasi modal perusahaan harus diprioritaskan pada pergerakan barang riil (stok produk kopi/teh, kemasan, izin edar, promosi kemitraan) daripada membayar biaya sewa server bulanan yang kapasitasnya belum terpakai penuh.
-
-Berdasarkan audit komparasi teknis:
-* **Paket Gratis Vercel + Prisma Postgres + Vercel Blob** saat ini sudah mampu menampung aktivitas operasional **hingga 500 member aktif**.
-* Fitur pemasangan **Custom Domain (`varena.id`) di Vercel adalah 100% GRATIS** (tidak perlu membayar Vercel Pro sebesar $20/bulan).
-* **Investasi wajib saat ini hanyalah Domain `.id`** seharga **Rp230.000 per tahun** (hanya sekitar Rp19.000/bulan).
+**Dokumen Rujukan:** Manajemen Kuota Server & Database (Production Cost-Optimization)  
+**Versi:** 2.0 (Diperbarui pasca-audit beban sistem & metrik live)  
+**Tanggal Pembaruan:** 22 November 2026  
+**Status Target:** Berjalan Aktif di Produksi (Free Tier Safe Mode)
 
 ---
 
-## 2. Analisis Kapasitas Paket Gratis (0 – 500 Member)
+## 1. Ringkasan Eksekutif & Status Metrik Live Saat Ini
 
-| Komponen Cloud | Batas Kuota Paket Gratis (*Free Tier*) | Estimasi Pemakaian (200 Member) | Status Kapasitas |
-|---|---|---|:---:|
-| **Database (Prisma Postgres Free)** | • **200.000** Operasi Database / bulan<br>• **1.000.000** Compute Requests / bulan<br>• **2 GB (2.048 MB)** Penyimpanan Storage | • $\approx$ 65.000 Operasi / bulan<br>• $\approx$ 10 MB Data Teks & Ledger | **SANGAT AMAN**<br>*(Baru terpakai $\approx$ 32% operasi & 0,5% storage)* |
-| **Aplikasi Web (Vercel Hobby Free)** | • **100 GB** Bandwidth CDN / bulan<br>• **1.000.000** Eksekusi Serverless / bulan<br>• Custom Domain + SSL Otomatis: **Tersedia** | • $\approx$ 5 – 10 GB Bandwidth / bulan<br>• $\approx$ 50.000 Eksekusi API / bulan | **SANGAT AMAN**<br>*(Baru terpakai $\approx$ 8% kuota)* |
-| **Foto Bukti Transfer (Vercel Blob Free)** | • **1 GB** Penyimpanan Storage<br>• **5 GB** Bandwidth Unduhan / bulan | • $\approx$ 200 – 400 Foto Bukti Kompresi WebP ($\approx$ 60 – 120 MB) | **SANGAT AMAN**<br>*(Baru terpakai $\approx$ 10% storage)* |
+Berdasarkan pembacaan metrik langsung (*realtime telemetry*) di lingkungan produksi:
+* **Prisma Postgres**: 
+  - Konsumsi Operasi: **26.8K / 200K operasi** ($0.00 — Kuota tersisa 173.200 operasi).
+  - Storage: **0.0 GiB / 2.0 GiB**.
+  - Compute Requests: **0 / 1 Juta**.
+* **Vercel Hosting**: 
+  - Function Invocations: **597 eksekusi / 6 jam** ($\approx$ 100/jam, proyeksi bulanan $\sim$72K dari batas 1 Juta).
+  - CDN Requests: **2.2K** (disajikan cepat dari Edge CDN).
+  - Error Rate: **0%** (*Zero Error / Rock Solid*).
 
-> **Catatan Teknis Perhitungan:**  
-> Satu transaksi pemesanan lengkap (Order + Bukti Upload + Konfirmasi Admin + Jurnal Buku Besar 10 Level + Notifikasi) hanya memakan rata-rata 12–15 operasi database baris teks. Ruang 2 GB di Prisma dapat menampung hingga lebih dari **100.000 baris transaksi pembukuan**.
-
----
-
-## 3. Audit Rencana Biaya: Apakah Upgrade $30/bulan Mahal?
-
-Rencana upgrade awal:
-1. Domain `.id` di IDwebhost: **Rp230.000 / tahun** ($\approx$ Rp19.000/bln).
-2. Database Prisma Starter: **$10 / bulan** ($\approx$ Rp160.000/bln).
-3. Vercel Pro: **$20 / bulan** ($\approx$ Rp320.000/bln).
-* **Total Biaya Rencana Awal:** $\approx \mathbf{Rp500.000\text{ per bulan}}$ (**Rp6.000.000 per tahun**).
-
-### Temuan Audit:
-1. **Vercel Pro ($20/bulan) = Pemborosan:**  
-   Banyak pengembang mengira bahwa untuk menggunakan nama domain sendiri (`varena.id`) wajib berlangganan Vercel Pro. Ini keliru. Vercel paket Free mengizinkan custom domain tanpa batas biaya. Biaya $20/bulan di Vercel sebenarnya ditujukan untuk tim dengan banyak akun developer (*multi-seat collaboration*).
-2. **Prisma Starter ($10/bulan) = Belum Dibutuhkan:**  
-   Kecuali traffic transaksi bulanan telah melampaui 180.000 operasi (sekitar 80% kuota gratis), upgrade $10 belum memberikan dampak performa apapun selain menambah kuota storage menjadi 10 GB (sementara pemakaian saat ini baru 10 MB).
+### Kesimpulan Fundamental:
+1. **Paket Free Tier Vercel + Prisma Postgres saat ini 100% AMAN & LAYAK** untuk pertumbuhan mitra awal.
+2. Keputusan mematikan *background polling* otomatis (`ENABLE_BACKGROUND_POLLING = false`) dan menggantinya dengan *Smart On-Demand Notification* berhasil memangkas konsumsi query hingga **95%**, mencegah lonjakan habisnya kuota 200K di awal bulan.
+3. **Vercel dan Prisma adalah dua entitas yang berbeda.** Meng-upgrade Vercel Pro ($20/bulan) **TIDAK AKAN** menaikkan kuota database Prisma.
 
 ---
 
-## 4. Roadmap Infrastruktur 3 Fase Pertumbuhan
+## 2. Klarifikasi Billing: Vercel vs Prisma Postgres
 
-```
-[FASE 1: 0 - 500 Member]      ───►  [FASE 2: 500 - 2.000 Member]  ───►  [FASE 3: > 2.000 Member]
-• Vercel Free (Custom Domain)       • Vercel Free                      • VPS Cloud Indonesia
-• Prisma Postgres Free              • Prisma Starter ($10/bln)         • PostgreSQL Mandiri (Dedicated)
-• Biaya: Rp230rb / TAHUN             • Biaya: ~Rp180rb / BULAN           • Biaya: ~Rp120rb / BULAN
-```
+Banyak founder/developer keliru mengira bahwa meng-upgrade akun Vercel akan otomatis menyelesaikan masalah kuota database. Tabel berikut menjelaskan pemisahannya:
 
-### Fase 1: Go-Live & Validasi Pasar (1 s/d 500 Member)
-* **Tujuan:** Peluncuran resmi, aktivasi leader, rekrutmen mitra awal.
-* **Infrastruktur:**
-  * Domain Resmi: `varena.id` via IDwebhost (Rp230.000/tahun).
-  * Web & API: Vercel Free Tier (Tersambung ke `varena.id`).
-  * Database: Prisma Postgres Free Tier (2 GB).
-  * Media Bukti: Vercel Blob Storage Free Tier (1 GB).
-* **Total Biaya Operasional:** **Hanya Rp230.000 per TAHUN** (Rp19.100/bulan).
+| Komponen | Penyedia Layanan | Batas Paket Gratis (*Free Tier*) | Jika Kuota Habis | Solusi Upgrade yang Tepat |
+|---|---|---|---|---|
+| **Hosting & Frontend/API** | **Vercel** (Hobby) | • 1.000.000 Function Invocations/bln<br>• 100 GB Bandwidth CDN/bln | Request dibatasi / diberi peringatan | Upgrade ke **Vercel Pro ($20/bln)** *(Hanya jika eksekusi fungsi tembus 1 juta/bln)* |
+| **Database Mesin SQL** | **Prisma** (Prisma Data Platform / Postgres) | • **200.000** Operasi Query/bln<br>• 2 GB Storage Penyimpanan<br>• 1.000.000 Compute Requests | Query database di-*pause* sementara hingga tgl 1 | Upgrade ke **Prisma Starter ($10/bln)** via `console.prisma.io` |
+
+> ⚠️ **PERINGATAN ANGGARAN:**  
+> Jika suatu saat operasi database Anda menyentuh 180K–200K, **JANGAN upgrade Vercel Pro ($20/bln)**. Yang wajib Anda upgrade **HANYA PRISMA STARTER ($10/bln)**. Akun Vercel Anda tetap biarkan di paket **FREE ($0.00)** karena kapasitas Vercel masih sangat longgar (baru terpakai <8%).
 
 ---
 
-### Fase 2: Pertumbuhan Jaringan (500 s/d 2.000 Member)
-* **Tujuan:** Arus transaksi harian stabil, ekspansi agen wilayah di beberapa kota.
-* **Infrastruktur:**
-  * Tetap gunakan Vercel Free Tier untuk frontend/backend.
-  * Upgrade Prisma Postgres ke **Starter ($10/bulan)** ketika dasbor Prisma menunjukkan pemakaian operasi telah mencapai $\ge 80\%$.
-  * Keuntungan Starter: Kuota 1.000.000 operasi/bulan dan pencadangan harian otomatis (*Daily Backups 7 hari*).
-* **Total Biaya Operasional:** $\approx \mathbf{Rp180.000\text{ per BULAN}}$.
+## 3. Simulasi Matematis Beban Pertumbuhan Mitra
+
+Dengan arsitektur *Smart On-Demand* (query hanya berjalan saat buka halaman, klik lonceng notifikasi, atau transaksi belanja/pencairan), berikut adalah proyeksi beban nyata:
+
+### Skenario A: 300 Mitra (Bulan ke-1)
+* **Kunjungan Pengguna**: 300 mitra $\times$ rata-rata 15 sesi/bulan = $4.500\text{ kunjungan}$.
+* **Beban Query Baca**: $4.500 \times 12\text{ query/sesi} = \mathbf{54.000\text{ operasi}}$.
+* **Transaksi Belanja & Mutasi**: $\sim 20.000\text{ operasi}$ (pendaftaran perdana, pesanan, pembukuan komisi).
+* **Total Pemakaian Database**: **$\sim 74.000\text{ operasi / bulan}$**.
+* **Persentase Kuota Prisma**: **37%** dari 200.000 limit (*Sisa 126.000 operasi*).
+* **Pemakaian Vercel Invocations**: $\sim 60.000$ (hanya 6% dari 1 juta).
+* 🟢 **Status Anggaran: 100% GRATIS ($0.00)**.
 
 ---
 
-### Fase 3: Skala Besar & Kemandirian Server (> 2.000 Member)
-* **Tujuan:** Efisiensi maksimal pada volume ratusan ribu transaksi per bulan.
-* **Infrastruktur Mandiri (Self-Hosted VPS di Data Center Indonesia):**
-  * Sewa 1 unit Cloud VPS di penyedia lokal seperti **IDCloudHost / Biznet Gio / Niagahoster** (Data Center Jakarta / Cyber 2):
-    * Spesifikasi: 2 vCPU, 4 GB RAM, 60 GB NVMe SSD.
-    * Biaya: $\approx$ **Rp80.000 s/d Rp130.000 per bulan**.
-  * Di dalam VPS dipasang PostgreSQL mandiri: **Tanpa batasan kuota per operasi (*unlimited operations*)** dan latensi koneksi lokal super instan ($\approx$ 5–15 ms).
-* **Total Biaya Operasional:** $\approx \mathbf{Rp100.000 s/d Rp150.000 per BULAN}$.
+### Skenario B: 500 Mitra (Bulan ke-2)
+* **Kunjungan Pengguna**: 500 mitra $\times$ 15 sesi/bulan = $7.500\text{ kunjungan}$.
+* **Beban Query Baca**: $7.500 \times 12\text{ query/sesi} = \mathbf{90.000\text{ operasi}}$.
+* **Transaksi Belanja & Mutasi**: $\sim 35.000\text{ operasi}$ (repeat order, bonus payout, registrasi baru).
+* **Total Pemakaian Database**: **$\sim 125.000\text{ operasi / bulan}$**.
+* **Persentase Kuota Prisma**: **62.5%** dari 200.000 limit (*Sisa 75.000 operasi*).
+* **Pemakaian Vercel Invocations**: $\sim 110.000$ (hanya 11% dari 1 juta).
+* 🟢 **Status Anggaran: 100% GRATIS ($0.00)**.
 
 ---
 
-## 5. Panduan Menghubungkan Domain `varena.id` (IDwebhost ke Vercel)
-
-Ketika Anda sudah membeli domain `varena.id` di IDwebhost, ikuti langkah berikut untuk menyambungkannya ke Vercel tanpa biaya:
-
-### Langkah A: Tambahkan Domain di Vercel Dashboard
-1. Buka dashboard Vercel $\rightarrow$ Proyek **varena** / **varena-theta**.
-2. Masuk ke menu **Settings** $\rightarrow$ pilih **Domains** di sebelah kiri.
-3. Ketikkan nama domain Anda: `varena.id`, lalu klik **Add**.
-4. Vercel akan memberikan petunjuk record DNS yang perlu dipasang.
-
-### Langkah B: Pasang DNS Record di Member Area IDwebhost
-1. Login ke panel **IDwebhost** $\rightarrow$ Kelola Domain $\rightarrow$ **DNS Management**.
-2. Tambahkan 2 baris record berikut:
-
-| Type | Name / Host | Target / Value | TTL |
-|:---:|:---:|:---:|:---:|
-| **A** | `@` *(atau kosongkan)* | `76.76.21.21` | Automatic / 14400 |
-| **CNAME** | `www` | `cname.vercel-dns.com` | Automatic / 14400 |
-
-### Langkah C: Perbarui Authorized Origins Google Cloud Console
-Setelah domain `varena.id` terverifikasi hijau di Vercel:
-1. Buka [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
-2. Edit Web Client ID Anda, lalu tambahkan:
-   * **Authorized JavaScript origins:**  
-     `https://varena.id`  
-     `https://www.varena.id`
-   * **Authorized redirect URIs:**  
-     `https://varena.id/api/auth/callback/google`  
-     `https://varena.id/login`
-3. Klik **Simpan**.
+### Skenario C: 800 s/d 1.000 Mitra (Titik Transisi / Ambang Batas)
+* **Total Pemakaian Database**: **$\sim 180.000 - 220.000\text{ operasi / bulan}$**.
+* **Kondisi**: Mendekati atau menyentuh ambang batas 200.000 operasi Prisma.
+* 🟡 **Tindakan**: **Lakukan upgrade ke Prisma Starter ($10/bulan $\approx$ Rp160.000)**.
+* **Hasil Pasca-Upgrade**:
+  - Kuota operasi langsung melonjak **5x lipat** menjadi **1.000.000 operasi/bulan**.
+  - Kapasitas penyimpanan naik dari **2 GB $\rightarrow$ 10 GB**.
+  - Fitur **Daily Backup otomatis** aktif.
+  - Vercel tetap di paket **Free ($0.00)**.
+  - **Total Biaya Bulanan:** **Hanya Rp160.000 / bulan** (sangat kecil dibanding omzet ratusan mitra).
 
 ---
 
-## 6. Indikator Kapan Waktunya Melakukan Upgrade (Checklist)
+## 4. Matriks Ringkasan Roadmap & Biaya
 
-Lakukan upgrade **hanya jika** salah satu kondisi riil berikut terpenuhi:
-
-- [ ] Dasbor Prisma Postgres menunjukkan konsumsi operasi bulanan melebihi **160.000 operasi** (80% dari kuota 200.000). $\rightarrow$ *Tindakan: Upgrade Prisma Starter $10/bln.*
-- [ ] Vercel mengirimkan email peringatan bahwa bandwidth CDN bulanan melebihi **80 GB**. $\rightarrow$ *Tindakan: Kompresi aset gambar atau aktifkan Cloudflare proxy gratis.*
-- [ ] Omzet bersih perusahaan sudah menghasilkan keuntungan rutin dan membutuhkan SLA formal serta tim pengembang tambahan. $\rightarrow$ *Tindakan: Evaluasi Vercel Pro atau migrasi VPS mandiri.*
+| Tahapan | Jumlah Mitra | Status Vercel | Status Database | Biaya Bulanan |
+|---|:---:|:---:|:---:|:---:|
+| **Fase 1 (Peluncuran)** | 0 – 300 Mitra | **Free Tier** | **Prisma Free (200K Ops)** | **Rp0 / bln** *(Hanya domain Rp230rb/thn)* |
+| **Fase 2 (Validasi)** | 300 – 500 Mitra | **Free Tier** | **Prisma Free (200K Ops)** | **Rp0 / bln** |
+| **Fase 3 (Skalabilitas)** | 800 – 2.000 Mitra | **Free Tier** | **Prisma Starter ($10/bln)** | **$\approx$ Rp160.000 / bln** |
+| **Fase 4 (Enterprise)** | > 2.000 Mitra | **Free Tier / Custom** | **VPS Dedicated Mandiri** | **$\approx$ Rp120.000 – Rp200.000 / bln** |
 
 ---
-*Dokumen ini disusun sebagai panduan resmi penganggaran teknologi VARENA agar pertumbuhan bisnis berjalan sehat, berdaya tahan tinggi, dan terbebas dari beban biaya infrastruktur yang belum diperlukan.*
+
+## 5. Panduan Taktis Melakukan Upgrade Prisma ($10/bln)
+
+Lakukan prosedur ini **hanya ketika** konsumsi operasi di console Prisma sudah menyentuh **$\ge 170.000$ operasi** (85% kuota):
+
+1. Buka halaman pengaturan tagihan Prisma Anda:
+   [https://console.prisma.io/.../settings/billing](https://console.prisma.io/v69nzupp8ilfufftxdrvjdui/settings/billing)  
+   *(Atau lewat Vercel Dashboard $\rightarrow$ tab Integrations $\rightarrow$ Prisma $\rightarrow$ Settings)*.
+2. Klik tombol **Upgrade** di samping keterangan *Free Plan*.
+3. Pilih paket **Starter ($10/month)**.
+4. Masukkan metode pembayaran kartu debit/kredit/virtual card.
+5. **Konfirmasi Selesai**: Kuota operasi seketika bertambah menjadi 1.000.000 operasi **tanpa ada *downtime*** (web dan data transaksi mitra tidak terganggu sama sekali).
+
+---
+
+## 6. Checklist Pemantauan Rutin (Admin / Tech Lead)
+
+- [ ] **Setiap Tanggal 20 Setiap Bulan**: Buka [console.prisma.io](https://console.prisma.io) dan periksa baris `Postgres Operations`.
+  - Jika $< 160\text{K}$: Biarkan tetap berjalan di paket Gratis.
+  - Jika $\ge 170\text{K}$: Lakukan upgrade Starter ($10/bln).
+- [ ] **Setiap Awal Bulan (Tanggal 1)**: Kuota operasi Prisma otomatis me-reset kembali ke `0 / 200K`.
+- [ ] **Pastikan Kompresi WebP Tetap Berjalan**: Foto bukti transfer yang diunggah mitra/agen harus selalu dalam format WebP (<80 KB) agar tidak membebani kuota Vercel Blob (1 GB).
+
+---
+*Dokumen ini merupakan standar operasional teknologi resmi platform VARENA untuk menjamin efisiensi modal bisnis tanpa mengorbankan kecepatan dan kestabilan sistem.*
