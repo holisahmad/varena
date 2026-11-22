@@ -72,6 +72,19 @@ export async function GET(req: Request) {
               phone: true,
               status: true,
               lastLoginAt: true,
+              orders: {
+                where: {
+                  orderStatus: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'COMPLETED'] },
+                },
+                select: {
+                  id: true,
+                  orderNumber: true,
+                  orderType: true,
+                  total: true,
+                  createdAt: true,
+                },
+                take: 1,
+              },
             },
           },
           sponsorRel: {
@@ -92,39 +105,50 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    const formatted = members.map((m) => ({
-      id: m.id,
-      userId: m.userId,
-      memberCode: m.memberCode,
-      displayName: m.displayName,
-      legalName: m.legalName,
-      nik: m.nik,
-      memberStatus: m.memberStatus,
-      // isActive: flat field agar mudah dibaca UI
-      isActive: m.memberStatus === 'ACTIVE',
-      kycStatus: m.kycStatus,
-      isAgent: m.isAgent,
-      agentType: m.agentType,
-      agentStatus: m.agentStatus,
-      agentCity: m.agentCity,
-      createdAt: m.createdAt,
-      bankName: m.bankName,
-      bankAccountNumber: m.bankAccountNumber,
-      bankAccountHolder: m.bankAccountHolder,
-      email: m.user?.email || null,
-      phone: m.user?.phone || null,
-      accountStatus: m.user?.status || 'ACTIVE',
-      lastLoginAt: m.user?.lastLoginAt || null,
-      // sponsorCode flat agar mudah dibaca UI
-      sponsorCode: m.sponsorRel?.sponsor?.memberCode || null,
-      sponsorName: m.sponsorRel?.sponsor?.displayName || null,
-      sponsor: m.sponsorRel?.sponsor
-        ? {
-            code: m.sponsorRel.sponsor.memberCode,
-            name: m.sponsorRel.sponsor.displayName,
-          }
-        : null,
-    }));
+    const formatted = members.map((m) => {
+      const isLeaderOrCorp =
+        m.memberCode.startsWith('VRN-LDR-') ||
+        m.memberCode.startsWith('VRN-CORP-') ||
+        m.memberCode === 'VRN-0001';
+      const hasCompletedPurchase = Boolean(m.user?.orders && m.user.orders.length > 0);
+
+      return {
+        id: m.id,
+        userId: m.userId,
+        memberCode: m.memberCode,
+        displayName: m.displayName,
+        legalName: m.legalName,
+        nik: m.nik,
+        memberStatus: m.memberStatus,
+        // isActive: flat field agar mudah dibaca UI
+        isActive: m.memberStatus === 'ACTIVE',
+        isLeaderOrCorp,
+        hasCompletedPurchase,
+        firstOrderNumber: m.user?.orders?.[0]?.orderNumber || null,
+        kycStatus: m.kycStatus,
+        isAgent: m.isAgent,
+        agentType: m.agentType,
+        agentStatus: m.agentStatus,
+        agentCity: m.agentCity,
+        createdAt: m.createdAt,
+        bankName: m.bankName,
+        bankAccountNumber: m.bankAccountNumber,
+        bankAccountHolder: m.bankAccountHolder,
+        email: m.user?.email || null,
+        phone: m.user?.phone || null,
+        accountStatus: m.user?.status || 'ACTIVE',
+        lastLoginAt: m.user?.lastLoginAt || null,
+        // sponsorCode flat agar mudah dibaca UI
+        sponsorCode: m.sponsorRel?.sponsor?.memberCode || null,
+        sponsorName: m.sponsorRel?.sponsor?.displayName || null,
+        sponsor: m.sponsorRel?.sponsor
+          ? {
+              code: m.sponsorRel.sponsor.memberCode,
+              name: m.sponsorRel.sponsor.displayName,
+            }
+          : null,
+      };
+    });
 
     return NextResponse.json({
       success: true,
@@ -159,8 +183,71 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, memberId, reason } = body;
 
-    if (!action || !memberId) {
-      return NextResponse.json({ error: 'Parameter action dan memberId wajib diisi.' }, { status: 400 });
+    if (!action) {
+      return NextResponse.json({ error: 'Parameter action wajib diisi.' }, { status: 400 });
+    }
+
+    // Aksi Massal: Sinkronkan seluruh akun mitra non-leader yang belum belanja wajib ke PENDING
+    if (action === 'SYNC_ALL_UNPAID') {
+      const candidates = await prisma.member.findMany({
+        where: {
+          memberStatus: 'ACTIVE',
+          NOT: {
+            OR: [
+              { memberCode: 'VRN-0001' },
+              { memberCode: { startsWith: 'VRN-LDR-' } },
+              { memberCode: { startsWith: 'VRN-CORP-' } },
+            ],
+          },
+        },
+        include: {
+          user: {
+            include: {
+              orders: {
+                where: {
+                  orderStatus: { in: ['PAID', 'PROCESSING', 'SHIPPED', 'COMPLETED'] },
+                },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      });
+
+      const unpaidMembers = candidates.filter((c) => !c.user?.orders || c.user.orders.length === 0);
+      const unpaidIds = unpaidMembers.map((m) => m.id);
+
+      if (unpaidIds.length > 0) {
+        await prisma.member.updateMany({
+          where: { id: { in: unpaidIds } },
+          data: {
+            memberStatus: 'PENDING',
+            activatedAt: null,
+          },
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            actorUserId: adminSession.userId,
+            action: 'MEMBERS_SYNC_UNPAID_STATUS',
+            entityType: 'MEMBER',
+            entityId: 'BATCH_SYNC',
+            beforeJson: JSON.stringify({ count: unpaidIds.length, targetIds: unpaidIds }),
+            afterJson: JSON.stringify({ memberStatus: 'PENDING' }),
+            reason: 'Sinkronisasi massal: menyetel status akun non-leader tanpa belanja wajib menjadi PENDING (Belum Aktif)',
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Sinkronisasi selesai. Sebanyak ${unpaidIds.length} mitra non-leader tanpa transaksi belanja wajib berhasil disetel ke Belum Aktif (PENDING).`,
+        syncedCount: unpaidIds.length,
+      });
+    }
+
+    if (!memberId) {
+      return NextResponse.json({ error: 'Parameter memberId wajib diisi untuk aksi ini.' }, { status: 400 });
     }
 
     const member = await prisma.member.findUnique({
@@ -172,8 +259,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Data mitra tidak ditemukan.' }, { status: 404 });
     }
 
-    // 1. Aktivasi Akun Manual (misal bayar cash di kantor)
+    // 1. Aktivasi Akun Manual (Dispensasi / Kebijakan Khusus Manajemen)
     if (action === 'ACTIVATE_MEMBER') {
+      const cleanReason = (reason || '').trim();
+      if (!cleanReason || cleanReason.length < 5) {
+        return NextResponse.json(
+          {
+            error:
+              'Alasan kebijakan khusus wajib diisi minimal 5 karakter (misal: talenta marketing berprestasi, dispensasi khusus manajemen, atau pembayaran offline).',
+          },
+          { status: 400 }
+        );
+      }
+
       await prisma.member.update({
         where: { id: member.id },
         data: {
@@ -189,14 +287,42 @@ export async function POST(req: Request) {
           entityType: 'MEMBER',
           entityId: member.id,
           beforeJson: JSON.stringify({ memberStatus: member.memberStatus }),
-          afterJson: JSON.stringify({ memberStatus: 'ACTIVE' }),
-          reason: reason || 'Aktivasi manual akun mitra oleh manajemen korporasi',
+          afterJson: JSON.stringify({ memberStatus: 'ACTIVE', specialPolicyExemption: true }),
+          reason: cleanReason,
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: `Akun mitra ${member.displayName} (${member.memberCode}) berhasil diaktifkan.`,
+        message: `Akun mitra ${member.displayName} (${member.memberCode}) berhasil diaktifkan dengan kebijakan khusus: "${cleanReason}".`,
+      });
+    }
+
+    // 2. Setel Status ke Belum Aktif (PENDING - Menunggu Belanja Wajib)
+    if (action === 'SET_PENDING') {
+      await prisma.member.update({
+        where: { id: member.id },
+        data: {
+          memberStatus: 'PENDING',
+          activatedAt: null,
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          actorUserId: adminSession.userId,
+          action: 'MEMBER_SET_PENDING',
+          entityType: 'MEMBER',
+          entityId: member.id,
+          beforeJson: JSON.stringify({ memberStatus: member.memberStatus }),
+          afterJson: JSON.stringify({ memberStatus: 'PENDING' }),
+          reason: (reason || '').trim() || 'Disetel ke Belum Aktif karena belum menyelesaikan pembelanjaan paket perdana wajib.',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Status akun mitra ${member.displayName} (${member.memberCode}) berhasil disetel ke Belum Aktif (PENDING).`,
       });
     }
 

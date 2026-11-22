@@ -301,9 +301,10 @@ export default function AdminPage() {
   const [resetPwAutoGen, setResetPwAutoGen] = useState(true);
   // Member status modal state
   const [statusModalTarget, setStatusModalTarget] = useState<any>(null);
-  const [statusModalAction, setStatusModalAction] = useState<'ACTIVATE_MEMBER' | 'SUSPEND_WITHDRAWAL' | 'SUSPEND_LOGIN' | 'UNSUSPEND'>('ACTIVATE_MEMBER');
+  const [statusModalAction, setStatusModalAction] = useState<'ACTIVATE_MEMBER' | 'SUSPEND_WITHDRAWAL' | 'SUSPEND_LOGIN' | 'UNSUSPEND' | 'SET_PENDING'>('ACTIVATE_MEMBER');
   const [statusModalReason, setStatusModalReason] = useState('');
   const [statusModalLoading, setStatusModalLoading] = useState(false);
+  const [syncingUnpaid, setSyncingUnpaid] = useState(false);
 
   // WhatsApp Outbox State
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
@@ -1418,6 +1419,15 @@ export default function AdminPage() {
 
   const handleUpdateMemberStatus = async () => {
     if (!statusModalTarget) return;
+
+    if (statusModalAction === 'ACTIVATE_MEMBER') {
+      const cleanReason = (statusModalReason || '').trim();
+      if (!cleanReason || cleanReason.length < 5) {
+        showToast('Alasan kebijakan khusus wajib diisi minimal 5 karakter untuk aktivasi manual.', 'error');
+        return;
+      }
+    }
+
     setStatusModalLoading(true);
     try {
       const headers = getAdminHeaders();
@@ -1427,7 +1437,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           memberId: statusModalTarget.id,
           action: statusModalAction,
-          reason: statusModalReason,
+          reason: statusModalReason.trim(),
         }),
       });
       const data = await res.json();
@@ -1444,6 +1454,39 @@ export default function AdminPage() {
     } finally {
       setStatusModalLoading(false);
     }
+  };
+
+  const handleSyncUnpaidMembers = async () => {
+    showConfirm({
+      title: 'Sinkronkan Status Belanja Wajib Mitra',
+      message:
+        'Sistem akan memindai seluruh akun mitra non-leader. Akun yang belum pernah menyelesaikan pembelanjaan Paket Perdana wajib akan disetel ke status Belum Aktif (PENDING). Lanjutkan?',
+      confirmText: 'Ya, Sinkronkan Sekarang',
+      cancelText: 'Batal',
+      variant: 'amber',
+      onConfirm: async () => {
+        setSyncingUnpaid(true);
+        try {
+          const headers = getAdminHeaders();
+          const res = await fetch('/api/v1/admin/members', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ action: 'SYNC_ALL_UNPAID' }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(data.message, 'success');
+            loadMembersList(membersPage, membersSearch, membersFilter);
+          } else {
+            showToast(data.error || 'Gagal menyinkronkan status mitra.', 'error');
+          }
+        } catch {
+          showToast('Terjadi kesalahan saat menyinkronkan status mitra.', 'error');
+        } finally {
+          setSyncingUnpaid(false);
+        }
+      },
+    });
   };
 
   // WhatsApp Outbox Loader
@@ -3786,13 +3829,24 @@ export default function AdminPage() {
                     <span className="font-semibold text-slate-700">{membersTotal} mitra</span>
                   </p>
                 </div>
-                <button
-                  onClick={() => loadMembersList(1, membersSearch, membersFilter)}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleSyncUnpaidMembers}
+                    disabled={syncingUnpaid}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                    title="Periksa dan setel seluruh akun non-leader yang belum belanja wajib ke status Belum Aktif (PENDING)"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingUnpaid ? 'animate-spin' : ''}`} />
+                    <span>{syncingUnpaid ? 'Menyinkronkan...' : 'Sinkron Belanja Wajib'}</span>
+                  </button>
+                  <button
+                    onClick={() => loadMembersList(1, membersSearch, membersFilter)}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-slate-800 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {/* Search & Filter */}
@@ -3890,24 +3944,24 @@ export default function AdminPage() {
                               <span className="text-xs text-slate-600">{member.phone || '-'}</span>
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex flex-col gap-1">
+                              <div className="flex flex-col gap-1 items-start">
                                 {(!member.memberStatus || member.memberStatus === 'ACTIVE') && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                                     Aktif
                                   </span>
                                 )}
                                 {member.memberStatus === 'PENDING' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
                                     Belum Aktif
                                   </span>
                                 )}
                                 {member.memberStatus === 'SUSPENDED_WITHDRAWAL' && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-200">
                                     Suspend WD
                                   </span>
                                 )}
                                 {(member.memberStatus === 'SUSPENDED_LOGIN' || member.memberStatus === 'SUSPENDED') && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">
                                     Diblokir Login
                                   </span>
                                 )}
@@ -3917,8 +3971,23 @@ export default function AdminPage() {
                                   </span>
                                 )}
                                 {member.isAgent && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                                     Agen
+                                  </span>
+                                )}
+
+                                {/* Status Belanja Wajib */}
+                                {member.isLeaderOrCorp ? (
+                                  <span className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-medium">
+                                    👑 Akun Leader
+                                  </span>
+                                ) : member.hasCompletedPurchase ? (
+                                  <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-medium">
+                                    🛍️ Belanja Lunas
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 font-medium">
+                                    ⏳ Belum Belanja
                                   </span>
                                 )}
                               </div>
@@ -3938,6 +4007,8 @@ export default function AdminPage() {
                                       setStatusModalAction('ACTIVATE_MEMBER');
                                     } else if (member.memberStatus?.startsWith('SUSPEND')) {
                                       setStatusModalAction('UNSUSPEND');
+                                    } else if (!member.hasCompletedPurchase && !member.isLeaderOrCorp) {
+                                      setStatusModalAction('SET_PENDING');
                                     } else {
                                       setStatusModalAction('SUSPEND_WITHDRAWAL');
                                     }
@@ -4250,21 +4321,46 @@ export default function AdminPage() {
 
                     <div className="p-5 space-y-4">
                       {/* Info Target Mitra */}
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-slate-500 font-medium">Mitra Terpilih</p>
-                          <p className="font-semibold text-slate-800 text-sm">
-                            {statusModalTarget.displayName || statusModalTarget.legalName}
-                          </p>
-                          <p className="text-xs text-slate-500 font-mono">
-                            {statusModalTarget.memberCode} · {statusModalTarget.phone || '-'}
-                          </p>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-500 font-medium">Mitra Terpilih</p>
+                            <p className="font-semibold text-slate-800 text-sm">
+                              {statusModalTarget.displayName || statusModalTarget.legalName}
+                            </p>
+                            <p className="text-xs text-slate-500 font-mono">
+                              {statusModalTarget.memberCode} · {statusModalTarget.phone || '-'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[11px] text-slate-400">Status Saat Ini</p>
+                            <span className={`inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${
+                              statusModalTarget.memberStatus === 'ACTIVE'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : statusModalTarget.memberStatus === 'PENDING'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {statusModalTarget.memberStatus || 'PENDING'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[11px] text-slate-400">Status Saat Ini</p>
-                          <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-slate-200 text-slate-800">
-                            {statusModalTarget.memberStatus || 'PENDING'}
-                          </span>
+
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Status Belanja Wajib:</span>
+                          {statusModalTarget.isLeaderOrCorp ? (
+                            <span className="font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              👑 Akun Leader / Pusat (Otomatis Aktif)
+                            </span>
+                          ) : statusModalTarget.hasCompletedPurchase ? (
+                            <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              ✓ Paket Perdana Lunas
+                            </span>
+                          ) : (
+                            <span className="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                              ⏳ Belum Ada Transaksi Belanja Wajib
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -4274,7 +4370,7 @@ export default function AdminPage() {
                           Pilih Tindakan Status Akun <span className="text-red-500">*</span>
                         </label>
                         <div className="space-y-2">
-                          {statusModalTarget.memberStatus === 'PENDING' && (
+                          {statusModalTarget.memberStatus !== 'ACTIVE' && (
                             <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
                               statusModalAction === 'ACTIVATE_MEMBER'
                                 ? 'border-emerald-500 bg-emerald-50/50'
@@ -4290,10 +4386,35 @@ export default function AdminPage() {
                               />
                               <div>
                                 <span className="text-xs font-bold text-emerald-900 block">
-                                  Aktifkan Akun (Manual)
+                                  Aktifkan Akun (Dispensasi / Kebijakan Khusus)
                                 </span>
                                 <span className="text-[11px] text-emerald-700 block">
-                                  Mitra diaktifkan langsung tanpa harus menunggu transaksi belanja Paket Perdana pertama lunas.
+                                  Mitra diaktifkan langsung oleh kebijakan manajemen tanpa menunggu transaksi belanja Paket Perdana pertama lunas (misal: talenta marketing berprestasi, dispensasi promosi kantor, atau pembayaran tunai offline). Wajib isi alasan di bawah.
+                                </span>
+                              </div>
+                            </label>
+                          )}
+
+                          {statusModalTarget.memberStatus === 'ACTIVE' && (
+                            <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                              statusModalAction === 'SET_PENDING'
+                                ? 'border-amber-500 bg-amber-50/50'
+                                : 'border-slate-200 hover:bg-slate-50'
+                            }`}>
+                              <input
+                                type="radio"
+                                name="member_action"
+                                value="SET_PENDING"
+                                checked={statusModalAction === 'SET_PENDING'}
+                                onChange={() => setStatusModalAction('SET_PENDING')}
+                                className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-amber-950 block">
+                                  Setel Belum Aktif (PENDING - Menunggu Belanja)
+                                </span>
+                                <span className="text-[11px] text-amber-800 block">
+                                  Kembalikan status akun ke PENDING karena mitra belum memenuhi syarat belanja Paket Perdana wajib atau dispensasi dicabut.
                                 </span>
                               </div>
                             </label>
@@ -4373,13 +4494,24 @@ export default function AdminPage() {
                       {/* Catatan / Alasan Admin */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                          Alasan / Catatan Admin (Tercatat di Audit Log)
+                          {statusModalAction === 'ACTIVATE_MEMBER' ? (
+                            <>
+                              Alasan Kebijakan Khusus Aktivasi Manual{' '}
+                              <span className="text-red-500">* (Wajib diisi untuk Audit Log)</span>
+                            </>
+                          ) : (
+                            <>Alasan / Catatan Admin (Tercatat di Audit Log)</>
+                          )}
                         </label>
                         <textarea
                           rows={2}
                           value={statusModalReason}
                           onChange={(e) => setStatusModalReason(e.target.value)}
-                          placeholder="Contoh: Menunggu verifikasi rekening bank mitra / Investigasi fraud..."
+                          placeholder={
+                            statusModalAction === 'ACTIVATE_MEMBER'
+                              ? "Contoh: Kebijakan khusus manajemen - talenta marketing berprestasi sebelum gabung mitra / Pembayaran tunai di kantor..."
+                              : "Contoh: Menunggu verifikasi rekening bank mitra / Investigasi fraud..."
+                          }
                           className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 resize-none"
                         />
                       </div>
