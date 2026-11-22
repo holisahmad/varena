@@ -23,12 +23,25 @@ export async function authenticateUser(email: string, passwordPlain: string): Pr
     },
   });
 
-  if (!user || user.status !== 'ACTIVE') {
+  if (!user) {
     return null;
   }
 
   const match = await bcrypt.compare(passwordPlain, user.passwordHash);
   if (!match) {
+    return null;
+  }
+
+  // Cek jika akun ditangguhkan / diblokir login oleh admin
+  if (
+    user.status === 'SUSPENDED' ||
+    user.member?.memberStatus === 'SUSPENDED_LOGIN' ||
+    user.member?.memberStatus === 'TERMINATED'
+  ) {
+    throw new Error('ACCOUNT_SUSPENDED');
+  }
+
+  if (user.status !== 'ACTIVE') {
     return null;
   }
 

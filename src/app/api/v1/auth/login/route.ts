@@ -81,7 +81,21 @@ export async function POST(req: Request) {
     }
 
     // 5. Authenticate
-    const session = await authenticateUser(cleanEmail, password);
+    let session: any = null;
+    try {
+      session = await authenticateUser(cleanEmail, password);
+    } catch (authErr: any) {
+      if (authErr.message === 'ACCOUNT_SUSPENDED') {
+        return NextResponse.json(
+          {
+            error:
+              'Akun Anda telah dinonaktifkan / ditangguhkan oleh Administrator. Silakan hubungi kantor VARENA untuk informasi lebih lanjut.',
+          },
+          { status: 403 }
+        );
+      }
+      throw authErr;
+    }
 
     if (!session) {
       recordFailedLogin(lockKey);

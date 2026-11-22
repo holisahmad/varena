@@ -37,7 +37,9 @@ export async function GET(req: Request) {
     if (status === 'ACTIVE') {
       where.memberStatus = 'ACTIVE';
     } else if (status === 'INACTIVE') {
-      where.memberStatus = { not: 'ACTIVE' };
+      where.memberStatus = 'PENDING';
+    } else if (status === 'SUSPENDED') {
+      where.memberStatus = { in: ['SUSPENDED', 'SUSPENDED_WITHDRAWAL', 'SUSPENDED_LOGIN', 'TERMINATED'] };
     } else if (status === 'AGENT') {
       where.isAgent = true;
     }
@@ -138,6 +140,171 @@ export async function GET(req: Request) {
     console.error('Admin members list error:', err);
     return NextResponse.json(
       { error: err.message || 'Gagal mengambil data daftar mitra.' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/v1/admin/members
+ * Update status kemitraan (Aktivasi Manual, Suspend Tarik Dana, Suspend Login, Unsuspend)
+ */
+export async function POST(req: Request) {
+  try {
+    const adminSession = await resolveCorporateAdmin(req);
+    if (!adminSession) {
+      return NextResponse.json({ error: 'Akses ditolak. Sesi admin diperlukan.' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { action, memberId, reason } = body;
+
+    if (!action || !memberId) {
+      return NextResponse.json({ error: 'Parameter action dan memberId wajib diisi.' }, { status: 400 });
+    }
+
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: { user: true },
+    });
+
+    if (!member) {
+      return NextResponse.json({ error: 'Data mitra tidak ditemukan.' }, { status: 404 });
+    }
+
+    // 1. Aktivasi Akun Manual (misal bayar cash di kantor)
+    if (action === 'ACTIVATE_MEMBER') {
+      await prisma.member.update({
+        where: { id: member.id },
+        data: {
+          memberStatus: 'ACTIVE',
+          activatedAt: member.activatedAt || new Date(),
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          actorUserId: adminSession.userId,
+          action: 'MEMBER_MANUALLY_ACTIVATED',
+          entityType: 'MEMBER',
+          entityId: member.id,
+          beforeJson: JSON.stringify({ memberStatus: member.memberStatus }),
+          afterJson: JSON.stringify({ memberStatus: 'ACTIVE' }),
+          reason: reason || 'Aktivasi manual akun mitra oleh manajemen korporasi',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Akun mitra ${member.displayName} (${member.memberCode}) berhasil diaktifkan.`,
+      });
+    }
+
+    // 2. Suspend Tarik Dana (WD) — Mitra tetap bisa login dan belanja, tapi diblokir dari pencairan dana
+    if (action === 'SUSPEND_WITHDRAWAL') {
+      await prisma.member.update({
+        where: { id: member.id },
+        data: {
+          memberStatus: 'SUSPENDED_WITHDRAWAL',
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          actorUserId: adminSession.userId,
+          action: 'MEMBER_SUSPENDED_WITHDRAWAL',
+          entityType: 'MEMBER',
+          entityId: member.id,
+          beforeJson: JSON.stringify({ memberStatus: member.memberStatus }),
+          afterJson: JSON.stringify({ memberStatus: 'SUSPENDED_WITHDRAWAL' }),
+          reason: reason || 'Penangguhan fasilitas penarikan dana oleh admin',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Fasilitas tarik dana (WD) untuk mitra ${member.displayName} berhasil ditangguhkan. Mitra tetap dapat login dan belanja.`,
+      });
+    }
+
+    // 3. Suspend Total (Blokir Login) — Mitra tidak bisa login sama sekali
+    if (action === 'SUSPEND_LOGIN') {
+      await prisma.$transaction(async (tx) => {
+        await tx.member.update({
+          where: { id: member.id },
+          data: {
+            memberStatus: 'SUSPENDED_LOGIN',
+          },
+        });
+
+        await tx.user.update({
+          where: { id: member.userId },
+          data: {
+            status: 'SUSPENDED',
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: adminSession.userId,
+            action: 'MEMBER_SUSPENDED_LOGIN',
+            entityType: 'MEMBER',
+            entityId: member.id,
+            beforeJson: JSON.stringify({ memberStatus: member.memberStatus, userStatus: member.user?.status }),
+            afterJson: JSON.stringify({ memberStatus: 'SUSPENDED_LOGIN', userStatus: 'SUSPENDED' }),
+            reason: reason || 'Blokir total akun mitra (tidak bisa login) oleh admin',
+          },
+        });
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Akun mitra ${member.displayName} berhasil diblokir total (akses login ditutup).`,
+      });
+    }
+
+    // 4. Pulihkan / Unsuspend Akun ke Normal (ACTIVE)
+    if (action === 'UNSUSPEND') {
+      await prisma.$transaction(async (tx) => {
+        await tx.member.update({
+          where: { id: member.id },
+          data: {
+            memberStatus: 'ACTIVE',
+            activatedAt: member.activatedAt || new Date(),
+          },
+        });
+
+        await tx.user.update({
+          where: { id: member.userId },
+          data: {
+            status: 'ACTIVE',
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: adminSession.userId,
+            action: 'MEMBER_UNSUSPENDED',
+            entityType: 'MEMBER',
+            entityId: member.id,
+            beforeJson: JSON.stringify({ memberStatus: member.memberStatus }),
+            afterJson: JSON.stringify({ memberStatus: 'ACTIVE', userStatus: 'ACTIVE' }),
+            reason: reason || 'Pemulihan akun mitra ke status aktif normal oleh admin',
+          },
+        });
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Akun mitra ${member.displayName} berhasil dipulihkan menjadi Aktif Normal.`,
+      });
+    }
+
+    return NextResponse.json({ error: `Aksi '${action}' tidak dikenali.` }, { status: 400 });
+  } catch (err: any) {
+    console.error('Admin member action error:', err);
+    return NextResponse.json(
+      { error: err.message || 'Gagal memproses aksi pada mitra.' },
       { status: 500 }
     );
   }

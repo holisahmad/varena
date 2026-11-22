@@ -2,10 +2,24 @@ import { NextResponse } from 'next/server';
 import { createOrder } from '@/lib/order';
 import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
 import { resolveMemberFromRequest } from '@/lib/api-auth';
+import { getMaintenanceConfig } from '@/lib/maintenance';
 
 export async function POST(req: Request) {
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+
+    // 0. Global Maintenance / Freeze Check
+    const maintenance = await getMaintenanceConfig();
+    if (maintenance.isActive && maintenance.freezePurchases) {
+      return NextResponse.json(
+        {
+          error:
+            maintenance.message ||
+            'Pemesanan produk sedang dibekukan sementara untuk pemeliharaan sistem berkala. Mohon coba beberapa saat lagi.',
+        },
+        { status: 503 }
+      );
+    }
 
     // 1. Rate limiting: max 20 checkouts per 5 minutes per IP
     const rateCheck = checkRateLimit(`checkout:${ip}`, 20, 5 * 60 * 1000);

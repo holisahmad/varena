@@ -480,11 +480,11 @@ export async function settleOrderPayment(orderId: string, providerRef = 'SIM-PAI
       buyerMember = u?.member;
     }
 
-    if (buyerMember && !buyerMember.activatedAt) {
+    if (buyerMember && (!buyerMember.activatedAt || buyerMember.memberStatus !== 'ACTIVE')) {
       await prisma.member.update({
         where: { id: buyerMember.id },
         data: {
-          activatedAt: new Date(),
+          activatedAt: buyerMember.activatedAt || new Date(),
           memberStatus: 'ACTIVE',
         },
       });

@@ -103,6 +103,10 @@ export async function POST(req: Request) {
         });
       }
 
+      // Akun Leader (VRN-LDR-*) atau Corporate (VRN-CORP-*) langsung aktif.
+      // Mitra reguler baru berstatus PENDING (Belum Aktif) sampai belanja Paket Perdana lunas.
+      const isLeaderOrCorp = newCode.startsWith('VRN-LDR-') || newCode.startsWith('VRN-CORP-');
+
       // Create Member
       const member = await tx.member.create({
         data: {
@@ -110,9 +114,9 @@ export async function POST(req: Request) {
           memberCode: newCode,
           displayName,
           legalName: legalName || displayName,
-          memberStatus: 'ACTIVE',
+          memberStatus: isLeaderOrCorp ? 'ACTIVE' : 'PENDING',
           kycStatus: 'VERIFIED',
-          activatedAt: new Date(),
+          activatedAt: isLeaderOrCorp ? new Date() : null,
         },
       });
 

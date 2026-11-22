@@ -4,6 +4,7 @@ import Navbar from '@/components/layout/Navbar';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import PwaInstallPrompt from '@/components/layout/PwaInstallPrompt';
 import ImpersonationBanner from '@/components/layout/ImpersonationBanner';
+import MaintenanceBanner from '@/components/layout/MaintenanceBanner';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
@@ -55,6 +56,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-varena-ivory text-varena-espresso pb-16 md:pb-0" suppressHydrationWarning>
         <NotificationProvider>
           <ImpersonationBanner />
+          <MaintenanceBanner />
           <PwaInstallPrompt />
           <Navbar />
           <main className="flex-1 flex flex-col">{children}</main>

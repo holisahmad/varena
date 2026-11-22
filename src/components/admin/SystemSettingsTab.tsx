@@ -14,6 +14,7 @@ import {
   DollarSign,
   Percent,
   Users,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SystemSettingsTabProps {
@@ -48,6 +49,13 @@ export default function SystemSettingsTab({
     defaultDiscountValue: 15.0,
   });
 
+  const [maintenanceConfig, setMaintenanceConfig] = useState({
+    freezeWithdrawals: false,
+    freezePurchases: false,
+    freezeDeposits: false,
+    message: 'Sistem sedang dalam audit & pemeliharaan berkala.',
+  });
+
   const loadSettings = () => {
     setLoading(true);
     fetch('/api/v1/admin/settings', { headers: authHeaders })
@@ -55,6 +63,12 @@ export default function SystemSettingsTab({
       .then((data) => {
         if (data.settings) {
           setSettings((prev) => ({ ...prev, ...data.settings }));
+          if (data.settings.GLOBAL_MAINTENANCE_FREEZE) {
+            try {
+              const parsed = JSON.parse(data.settings.GLOBAL_MAINTENANCE_FREEZE);
+              setMaintenanceConfig((prev) => ({ ...prev, ...parsed }));
+            } catch {}
+          }
         }
         if (data.agentConfig) {
           setAgentConfig({
@@ -94,6 +108,7 @@ export default function SystemSettingsTab({
             body: JSON.stringify({
               settings: {
                 ...settings,
+                GLOBAL_MAINTENANCE_FREEZE: JSON.stringify(maintenanceConfig),
                 DEFAULT_AGENT_MOQ: String(agentConfig.minimumRestockBox),
                 DEFAULT_AGENT_DISCOUNT: String(agentConfig.defaultDiscountValue),
               },
@@ -393,6 +408,113 @@ export default function SystemSettingsTab({
             <div className="font-bold pt-1">✓ Batas Kedalaman Level Maksimal: 10 Level</div>
             <div className="text-[11px] text-emerald-800">
               Mencegah overpaying komisi sistemik dan menjaga kesehatan keuangan jangka panjang korporasi.
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Kunci Darurat & Pemeliharaan Sistem (Global Freeze Mode) */}
+        <div className="p-5 rounded-xl border border-rose-200 bg-rose-50/30 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <div>
+                <h4 className="font-serif font-bold text-sm text-rose-950">
+                  Kunci Darurat &amp; Pemeliharaan Sistem (Global Freeze Mode)
+                </h4>
+                <p className="text-[11px] text-rose-700">
+                  Digunakan oleh kantor pusat saat audit keuangan, pemeliharaan database, atau investigasi darurat.
+                </p>
+              </div>
+            </div>
+            {(maintenanceConfig.freezeWithdrawals || maintenanceConfig.freezePurchases || maintenanceConfig.freezeDeposits) && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-600 text-white animate-pulse">
+                FREEZE AKTIF
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="flex items-start gap-2.5 p-3 rounded-lg border border-rose-200/80 bg-white cursor-pointer hover:bg-rose-50/50 transition">
+                <input
+                  type="checkbox"
+                  checked={maintenanceConfig.freezeWithdrawals}
+                  onChange={(e) =>
+                    setMaintenanceConfig((prev) => ({
+                      ...prev,
+                      freezeWithdrawals: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Kunci Penarikan Dana (WD)</span>
+                  <span className="text-[10px] text-slate-500 leading-tight block">
+                    Mitra dicegah mengajukan pencairan saldo komisi.
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-lg border border-rose-200/80 bg-white cursor-pointer hover:bg-rose-50/50 transition">
+                <input
+                  type="checkbox"
+                  checked={maintenanceConfig.freezePurchases}
+                  onChange={(e) =>
+                    setMaintenanceConfig((prev) => ({
+                      ...prev,
+                      freezePurchases: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Kunci Belanja / Checkout</span>
+                  <span className="text-[10px] text-slate-500 leading-tight block">
+                    Mitra dicegah membuat pesanan belanja produk baru.
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-lg border border-rose-200/80 bg-white cursor-pointer hover:bg-rose-50/50 transition">
+                <input
+                  type="checkbox"
+                  checked={maintenanceConfig.freezeDeposits}
+                  onChange={(e) =>
+                    setMaintenanceConfig((prev) => ({
+                      ...prev,
+                      freezeDeposits: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">Kunci Topup Saldo</span>
+                  <span className="text-[10px] text-slate-500 leading-tight block">
+                    Mitra dan agen dicegah mengisi deposit saldo dompet.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Pesan Pemeliharaan untuk Pengguna (Ditampilkan pada Banner Mitra)
+              </label>
+              <input
+                type="text"
+                value={maintenanceConfig.message}
+                onChange={(e) =>
+                  setMaintenanceConfig((prev) => ({
+                    ...prev,
+                    message: e.target.value,
+                  }))
+                }
+                placeholder="Contoh: Sistem sedang dalam audit & pemeliharaan berkala..."
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-rose-500 font-sans"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                Jika salah satu kunci di atas aktif, banner peringatan ini otomatis muncul di bagian atas seluruh halaman mitra.
+              </span>
             </div>
           </div>
         </div>

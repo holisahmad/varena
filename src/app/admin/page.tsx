@@ -287,7 +287,7 @@ export default function AdminPage() {
   const [membersTotalPages, setMembersTotalPages] = useState(1);
   const [membersTotal, setMembersTotal] = useState(0);
   const [membersSearch, setMembersSearch] = useState('');
-  const [membersFilter, setMembersFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'AGENT'>('ALL');
+  const [membersFilter, setMembersFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'AGENT' | 'SUSPENDED'>('ALL');
   // Impersonation modal state
   const [impersonateTarget, setImpersonateTarget] = useState<any>(null);
   const [impersonateReason, setImpersonateReason] = useState('');
@@ -299,6 +299,11 @@ export default function AdminPage() {
   const [resetPwLoading, setResetPwLoading] = useState(false);
   const [resetPwResult, setResetPwResult] = useState<any>(null);
   const [resetPwAutoGen, setResetPwAutoGen] = useState(true);
+  // Member status modal state
+  const [statusModalTarget, setStatusModalTarget] = useState<any>(null);
+  const [statusModalAction, setStatusModalAction] = useState<'ACTIVATE_MEMBER' | 'SUSPEND_WITHDRAWAL' | 'SUSPEND_LOGIN' | 'UNSUSPEND'>('ACTIVATE_MEMBER');
+  const [statusModalReason, setStatusModalReason] = useState('');
+  const [statusModalLoading, setStatusModalLoading] = useState(false);
 
   // WhatsApp Outbox State
   const [waOutboxMessages, setWaOutboxMessages] = useState<any[]>([]);
@@ -1408,6 +1413,36 @@ export default function AdminPage() {
       showToast(err.message || 'Gagal reset password.', 'error');
     } finally {
       setResetPwLoading(false);
+    }
+  };
+
+  const handleUpdateMemberStatus = async () => {
+    if (!statusModalTarget) return;
+    setStatusModalLoading(true);
+    try {
+      const headers = getAdminHeaders();
+      const res = await fetch('/api/v1/admin/members', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          memberId: statusModalTarget.id,
+          action: statusModalAction,
+          reason: statusModalReason,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        setStatusModalTarget(null);
+        setStatusModalReason('');
+        loadMembersList(membersPage, membersSearch, membersFilter);
+      } else {
+        showToast(data.error || 'Gagal memperbarui status mitra.', 'error');
+      }
+    } catch {
+      showToast('Gagal memproses perubahan status mitra.', 'error');
+    } finally {
+      setStatusModalLoading(false);
     }
   };
 
@@ -3782,7 +3817,7 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(['ALL', 'ACTIVE', 'INACTIVE', 'AGENT'] as const).map((f) => (
+                  {(['ALL', 'ACTIVE', 'INACTIVE', 'AGENT', 'SUSPENDED'] as const).map((f) => (
                     <button
                       key={f}
                       onClick={() => { setMembersFilter(f); loadMembersList(1, membersSearch, f); }}
@@ -3792,7 +3827,15 @@ export default function AdminPage() {
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      {f === 'ALL' ? 'Semua' : f === 'ACTIVE' ? 'Aktif' : f === 'INACTIVE' ? 'Belum Aktif' : 'Agen'}
+                      {f === 'ALL'
+                        ? 'Semua'
+                        : f === 'ACTIVE'
+                        ? 'Aktif'
+                        : f === 'INACTIVE'
+                        ? 'Belum Aktif'
+                        : f === 'AGENT'
+                        ? 'Agen'
+                        : 'Ditangguhkan'}
                     </button>
                   ))}
                 </div>
@@ -3848,13 +3891,31 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-1">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  member.isActive
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {member.isActive ? 'Aktif' : 'Belum Aktif'}
-                                </span>
+                                {(!member.memberStatus || member.memberStatus === 'ACTIVE') && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                                    Aktif
+                                  </span>
+                                )}
+                                {member.memberStatus === 'PENDING' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                                    Belum Aktif
+                                  </span>
+                                )}
+                                {member.memberStatus === 'SUSPENDED_WITHDRAWAL' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                                    Suspend WD
+                                  </span>
+                                )}
+                                {(member.memberStatus === 'SUSPENDED_LOGIN' || member.memberStatus === 'SUSPENDED') && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                    Diblokir Login
+                                  </span>
+                                )}
+                                {member.memberStatus === 'TERMINATED' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">
+                                    Terminated
+                                  </span>
+                                )}
                                 {member.isAgent && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
                                     Agen
@@ -3869,6 +3930,24 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setStatusModalTarget(member);
+                                    setStatusModalReason('');
+                                    if (member.memberStatus === 'PENDING') {
+                                      setStatusModalAction('ACTIVATE_MEMBER');
+                                    } else if (member.memberStatus?.startsWith('SUSPEND')) {
+                                      setStatusModalAction('UNSUSPEND');
+                                    } else {
+                                      setStatusModalAction('SUSPEND_WITHDRAWAL');
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-medium hover:bg-slate-800 transition-colors"
+                                  title="Kelola Status &amp; Suspend Akun"
+                                >
+                                  <ShieldAlert className="w-3.5 h-3.5" />
+                                  Status
+                                </button>
                                 <button
                                   onClick={() => { setImpersonateTarget(member); setImpersonateReason(''); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition-colors"
@@ -4142,6 +4221,197 @@ export default function AdminPage() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ===== STATUS & SUSPEND MANAGEMENT MODAL ===== */}
+              {statusModalTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-amber-400">
+                          <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-base">Kelola Status &amp; Suspend Mitra</h3>
+                          <p className="text-xs text-slate-400">Otoritas penegakan tata tertib &amp; keamanan akun</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setStatusModalTarget(null); setStatusModalReason(''); }}
+                        className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                      {/* Info Target Mitra */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-slate-500 font-medium">Mitra Terpilih</p>
+                          <p className="font-semibold text-slate-800 text-sm">
+                            {statusModalTarget.displayName || statusModalTarget.legalName}
+                          </p>
+                          <p className="text-xs text-slate-500 font-mono">
+                            {statusModalTarget.memberCode} · {statusModalTarget.phone || '-'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] text-slate-400">Status Saat Ini</p>
+                          <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-slate-200 text-slate-800">
+                            {statusModalTarget.memberStatus || 'PENDING'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pilihan Tindakan Status */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Pilih Tindakan Status Akun <span className="text-red-500">*</span>
+                        </label>
+                        <div className="space-y-2">
+                          {statusModalTarget.memberStatus === 'PENDING' && (
+                            <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                              statusModalAction === 'ACTIVATE_MEMBER'
+                                ? 'border-emerald-500 bg-emerald-50/50'
+                                : 'border-slate-200 hover:bg-slate-50'
+                            }`}>
+                              <input
+                                type="radio"
+                                name="member_action"
+                                value="ACTIVATE_MEMBER"
+                                checked={statusModalAction === 'ACTIVATE_MEMBER'}
+                                onChange={() => setStatusModalAction('ACTIVATE_MEMBER')}
+                                className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-emerald-900 block">
+                                  Aktifkan Akun (Manual)
+                                </span>
+                                <span className="text-[11px] text-emerald-700 block">
+                                  Mitra diaktifkan langsung tanpa harus menunggu transaksi belanja Paket Perdana pertama lunas.
+                                </span>
+                              </div>
+                            </label>
+                          )}
+
+                          <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                            statusModalAction === 'SUSPEND_WITHDRAWAL'
+                              ? 'border-orange-500 bg-orange-50/50'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="member_action"
+                              value="SUSPEND_WITHDRAWAL"
+                              checked={statusModalAction === 'SUSPEND_WITHDRAWAL'}
+                              onChange={() => setStatusModalAction('SUSPEND_WITHDRAWAL')}
+                              className="mt-0.5 text-orange-600 focus:ring-orange-500"
+                            />
+                            <div>
+                              <span className="text-xs font-bold text-orange-950 block">
+                                Suspend Penarikan Dana Saja (Kunci WD)
+                              </span>
+                              <span className="text-[11px] text-orange-700 block">
+                                Mitra tetap bisa login, melihat pohon jaringan, dan belanja, namun dilarang melakukan pencairan komisi (WD) &amp; deposit.
+                              </span>
+                            </div>
+                          </label>
+
+                          <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                            statusModalAction === 'SUSPEND_LOGIN'
+                              ? 'border-rose-500 bg-rose-50/50'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="member_action"
+                              value="SUSPEND_LOGIN"
+                              checked={statusModalAction === 'SUSPEND_LOGIN'}
+                              onChange={() => setStatusModalAction('SUSPEND_LOGIN')}
+                              className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                            />
+                            <div>
+                              <span className="text-xs font-bold text-rose-950 block">
+                                Suspend Total (Blokir Login Akun)
+                              </span>
+                              <span className="text-[11px] text-rose-700 block">
+                                Mitra diblokir login ke portal. Sesi aktif akan otomatis tertolak dan muncul pesan penangguhan oleh admin.
+                              </span>
+                            </div>
+                          </label>
+
+                          <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                            statusModalAction === 'UNSUSPEND'
+                              ? 'border-blue-500 bg-blue-50/50'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="member_action"
+                              value="UNSUSPEND"
+                              checked={statusModalAction === 'UNSUSPEND'}
+                              onChange={() => setStatusModalAction('UNSUSPEND')}
+                              className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div>
+                              <span className="text-xs font-bold text-blue-950 block">
+                                Pulihkan Akun Normal (ACTIVE)
+                              </span>
+                              <span className="text-[11px] text-blue-700 block">
+                                Menghapus segala status penangguhan (suspend) dan mengembalikan hak akun mitra secara penuh.
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Catatan / Alasan Admin */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                          Alasan / Catatan Admin (Tercatat di Audit Log)
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={statusModalReason}
+                          onChange={(e) => setStatusModalReason(e.target.value)}
+                          placeholder="Contoh: Menunggu verifikasi rekening bank mitra / Investigasi fraud..."
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 resize-none"
+                        />
+                      </div>
+
+                      {/* Tombol Aksi */}
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => { setStatusModalTarget(null); setStatusModalReason(''); }}
+                          className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-200 transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="button"
+                          disabled={statusModalLoading}
+                          onClick={handleUpdateMemberStatus}
+                          className="flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          {statusModalLoading ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Menyimpan...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Simpan Status</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

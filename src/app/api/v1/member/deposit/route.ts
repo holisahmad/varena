@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getMemberFromJWT } from '@/lib/auth';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import { sweepExpiredDeposits } from '@/lib/deposit';
+import { getMaintenanceConfig } from '@/lib/maintenance';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,11 +76,37 @@ export async function POST(req: Request) {
       );
     }
 
+    // 0. Maintenance check
+    const maintenance = await getMaintenanceConfig();
+    if (maintenance.isActive && maintenance.freezeDeposits) {
+      return NextResponse.json(
+        {
+          error:
+            maintenance.message ||
+            'Pengajuan top up saldo deposit sedang dibekukan sementara untuk pemeliharaan sistem.',
+        },
+        { status: 503 }
+      );
+    }
+
     await sweepExpiredDeposits();
 
     const member = await prisma.member.findUnique({ where: { memberCode } });
     if (!member) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
+    }
+
+    // Cek penangguhan akun
+    if (
+      member.memberStatus === 'SUSPENDED_WITHDRAWAL' ||
+      member.memberStatus === 'SUSPENDED' ||
+      member.memberStatus === 'SUSPENDED_LOGIN' ||
+      member.memberStatus === 'TERMINATED'
+    ) {
+      return NextResponse.json(
+        { error: 'Akun Anda sedang dalam status penangguhan oleh kantor pusat. Pengajuan deposit dinonaktifkan.' },
+        { status: 403 }
+      );
     }
 
     const uniqueCode = generateUniqueCode();

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requestPayout } from '@/lib/payout';
 import { checkRateLimit } from '@/lib/security';
+import { getMaintenanceConfig } from '@/lib/maintenance';
 import { calculatePayoutFees, PAYOUT_CONFIG } from '@/config/payout';
 
 export async function GET(req: Request) {
@@ -62,6 +63,50 @@ export async function POST(req: Request) {
 
     if (!member) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
+    }
+
+    // 2a. Global Maintenance / Freeze Check
+    const maintenance = await getMaintenanceConfig();
+    if (maintenance.isActive && maintenance.freezeWithdrawals) {
+      return NextResponse.json(
+        {
+          error:
+            maintenance.message ||
+            'Layanan penarikan dana (WD) sedang dibekukan sementara untuk pemeliharaan sistem / audit keuangan berkala.',
+        },
+        { status: 503 }
+      );
+    }
+
+    // 2b. Validasi Status Akun Mitra
+    if (member.memberStatus !== 'ACTIVE') {
+      if (
+        member.memberStatus === 'SUSPENDED_WITHDRAWAL' ||
+        member.memberStatus === 'SUSPENDED'
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Fasilitas penarikan dana (WD) untuk akun Anda ditangguhkan sementara oleh kantor pusat. Silakan hubungi admin VARENA.',
+          },
+          { status: 403 }
+        );
+      }
+      if (member.memberStatus === 'PENDING') {
+        return NextResponse.json(
+          {
+            error:
+              'Akun Anda belum aktif. Selesaikan pembelian Paket Perdana terlebih dahulu untuk membuka fasilitas penarikan dana.',
+          },
+          { status: 403 }
+        );
+      }
+      return NextResponse.json(
+        {
+          error: `Status akun Anda (${member.memberStatus}) tidak diizinkan melakukan penarikan dana.`,
+        },
+        { status: 403 }
+      );
     }
 
     // Security Check: Enforce Bound Bank Account
