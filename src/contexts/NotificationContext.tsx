@@ -137,14 +137,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [badge, setBadge] = useState<BadgeData>(null);
   const [readIds, setReadIds] = useState<string[]>([]);
   const pathname = usePathname();
+  const lastFetchRef = useRef<number>(0);
+
+  // Konfigurasi Polling Latar Belakang (Free-Tier Safe Mode)
+  // Default FALSE: Server & Database PostgreSQL tidak dibebani polling otomatis di background.
+  // Notifikasi berjalan On-Demand: saat buka halaman, saat klik lonceng, dan saat transaksi.
+  const ENABLE_BACKGROUND_POLLING = process.env.NEXT_PUBLIC_ENABLE_NOTIFICATION_POLLING === 'true';
 
   // Load read IDs isolated by current user session
   useEffect(() => {
     setReadIds(getReadIds());
   }, [pathname]);
 
-  const fetchBadge = useCallback(async () => {
+  const fetchBadge = useCallback(async (force = false) => {
     if (typeof window === 'undefined') return;
+
+    // Client-side throttle 20 detik (kecuali dipaksa dengan force=true saat buka lonceng / login)
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 20000) {
+      return;
+    }
+
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
       setBadge({ role: 'guest', total: 0, items: [] });
@@ -168,6 +181,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     try {
+      lastFetchRef.current = now;
       const res = await fetch('/api/v1/notifications/badge', {
         headers: {
           'x-user-id': userId,
@@ -183,16 +197,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // ── Realtime Synchronization: 4s polling + focus + visibility + storage ──
+  // ── Realtime Synchronization: On-Demand + Focus + Visibility + Storage ──
   useEffect(() => {
     fetchBadge();
 
-    // 1. Efficient 90-second background polling (hanya saat tab aktif dan visible, sangat hemat kuota database free tier)
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && !document.hidden) {
-        fetchBadge();
-      }
-    }, 90000);
+    // 1. Background interval polling (hanya aktif jika ENABLE_BACKGROUND_POLLING = true via env)
+    let interval: NodeJS.Timeout | null = null;
+    if (ENABLE_BACKGROUND_POLLING) {
+      interval = setInterval(() => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          fetchBadge();
+        }
+      }, 90000);
+    }
 
     // 2. Instant fetch on tab focus / visibility
     const handleVisibility = () => {
@@ -203,7 +220,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // 3. Instant fetch when user login/logout happens
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'varena_user') {
-        fetchBadge();
+        fetchBadge(true);
         setReadIds(getReadIds());
       }
     };
@@ -213,7 +230,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     window.addEventListener('storage', handleStorage);
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('storage', handleStorage);
@@ -383,7 +400,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         ackAdminMisc,
         markItemAsRead,
         markAllAsRead,
-        refresh: fetchBadge,
+        refresh: () => fetchBadge(true),
       }}
     >
       {children}

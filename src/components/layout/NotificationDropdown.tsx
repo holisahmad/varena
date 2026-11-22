@@ -37,7 +37,15 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     markAllAsRead,
     markItemAsRead,
     isItemRead,
+    refresh,
   } = useNotifications();
+
+  // On-Demand Realtime: Refresh notifikasi seketika saat dropdown lonceng dibuka oleh user
+  useEffect(() => {
+    if (isOpen) {
+      refresh();
+    }
+  }, [isOpen, refresh]);
 
   // Close on Escape or click outside
   useEffect(() => {
