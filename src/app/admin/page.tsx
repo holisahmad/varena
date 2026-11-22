@@ -557,31 +557,45 @@ export default function AdminPage() {
   };
 
   // Bersihkan log audit usang (>60 hari) untuk menghemat kuota database free tier
-  const handlePruneAuditLogs = async () => {
-    if (!window.confirm('Bersihkan log audit umum yang berusia lebih dari 60 hari dari database? Log transaksi finansial (payout/deposit) tetap aman.')) return;
-    setPruningLogs(true);
-    const authHeaders = getAdminHeaders();
-    try {
-      const res = await fetch('/api/v1/admin/audit-logs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-        body: JSON.stringify({ retentionDays: 60 }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(data.message || 'Pembersihan log berhasil.', 'success');
-        loadFilteredLogs(logDays, logEntityFilter, 1);
-      } else {
-        showToast(data.error || 'Gagal membersihkan log audit.', 'error');
-      }
-    } catch {
-      showToast('Terjadi kesalahan jaringan.', 'error');
-    } finally {
-      setPruningLogs(false);
-    }
+  const handlePruneAuditLogs = () => {
+    showConfirm({
+      title: 'Pembersihan Log Audit',
+      message: 'Bersihkan log audit umum yang berusia lebih dari 60 hari dari database?',
+      detail: (
+        <span className="text-xs text-stone-600">
+          Tindakan ini untuk menghemat kuota penyimpanan database. Seluruh log transaksi finansial (payout/deposit) akan <strong>tetap aman dipertahankan</strong>.
+        </span>
+      ),
+      variant: 'amber',
+      icon: 'warning',
+      confirmText: 'Bersihkan Log',
+      cancelText: 'Batal',
+      onConfirm: async () => {
+        setPruningLogs(true);
+        const authHeaders = getAdminHeaders();
+        try {
+          const res = await fetch('/api/v1/admin/audit-logs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeaders,
+            },
+            body: JSON.stringify({ retentionDays: 60 }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(data.message || 'Pembersihan log berhasil.', 'success');
+            loadFilteredLogs(logDays, logEntityFilter, 1);
+          } else {
+            showToast(data.error || 'Gagal membersihkan log audit.', 'error');
+          }
+        } catch {
+          showToast('Terjadi kesalahan jaringan.', 'error');
+        } finally {
+          setPruningLogs(false);
+        }
+      },
+    });
   };
 
   // Approve Payout Action

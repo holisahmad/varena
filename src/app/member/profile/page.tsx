@@ -17,6 +17,11 @@ import {
   Sparkles,
   Phone,
   Mail,
+  Clock,
+  ShieldAlert,
+  ShieldOff,
+  Ban,
+  ShoppingBag,
 } from 'lucide-react';
 
 const INDONESIA_BANKS = [
@@ -68,6 +73,9 @@ export default function MemberProfilePage() {
   // Progress
   const [completionPercent, setCompletionPercent] = useState(50);
 
+  // Status state
+  const [memberStatus, setMemberStatus] = useState('ACTIVE');
+
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
@@ -96,6 +104,7 @@ export default function MemberProfilePage() {
         setLegalName(m.legalName || '');
         setNik(m.nik || '');
         setPhone(m.phone || '');
+        setMemberStatus(m.memberStatus || 'PENDING');
 
         setBankName(m.bankName || 'BCA');
         setBankAccountNumber(m.bankAccountNumber || '');
@@ -237,6 +246,36 @@ export default function MemberProfilePage() {
                 <span className="font-mono text-xs font-bold bg-varena-gold/15 text-varena-espresso border border-varena-gold/40 px-2.5 py-0.5 rounded-full">
                   {memberCode}
                 </span>
+                {memberStatus === 'ACTIVE' && (
+                  <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Mitra Aktif</span>
+                  </span>
+                )}
+                {memberStatus === 'PENDING' && (
+                  <span className="text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-600" />
+                    <span>Menunggu Aktivasi</span>
+                  </span>
+                )}
+                {memberStatus === 'SUSPENDED_WITHDRAWAL' && (
+                  <span className="text-[11px] font-semibold bg-orange-50 text-orange-800 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-orange-600" />
+                    <span>WD Dinonaktifkan</span>
+                  </span>
+                )}
+                {(memberStatus === 'SUSPENDED_LOGIN' || memberStatus === 'SUSPENDED') && (
+                  <span className="text-[11px] font-semibold bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <ShieldOff className="w-3 h-3 text-rose-600" />
+                    <span>Akun Ditangguhkan</span>
+                  </span>
+                )}
+                {memberStatus === 'TERMINATED' && (
+                  <span className="text-[11px] font-semibold bg-stone-100 text-stone-700 border border-stone-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Ban className="w-3 h-3 text-stone-500" />
+                    <span>Nonaktif</span>
+                  </span>
+                )}
                 <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-600" />
                   <span>KYC Terverifikasi</span>
@@ -265,6 +304,40 @@ export default function MemberProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Account Status Notices */}
+      {memberStatus === 'PENDING' && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <div className="font-bold">Status Kemitraan: Menunggu Aktivasi</div>
+              <div className="text-[11px] text-amber-800 mt-0.5">
+                Kemitraan Anda akan aktif otomatis setelah pembelian Paket Perdana lunas.
+              </div>
+            </div>
+          </div>
+          <Link
+            href={`/checkout?ref=${memberCode}&type=FIRST_PACK`}
+            className="shrink-0 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+          >
+            <ShoppingBag className="w-3.5 h-3.5" />
+            <span>Belanja Sekarang</span>
+          </Link>
+        </div>
+      )}
+
+      {memberStatus === 'SUSPENDED_WITHDRAWAL' && (
+        <div className="mb-6 p-4 rounded-xl bg-orange-50 border border-orange-300 text-xs text-orange-900 flex items-start gap-3 shadow-xs">
+          <Lock className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold">Fasilitas Tarik Dana Dinonaktifkan Sementara</div>
+            <div className="text-[11px] text-orange-800 mt-0.5">
+              Anda tetap dapat berbelanja dan menerima komisi. Penarikan dana ditangguhkan sementara oleh sistem. Hubungi admin VARENA untuk bantuan.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       {saveSuccess && (

@@ -42,6 +42,11 @@ import {
   FileText,
   BadgeCheck,
   Store,
+  Lock,
+  ShieldOff,
+  ShieldAlert,
+  ShieldCheck,
+  Ban,
 } from 'lucide-react';
 import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -429,8 +434,21 @@ export default function MemberDashboardPage() {
             />
           </div>
           <div>
-            <div className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-gold-light border border-varena-gold/30 mb-1">
-              Portal Kemitraan Resmi
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="inline-block px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-semibold bg-varena-gold/20 text-varena-gold-light border border-varena-gold/30">
+                Portal Kemitraan Resmi
+              </span>
+              {(memberProfile?.memberStatus === 'ACTIVE' || (!memberProfile?.memberStatus && user?.memberStatus === 'ACTIVE')) ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Akun Aktif</span>
+                </span>
+              ) : (memberProfile?.memberStatus === 'PENDING' || (!memberProfile?.memberStatus && user?.memberStatus === 'PENDING')) ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <Clock className="w-2.5 h-2.5" />
+                  <span>Menunggu Aktivasi</span>
+                </span>
+              ) : null}
             </div>
             <h1 className="font-serif text-xl sm:text-3xl font-bold text-varena-ivory-light">
               Halo, {user.displayName}
@@ -487,6 +505,94 @@ export default function MemberDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Member Account Status Banner ─────────────────────────── */}
+      {(() => {
+        const status = memberProfile?.memberStatus || user?.memberStatus;
+        if (!status || status === 'ACTIVE') return null;
+
+        if (status === 'PENDING') {
+          return (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-900">Akun Anda Belum Aktif</p>
+                <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                  Kemitraan resmi Anda aktif otomatis setelah pembelian <strong>Paket Perdana</strong> lunas.
+                  Jika sudah ada kebijakan khusus dari admin, Anda akan menerima notifikasi aktivasi manual.
+                </p>
+              </div>
+              <Link
+                href={`/checkout?ref=${user?.memberCode || ''}&type=FIRST_PACK`}
+                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs transition shadow-sm whitespace-nowrap"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Belanja Sekarang</span>
+              </Link>
+            </div>
+          );
+        }
+
+        if (status === 'SUSPENDED_WITHDRAWAL') {
+          return (
+            <div className="bg-orange-50 border border-orange-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center shrink-0 border border-orange-200">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-orange-900">Fasilitas Penarikan Dana Dinonaktifkan</p>
+                <p className="text-xs text-orange-800 mt-0.5 leading-relaxed">
+                  Akun Anda masih dapat berbelanja dan menerima komisi, namun <strong>penarikan saldo & deposit</strong> sementara dinonaktifkan oleh sistem.
+                  Hubungi admin VARENA untuk informasi lebih lanjut.
+                </p>
+              </div>
+              <Link
+                href="/member/profile"
+                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs transition shadow-sm whitespace-nowrap"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>Lihat Profil</span>
+              </Link>
+            </div>
+          );
+        }
+
+        if (status === 'SUSPENDED_LOGIN' || status === 'SUSPENDED') {
+          return (
+            <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 sm:p-5 flex items-start gap-4 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
+                <ShieldOff className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-rose-900">Akun Ditangguhkan</p>
+                <p className="text-xs text-rose-800 mt-0.5 leading-relaxed">
+                  Akun kemitraan Anda sedang dalam status penangguhan. Hubungi admin VARENA segera untuk klarifikasi dan pemulihan akun.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        if (status === 'TERMINATED') {
+          return (
+            <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4 sm:p-5 flex items-start gap-4 shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 border border-slate-300">
+                <Ban className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800">Kemitraan Dinonaktifkan</p>
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                  Status kemitraan Anda telah dinonaktifkan secara permanen. Hubungi admin VARENA jika Anda merasa ini adalah kesalahan.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* Official Regional Agent Banner */}
       {(memberProfile?.isAgent || user?.isAgent) ? (

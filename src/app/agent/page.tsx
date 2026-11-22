@@ -87,6 +87,7 @@ export default function AgentPortalPage() {
   const [topupConfirmed, setTopupConfirmed] = useState(false);
   const [topupConfirming, setTopupConfirming] = useState(false);
   const [topupCancelling, setTopupCancelling] = useState(false);
+  const [showCancelTopupConfirmModal, setShowCancelTopupConfirmModal] = useState(false);
   const [topupTimeLeft, setTopupTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; expired: boolean } | null>(null);
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
@@ -419,7 +420,6 @@ export default function AgentPortalPage() {
 
   const handleCancelTopup = async () => {
     if (!topupResult?.transactionId || !user) return;
-    if (!window.confirm('Batalkan pengajuan top up kas agen ini?')) return;
     setTopupCancelling(true);
     setMessage(null);
     try {
@@ -433,6 +433,7 @@ export default function AgentPortalPage() {
       });
       const data = await res.json();
       if (data.success) {
+        setShowCancelTopupConfirmModal(false);
         setTopupModalOpen(false);
         setTopupStep(1);
         setTopupResult(null);
@@ -1738,7 +1739,7 @@ export default function AgentPortalPage() {
                           <button
                             type="button"
                             disabled={topupCancelling || topupConfirming}
-                            onClick={handleCancelTopup}
+                            onClick={() => setShowCancelTopupConfirmModal(true)}
                             className="w-full py-2 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition disabled:opacity-50"
                           >
                             {topupCancelling ? 'Membatalkan...' : '✕ Batalkan Pengajuan Ini'}
@@ -1769,6 +1770,44 @@ export default function AgentPortalPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Pembatalan Top Up Kas Agen */}
+      {showCancelTopupConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-stone-200">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-bold text-stone-900 text-sm">Batalkan Pengajuan Top Up?</h4>
+                <p className="text-xs text-stone-500">Nomor tiket ini akan ditutup secara permanen.</p>
+              </div>
+            </div>
+            <p className="text-xs text-stone-600 leading-relaxed bg-stone-50 p-3 rounded-xl border border-stone-100">
+              Apakah Anda yakin ingin membatalkan pengajuan top up kas agen ini? Kode unik transfer tidak akan berlaku lagi.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={topupCancelling}
+                onClick={() => setShowCancelTopupConfirmModal(false)}
+                className="flex-1 py-2 px-3 rounded-xl border border-stone-200 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={topupCancelling}
+                onClick={handleCancelTopup}
+                className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-1.5"
+              >
+                {topupCancelling ? 'Membatalkan...' : 'Ya, Batalkan'}
+              </button>
             </div>
           </div>
         </div>
