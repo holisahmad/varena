@@ -214,6 +214,12 @@ function CheckoutContent() {
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReasonOption, setCancelReasonOption] = useState('Ingin mengubah varian produk / jumlah pesanan');
+  const [cancelReasonCustom, setCancelReasonCustom] = useState('');
+  const [cancelErrorMsg, setCancelErrorMsg] = useState('');
+  const [isFreezePurchasesActive, setIsFreezePurchasesActive] = useState(false);
+  const [freezePurchasesMessage, setFreezePurchasesMessage] = useState('');
 
   // Metode pembayaran & saldo deposit
   const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'DEPOSIT'>('TRANSFER');
@@ -333,33 +339,35 @@ function CheckoutContent() {
     }
   };
 
-  // Handler pembatalan pesanan secara manual oleh pembeli sebelum pembayaran
-  const handleCancelOrderManual = async () => {
+  // Handler pembatalan pesanan secara manual oleh pembeli sebelum pembayaran (Custom Modal Flow)
+  const handleConfirmCancelOrder = async () => {
     if (!orderResult?.orderNumber) return;
-    const confirmed = window.confirm(
-      `Apakah Anda yakin ingin membatalkan pesanan ${orderResult.orderNumber}? Stok produk yang dipesan akan otomatis dikembalikan ke sistem.`
-    );
-    if (!confirmed) return;
+
+    const finalReason =
+      cancelReasonOption === 'Lainnya' && cancelReasonCustom.trim()
+        ? `Dibatalkan oleh pembeli: ${cancelReasonCustom.trim()}`
+        : `Dibatalkan oleh pembeli: ${cancelReasonOption}`;
 
     setCancellingOrder(true);
+    setCancelErrorMsg('');
     try {
       const res = await fetch('/api/v1/orders/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderNumber: orderResult.orderNumber,
-          reason: 'Dibatalkan oleh pembeli sebelum transfer pembayaran.',
+          reason: finalReason,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || 'Gagal membatalkan pesanan.');
 
       setOrderResult((prev: any) =>
         prev ? { ...prev, orderStatus: 'CANCELLED' } : null
       );
-      alert('Pesanan berhasil dibatalkan. Stok barang telah dikembalikan.');
+      setShowCancelModal(false);
     } catch (err: any) {
-      alert(err.message || 'Gagal membatalkan pesanan.');
+      setCancelErrorMsg(err.message || 'Gagal membatalkan pesanan.');
     } finally {
       setCancellingOrder(false);
     }
@@ -1707,20 +1715,20 @@ function CheckoutContent() {
                           setConfirmTransferAmount(String(orderResult.total));
                           setShowConfirmModal(true);
                         }}
-                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99]"
+                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] ring-2 ring-emerald-500/20"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        <span>✓ Saya Sudah Bayar (Konfirmasi Pembayaran)</span>
+                        <CheckCircle className="w-5 h-5" />
+                        <span>✓ Saya Sudah Transfer — Konfirmasi Pembayaran</span>
                       </button>
 
                       <button
                         type="button"
                         disabled={cancellingOrder}
-                        onClick={handleCancelOrderManual}
-                        className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        onClick={() => { setCancelErrorMsg(''); setShowCancelModal(true); }}
+                        className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 font-medium text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                       >
-                        <X className="w-3.5 h-3.5 text-rose-600" />
-                        <span>{cancellingOrder ? 'Membatalkan Pesanan...' : 'Batalkan Pesanan Ini'}</span>
+                        <X className="w-3.5 h-3.5" />
+                        <span>Batalkan Pesanan Ini</span>
                       </button>
                     </>
                   )}
@@ -2054,6 +2062,120 @@ function CheckoutContent() {
                 </>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: BATALKAN PESANAN ── */}
+      {showCancelModal && orderResult && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 bg-rose-50 border-b border-rose-100">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0">
+                <X className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-serif font-bold text-sm text-rose-950">Batalkan Pesanan</p>
+                <p className="text-[11px] text-rose-700 font-mono truncate">{orderResult.orderNumber}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancellingOrder}
+                className="text-rose-400 hover:text-rose-700 p-1 rounded-lg transition disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Warning */}
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-900 leading-relaxed">
+                  <span className="font-semibold block mb-0.5">Perhatian: Tindakan ini tidak dapat dibatalkan</span>
+                  Pesanan akan dibatalkan dan seluruh stok produk yang sudah dipesan akan dikembalikan otomatis ke inventaris sistem.
+                </p>
+              </div>
+
+              {/* Alasan Pembatalan */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Alasan Pembatalan <span className="text-rose-500">*</span>
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    'Ingin mengubah varian produk / jumlah pesanan',
+                    'Salah memasukkan data alamat pengiriman',
+                    'Kendala keuangan / belum siap transfer',
+                    'Menemukan harga yang lebih baik di tempat lain',
+                    'Alasan lainnya',
+                  ].map((reason) => (
+                    <label
+                      key={reason}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition text-xs ${
+                        cancelReasonOption === reason
+                          ? 'border-rose-400 bg-rose-50/60 text-rose-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="cancel_reason"
+                        value={reason}
+                        checked={cancelReasonOption === reason}
+                        onChange={() => setCancelReasonOption(reason)}
+                        className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                      />
+                      <span>{reason}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {cancelReasonOption === 'Alasan lainnya' && (
+                  <textarea
+                    rows={2}
+                    value={cancelReasonCustom}
+                    onChange={(e) => setCancelReasonCustom(e.target.value)}
+                    placeholder="Tuliskan alasan pembatalan Anda..."
+                    className="mt-2 w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
+                  />
+                )}
+              </div>
+
+              {/* Error */}
+              {cancelErrorMsg && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <span>{cancelErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={cancellingOrder}
+                  onClick={() => setShowCancelModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm font-medium transition disabled:opacity-50"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  disabled={cancellingOrder || (cancelReasonOption === 'Alasan lainnya' && !cancelReasonCustom.trim())}
+                  onClick={handleConfirmCancelOrder}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {cancellingOrder ? (
+                    <><RotateCcw className="w-3.5 h-3.5 animate-spin" /><span>Memproses...</span></>
+                  ) : (
+                    <><X className="w-3.5 h-3.5" /><span>Ya, Batalkan Pesanan</span></>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

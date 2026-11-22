@@ -17,6 +17,7 @@ import {
   ArrowRight,
   MessageCircle,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import { formatOrderStatus, getOrderStatusBadge } from '@/lib/formatters';
 
@@ -28,6 +29,8 @@ function TrackContent() {
   const [orders, setOrders] = useState<any[]>([]);
   const [copiedResi, setCopiedResi] = useState<string | null>(null);
   const [cancellingOrderNumber, setCancellingOrderNumber] = useState<string | null>(null);
+  const [cancelModalTarget, setCancelModalTarget] = useState<string | null>(null);
+  const [cancelErrorMsg, setCancelErrorMsg] = useState('');
 
   useEffect(() => {
     const initialQuery = searchParams.get('orderNumber') || searchParams.get('q');
@@ -57,29 +60,33 @@ function TrackContent() {
     }
   };
 
-  const handleCancelOrder = async (orderNumber: string) => {
-    const confirmed = window.confirm(
-      `Apakah Anda yakin ingin membatalkan pesanan ${orderNumber}? Stok produk akan otomatis dikembalikan ke sistem inventaris.`
-    );
-    if (!confirmed) return;
+  const [cancelReasonOption, setCancelReasonOption] = useState('Ingin mengubah varian produk / jumlah pesanan');
+  const [cancelReasonCustom, setCancelReasonCustom] = useState('');
 
+  const handleCancelOrder = async (orderNumber: string) => {
+    setCancelErrorMsg('');
     setCancellingOrderNumber(orderNumber);
+    const finalReason =
+      cancelReasonOption === 'Alasan lainnya' && cancelReasonCustom.trim()
+        ? `Dibatalkan oleh pembeli: ${cancelReasonCustom.trim()}`
+        : `Dibatalkan oleh pembeli: ${cancelReasonOption}`;
     try {
       const res = await fetch('/api/v1/orders/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderNumber,
-          reason: 'Dibatalkan oleh pembeli via halaman lacak pesanan.',
+          reason: finalReason,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
-      alert('Pesanan berhasil dibatalkan. Stok barang telah dikembalikan.');
+      setCancelModalTarget(null);
+      setCancelReasonOption('Ingin mengubah varian produk / jumlah pesanan');
+      setCancelReasonCustom('');
       performSearch(query);
     } catch (err: any) {
-      alert(err.message || 'Gagal membatalkan pesanan.');
+      setCancelErrorMsg(err.message || 'Gagal membatalkan pesanan.');
     } finally {
       setCancellingOrderNumber(null);
     }
@@ -248,11 +255,11 @@ function TrackContent() {
                         <button
                           type="button"
                           disabled={cancellingOrderNumber === o.orderNumber}
-                          onClick={() => handleCancelOrder(o.orderNumber)}
+                          onClick={() => { setCancelErrorMsg(''); setCancelModalTarget(o.orderNumber); }}
                           className="px-3 py-1.5 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold transition inline-flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
                         >
                           <X className="w-3.5 h-3.5 text-rose-600" />
-                          <span>{cancellingOrderNumber === o.orderNumber ? 'Membatalkan...' : 'Batalkan Pesanan Ini'}</span>
+                          <span>{cancellingOrderNumber === o.orderNumber ? 'Membatalkan...' : 'Batalkan Pesanan'}</span>
                         </button>
                       )}
                     </div>
@@ -431,6 +438,123 @@ function TrackContent() {
           <Link href="/register">Daftar Akun Baru →</Link>
         </div>
       </div>
+
+      {/* ── MODAL: BATALKAN PESANAN (Track) ── */}
+      {cancelModalTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 bg-rose-50 border-b border-rose-100">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0">
+                <X className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-serif font-bold text-sm text-rose-950">Batalkan Pesanan</p>
+                <p className="text-[11px] text-rose-700 font-mono truncate">{cancelModalTarget}</p>
+              </div>
+              <button
+                type="button"
+                disabled={cancellingOrderNumber === cancelModalTarget}
+                onClick={() => { setCancelModalTarget(null); setCancelErrorMsg(''); }}
+                className="text-rose-400 hover:text-rose-700 p-1 rounded-lg transition disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Warning */}
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-900 leading-relaxed">
+                  <span className="font-semibold block mb-0.5">Perhatian: Tindakan ini tidak dapat dibatalkan</span>
+                  Pesanan akan dibatalkan dan seluruh stok produk yang sudah dipesan akan dikembalikan otomatis ke inventaris sistem.
+                </p>
+              </div>
+
+              {/* Alasan Pembatalan */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Alasan Pembatalan <span className="text-rose-500">*</span>
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    'Ingin mengubah varian produk / jumlah pesanan',
+                    'Salah memasukkan data alamat pengiriman',
+                    'Kendala keuangan / belum siap transfer',
+                    'Menemukan harga yang lebih baik di tempat lain',
+                    'Alasan lainnya',
+                  ].map((reason) => (
+                    <label
+                      key={reason}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition text-xs ${
+                        cancelReasonOption === reason
+                          ? 'border-rose-400 bg-rose-50/60 text-rose-900'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="track_cancel_reason"
+                        value={reason}
+                        checked={cancelReasonOption === reason}
+                        onChange={() => setCancelReasonOption(reason)}
+                        className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                      />
+                      <span>{reason}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {cancelReasonOption === 'Alasan lainnya' && (
+                  <textarea
+                    rows={2}
+                    value={cancelReasonCustom}
+                    onChange={(e) => setCancelReasonCustom(e.target.value)}
+                    placeholder="Tuliskan alasan pembatalan Anda..."
+                    className="mt-2 w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-400 resize-none"
+                  />
+                )}
+              </div>
+
+              {/* Error */}
+              {cancelErrorMsg && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <span>{cancelErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={cancellingOrderNumber === cancelModalTarget}
+                  onClick={() => { setCancelModalTarget(null); setCancelErrorMsg(''); }}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm font-medium transition disabled:opacity-50"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    cancellingOrderNumber === cancelModalTarget ||
+                    (cancelReasonOption === 'Alasan lainnya' && !cancelReasonCustom.trim())
+                  }
+                  onClick={() => handleCancelOrder(cancelModalTarget)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {cancellingOrderNumber === cancelModalTarget ? (
+                    <><RotateCcw className="w-3.5 h-3.5 animate-spin" /><span>Memproses...</span></>
+                  ) : (
+                    <><X className="w-3.5 h-3.5" /><span>Ya, Batalkan Pesanan</span></>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
