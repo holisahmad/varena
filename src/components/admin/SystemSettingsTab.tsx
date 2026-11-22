@@ -31,6 +31,7 @@ export default function SystemSettingsTab({
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkApplying, setIsBulkApplying] = useState(false);
+  const [isUpdatingMaintenance, setIsUpdatingMaintenance] = useState(false);
 
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
@@ -58,19 +59,28 @@ export default function SystemSettingsTab({
 
   const loadSettings = () => {
     setLoading(true);
-    fetch('/api/v1/admin/settings', { headers: authHeaders })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.settings) {
+    Promise.all([
+      fetch('/api/v1/admin/settings', { headers: authHeaders }).then((res) => res.json()),
+      fetch('/api/v1/admin/maintenance', { headers: authHeaders }).then((res) => res.json()).catch(() => null),
+    ])
+      .then(([data, maintData]) => {
+        if (data && data.settings) {
           setSettings((prev) => ({ ...prev, ...data.settings }));
-          if (data.settings.GLOBAL_MAINTENANCE_FREEZE) {
-            try {
-              const parsed = JSON.parse(data.settings.GLOBAL_MAINTENANCE_FREEZE);
-              setMaintenanceConfig((prev) => ({ ...prev, ...parsed }));
-            } catch {}
-          }
         }
-        if (data.agentConfig) {
+        if (maintData && maintData.config) {
+          setMaintenanceConfig({
+            freezeWithdrawals: Boolean(maintData.config.freezeWithdrawals),
+            freezePurchases: Boolean(maintData.config.freezePurchases),
+            freezeDeposits: Boolean(maintData.config.freezeDeposits),
+            message: maintData.config.message || 'Sistem sedang dalam audit & pemeliharaan berkala.',
+          });
+        } else if (data && data.settings && data.settings.GLOBAL_MAINTENANCE_FREEZE) {
+          try {
+            const parsed = JSON.parse(data.settings.GLOBAL_MAINTENANCE_FREEZE);
+            setMaintenanceConfig((prev) => ({ ...prev, ...parsed }));
+          } catch {}
+        }
+        if (data && data.agentConfig) {
           setAgentConfig({
             minimumRestockBox: data.agentConfig.minimumRestockBox,
             defaultDiscountType: data.agentConfig.defaultDiscountType,
@@ -164,6 +174,112 @@ export default function SystemSettingsTab({
           showToast(err.message || 'Gagal menerapkan diskon massal ke agen', 'error');
         } finally {
           setIsBulkApplying(false);
+        }
+      },
+    });
+  };
+
+  const handleApplyMaintenance = () => {
+    const isAnyLocked =
+      maintenanceConfig.freezeWithdrawals ||
+      maintenanceConfig.freezePurchases ||
+      maintenanceConfig.freezeDeposits;
+
+    const lockedList = [
+      maintenanceConfig.freezePurchases ? 'Belanja / Checkout' : null,
+      maintenanceConfig.freezeWithdrawals ? 'Penarikan Dana (WD)' : null,
+      maintenanceConfig.freezeDeposits ? 'Topup Saldo Deposit' : null,
+    ].filter(Boolean);
+
+    const lockedActionsStr = lockedList.length > 0 ? lockedList.join(', ') : 'Tidak ada fitur yang dikunci';
+
+    showConfirm({
+      title: isAnyLocked ? 'Konfirmasi Kunci Darurat & Pemeliharaan Sistem' : 'Simpan Konfigurasi Pemeliharaan',
+      message: isAnyLocked
+        ? `PERINGATAN KRUSIAL: Menerapkan Kunci Darurat akan langsung MEMBLOKIR transaksi [${lockedActionsStr}] untuk SELURUH mitra secara real-time. Banner pemeliharaan akan langsung tampil di seluruh portal mitra. Lanjutkan penerapan ini?`
+        : 'Apakah Anda yakin ingin menyimpan konfigurasi pemeliharaan? Saat ini seluruh kunci dalam posisi terbuka (normal).',
+      confirmText: isAnyLocked ? 'Ya, Terapkan Kunci Darurat Sekarang' : 'Ya, Terapkan',
+      variant: isAnyLocked ? 'rose' : 'emerald',
+      icon: 'warning',
+      onConfirm: async () => {
+        setIsUpdatingMaintenance(true);
+        try {
+          const res = await fetch('/api/v1/admin/maintenance', {
+            method: 'POST',
+            headers: {
+              ...authHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              freezeWithdrawals: maintenanceConfig.freezeWithdrawals,
+              freezePurchases: maintenanceConfig.freezePurchases,
+              freezeDeposits: maintenanceConfig.freezeDeposits,
+              isActive: isAnyLocked,
+              message: maintenanceConfig.message,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          showToast(data.message || 'Kunci Darurat berhasil diterapkan!', 'success');
+          if (data.config) {
+            setMaintenanceConfig({
+              freezeWithdrawals: Boolean(data.config.freezeWithdrawals),
+              freezePurchases: Boolean(data.config.freezePurchases),
+              freezeDeposits: Boolean(data.config.freezeDeposits),
+              message: data.config.message,
+            });
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Gagal menerapkan kunci darurat', 'error');
+        } finally {
+          setIsUpdatingMaintenance(false);
+        }
+      },
+    });
+  };
+
+  const handleDisableAllFreeze = () => {
+    showConfirm({
+      title: 'Pulihkan Sistem ke Operasional Normal',
+      message:
+        'Apakah Anda yakin ingin membuka SEMUA kunci darurat? Seluruh mitra akan dapat kembali melakukan transaksi belanja checkout, penarikan dana (WD), dan pengisian deposit seperti biasa.',
+      confirmText: 'Ya, Buka Semua Kunci (Normalkan)',
+      variant: 'emerald',
+      icon: 'shield',
+      onConfirm: async () => {
+        setIsUpdatingMaintenance(true);
+        try {
+          const res = await fetch('/api/v1/admin/maintenance', {
+            method: 'POST',
+            headers: {
+              ...authHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              freezeWithdrawals: false,
+              freezePurchases: false,
+              freezeDeposits: false,
+              isActive: false,
+              message: maintenanceConfig.message,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          showToast(data.message || 'Seluruh kunci telah dibuka. Sistem kembali normal.', 'success');
+          if (data.config) {
+            setMaintenanceConfig({
+              freezeWithdrawals: false,
+              freezePurchases: false,
+              freezeDeposits: false,
+              message: data.config.message,
+            });
+          }
+        } catch (err: any) {
+          showToast(err.message || 'Gagal membuka kunci darurat', 'error');
+        } finally {
+          setIsUpdatingMaintenance(false);
         }
       },
     });
@@ -515,6 +631,34 @@ export default function SystemSettingsTab({
               <span className="text-[10px] text-slate-500 mt-1 block">
                 Jika salah satu kunci di atas aktif, banner peringatan ini otomatis muncul di bagian atas seluruh halaman mitra.
               </span>
+            </div>
+
+            <div className="pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-rose-200/80">
+              <div className="text-[11px] text-rose-800">
+                <span className="font-bold">Status Eksekusi:</span> Centang di atas memerlukan konfirmasi penerapan agar aktif di database &amp; server.
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {(maintenanceConfig.freezeWithdrawals || maintenanceConfig.freezePurchases || maintenanceConfig.freezeDeposits) && (
+                  <button
+                    type="button"
+                    disabled={isUpdatingMaintenance}
+                    onClick={handleDisableAllFreeze}
+                    className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Buka Semua Kunci (Normalkan)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={isUpdatingMaintenance}
+                  onClick={handleApplyMaintenance}
+                  className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>{isUpdatingMaintenance ? 'Menerapkan...' : 'Terapkan Kunci Darurat'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

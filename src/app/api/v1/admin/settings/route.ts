@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin } from '@/lib/auth';
+import { invalidateMaintenanceCache } from '@/lib/maintenance';
 
 /**
  * GET /api/v1/admin/settings
@@ -107,6 +108,10 @@ export async function PUT(req: Request) {
         },
       });
     });
+
+    if (settings.GLOBAL_MAINTENANCE_FREEZE) {
+      invalidateMaintenanceCache();
+    }
 
     return NextResponse.json({
       success: true,

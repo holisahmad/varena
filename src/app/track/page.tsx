@@ -16,6 +16,7 @@ import {
   ExternalLink,
   ArrowRight,
   MessageCircle,
+  X,
 } from 'lucide-react';
 import { formatOrderStatus, getOrderStatusBadge } from '@/lib/formatters';
 
@@ -26,6 +27,7 @@ function TrackContent() {
   const [error, setError] = useState('');
   const [orders, setOrders] = useState<any[]>([]);
   const [copiedResi, setCopiedResi] = useState<string | null>(null);
+  const [cancellingOrderNumber, setCancellingOrderNumber] = useState<string | null>(null);
 
   useEffect(() => {
     const initialQuery = searchParams.get('orderNumber') || searchParams.get('q');
@@ -52,6 +54,34 @@ function TrackContent() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderNumber: string) => {
+    const confirmed = window.confirm(
+      `Apakah Anda yakin ingin membatalkan pesanan ${orderNumber}? Stok produk akan otomatis dikembalikan ke sistem inventaris.`
+    );
+    if (!confirmed) return;
+
+    setCancellingOrderNumber(orderNumber);
+    try {
+      const res = await fetch('/api/v1/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNumber,
+          reason: 'Dibatalkan oleh pembeli via halaman lacak pesanan.',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      alert('Pesanan berhasil dibatalkan. Stok barang telah dikembalikan.');
+      performSearch(query);
+    } catch (err: any) {
+      alert(err.message || 'Gagal membatalkan pesanan.');
+    } finally {
+      setCancellingOrderNumber(null);
     }
   };
 
@@ -185,6 +215,49 @@ function TrackContent() {
                     </div>
                   </div>
                 </div>
+
+                {/* Status Pembayaran Pending & Tombol Batalkan / Konfirmasi */}
+                {o.orderStatus === 'PENDING_PAYMENT' && (
+                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-xs text-amber-950 uppercase tracking-wide">
+                          {o.paymentConfirmationStatus === 'SUBMITTED'
+                            ? 'Menunggu Verifikasi Pembayaran oleh Finance VARENA'
+                            : 'Menunggu Pembayaran Transfer Bank (Batas 1 Jam)'}
+                        </div>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          {o.paymentConfirmationStatus === 'SUBMITTED'
+                            ? 'Bukti transfer Anda telah dikirim dan sedang dicocokkan dengan mutasi rekening pusat. Pesanan Anda aman.'
+                            : 'Silakan lakukan transfer bank sesuai nominal tagihan dan kirimkan konfirmasi pembayaran sebelum batas waktu berakhir.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200/80">
+                      <Link
+                        href={`/confirm-payment?orderNumber=${encodeURIComponent(o.orderNumber)}`}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition inline-flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{o.paymentConfirmationStatus === 'SUBMITTED' ? 'Kirim Ulang Bukti Transfer' : 'Konfirmasi Pembayaran Sekarang'}</span>
+                      </Link>
+
+                      {o.paymentConfirmationStatus !== 'SUBMITTED' && (
+                        <button
+                          type="button"
+                          disabled={cancellingOrderNumber === o.orderNumber}
+                          onClick={() => handleCancelOrder(o.orderNumber)}
+                          className="px-3 py-1.5 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold transition inline-flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5 text-rose-600" />
+                          <span>{cancellingOrderNumber === o.orderNumber ? 'Membatalkan...' : 'Batalkan Pesanan Ini'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Resi Kurir Highlight */}
                 {o.trackingNumber ? (

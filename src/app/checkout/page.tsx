@@ -213,6 +213,7 @@ function CheckoutContent() {
   const [settling, setSettling] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
 
   // Metode pembayaran & saldo deposit
   const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'DEPOSIT'>('TRANSFER');
@@ -329,6 +330,38 @@ function CheckoutContent() {
       alert(err.message || 'Gagal mengirim konfirmasi.');
     } finally {
       setConfirmSubmitting(false);
+    }
+  };
+
+  // Handler pembatalan pesanan secara manual oleh pembeli sebelum pembayaran
+  const handleCancelOrderManual = async () => {
+    if (!orderResult?.orderNumber) return;
+    const confirmed = window.confirm(
+      `Apakah Anda yakin ingin membatalkan pesanan ${orderResult.orderNumber}? Stok produk yang dipesan akan otomatis dikembalikan ke sistem.`
+    );
+    if (!confirmed) return;
+
+    setCancellingOrder(true);
+    try {
+      const res = await fetch('/api/v1/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNumber: orderResult.orderNumber,
+          reason: 'Dibatalkan oleh pembeli sebelum transfer pembayaran.',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setOrderResult((prev: any) =>
+        prev ? { ...prev, orderStatus: 'CANCELLED' } : null
+      );
+      alert('Pesanan berhasil dibatalkan. Stok barang telah dikembalikan.');
+    } catch (err: any) {
+      alert(err.message || 'Gagal membatalkan pesanan.');
+    } finally {
+      setCancellingOrder(false);
     }
   };
 
@@ -1654,9 +1687,9 @@ function CheckoutContent() {
                 </div>
               </div>
 
-              {/* Tombol Utama: Konfirmasi Pembayaran oleh Mitra */}
+              {/* Tombol Utama: Konfirmasi Pembayaran oleh Mitra & Opsi Pembatalan Pesanan */}
               {orderResult.orderStatus !== 'CANCELLED' && (
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
                   {orderResult.paymentConfirmationStatus === 'SUBMITTED' ? (
                     <button
                       type="button"
@@ -1667,17 +1700,29 @@ function CheckoutContent() {
                       <span>Konfirmasi Terkirim (Menunggu Verifikasi Admin)</span>
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setConfirmTransferAmount(String(orderResult.total));
-                        setShowConfirmModal(true);
-                      }}
-                      className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99]"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      <span>✓ Saya Sudah Bayar (Konfirmasi Pembayaran)</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmTransferAmount(String(orderResult.total));
+                          setShowConfirmModal(true);
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99]"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        <span>✓ Saya Sudah Bayar (Konfirmasi Pembayaran)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={cancellingOrder}
+                        onClick={handleCancelOrderManual}
+                        className="w-full py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <X className="w-3.5 h-3.5 text-rose-600" />
+                        <span>{cancellingOrder ? 'Membatalkan Pesanan...' : 'Batalkan Pesanan Ini'}</span>
+                      </button>
+                    </>
                   )}
                 </div>
               )}
