@@ -155,6 +155,11 @@ export function templatePushLeaderFollowup(params: {
  * Simulates real gateway delivery and archives into outbox audit
  */
 export async function dispatchWaMessage(payload: WaMessagePayload): Promise<{ success: boolean; id: string }> {
+  // Jika WA dinonaktifkan, exit langsung tanpa proses memori maupun HTTP request
+  if (process.env.WHATSAPP_ENABLED !== 'true') {
+    return { success: false, id: 'WA_DISABLED' };
+  }
+
   const id = `WA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
   // Store in Outbox

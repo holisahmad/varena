@@ -115,21 +115,23 @@ export async function POST(req: Request) {
       });
     });
 
-    // Kirim notifikasi WA ke mitra secara async/non-blocking agar webhook bank lekas selesai (<50ms)
-    const memberPhone = (pendingTx.member as any).user?.phone || '';
-    if (memberPhone) {
-      const isShoppingDeposit = pendingTx.type === 'SHOPPING_TOPUP';
-      const typeLabel = isShoppingDeposit ? 'Belanja' : 'Agen';
-      enqueueWaMessage({
-        to: memberPhone,
-        message:
-          `🎉 *TOPUP SALDO ${typeLabel.toUpperCase()} DISETUJUI OTOMATIS* ✅\n\n` +
-          `Halo *${pendingTx.member.displayName}*,\n` +
-          `Pembayaran Anda telah terdeteksi dari mutasi bank dan saldo Anda telah otomatis ditambahkan:\n\n` +
-          `💰 *Nominal:* Rp${pendingTx.amount.toLocaleString('id-ID')}\n` +
-          `📋 *Ref:* \`${pendingTx.referenceId || pendingTx.id}\`\n\n` +
-          `Gunakan saldo untuk bertransaksi di VARENA. Terima kasih! 🌿`,
-      }).catch(() => {});
+    // Kirim notifikasi WA ke mitra jika WA aktif
+    if (process.env.WHATSAPP_ENABLED === 'true') {
+      const memberPhone = (pendingTx.member as any).user?.phone || '';
+      if (memberPhone) {
+        const isShoppingDeposit = pendingTx.type === 'SHOPPING_TOPUP';
+        const typeLabel = isShoppingDeposit ? 'Belanja' : 'Agen';
+        enqueueWaMessage({
+          to: memberPhone,
+          message:
+            `🎉 *TOPUP SALDO ${typeLabel.toUpperCase()} DISETUJUI OTOMATIS* ✅\n\n` +
+            `Halo *${pendingTx.member.displayName}*,\n` +
+            `Pembayaran Anda telah terdeteksi dari mutasi bank dan saldo Anda telah otomatis ditambahkan:\n\n` +
+            `💰 *Nominal:* Rp${pendingTx.amount.toLocaleString('id-ID')}\n` +
+            `📋 *Ref:* \`${pendingTx.referenceId || pendingTx.id}\`\n\n` +
+            `Gunakan saldo untuk bertransaksi di VARENA. Terima kasih! 🌿`,
+        }).catch(() => {});
+      }
     }
 
     return NextResponse.json({ received: true, matched: true, transactionId: pendingTx.id });

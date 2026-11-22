@@ -163,9 +163,10 @@ export async function POST(req: Request) {
       },
     });
 
-    // Kirim notifikasi WA ke admin secara async/non-blocking
+    // Kirim notifikasi WA ke admin secara async/non-blocking jika WA diaktifkan
     (async () => {
       try {
+        if (process.env.WHATSAPP_ENABLED !== 'true') return; // Zero-query exit saat WA non-aktif
         const adminPhone = process.env.ADMIN_WA_NUMBER || 
           (await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } }))?.value;
         if (adminPhone) {

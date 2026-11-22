@@ -136,8 +136,8 @@ export async function POST(req: Request) {
         },
       });
 
-      // Kirim notifikasi WA ke pembeli bahwa pembayaran disetujui (async/non-blocking tanpa query DB tambahan)
-      if (result?.order?.buyerPhone) {
+      // Kirim notifikasi WA ke pembeli bahwa pembayaran disetujui jika WA aktif
+      if (process.env.WHATSAPP_ENABLED === 'true' && result?.order?.buyerPhone) {
         enqueueWaMessage({
           to: result.order.buyerPhone,
           message:
