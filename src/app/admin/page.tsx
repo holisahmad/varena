@@ -4299,9 +4299,9 @@ export default function AdminPage() {
 
               {/* ===== STATUS & SUSPEND MANAGEMENT MODAL ===== */}
               {statusModalTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                    <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+                    <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
                       <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-amber-400">
                           <ShieldAlert className="w-5 h-5" />
@@ -4319,7 +4319,7 @@ export default function AdminPage() {
                       </button>
                     </div>
 
-                    <div className="p-5 space-y-4">
+                    <div className="p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain">
                       {/* Info Target Mitra */}
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
                         <div className="flex items-center justify-between">
@@ -4515,35 +4515,35 @@ export default function AdminPage() {
                           className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400 resize-none"
                         />
                       </div>
+                    </div>
 
-                      {/* Tombol Aksi */}
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => { setStatusModalTarget(null); setStatusModalReason(''); }}
-                          className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-200 transition-colors"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="button"
-                          disabled={statusModalLoading}
-                          onClick={handleUpdateMemberStatus}
-                          className="flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          {statusModalLoading ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Menyimpan...</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Simpan Status</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+                    {/* Tombol Aksi (Sticky Footer) */}
+                    <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => { setStatusModalTarget(null); setStatusModalReason(''); }}
+                        className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-100 transition-colors"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        disabled={statusModalLoading}
+                        onClick={handleUpdateMemberStatus}
+                        className="flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 shadow"
+                      >
+                        {statusModalLoading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Simpan Status</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
