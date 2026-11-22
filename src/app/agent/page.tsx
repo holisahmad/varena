@@ -86,6 +86,7 @@ export default function AgentPortalPage() {
   const [topupUploadingProof, setTopupUploadingProof] = useState(false);
   const [topupConfirmed, setTopupConfirmed] = useState(false);
   const [topupConfirming, setTopupConfirming] = useState(false);
+  const [topupCancelling, setTopupCancelling] = useState(false);
   const [topupTimeLeft, setTopupTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; expired: boolean } | null>(null);
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
@@ -413,6 +414,42 @@ export default function AgentPortalPage() {
       setMessage({ text: err.message || 'Terjadi kesalahan sistem.', type: 'error' });
     } finally {
       setTopupConfirming(false);
+    }
+  };
+
+  const handleCancelTopup = async () => {
+    if (!topupResult?.transactionId || !user) return;
+    if (!window.confirm('Batalkan pengajuan top up kas agen ini?')) return;
+    setTopupCancelling(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/v1/agent/deposit/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: topupResult.transactionId,
+          memberCode: user.memberCode,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTopupModalOpen(false);
+        setTopupStep(1);
+        setTopupResult(null);
+        setTopupProofUrl('');
+        setTopupNotes('');
+        setTopupBankName('');
+        setTopupAccountNumber('');
+        setTopupConfirmed(false);
+        setMessage({ text: 'Pengajuan top up berhasil dibatalkan.', type: 'success' });
+        loadAgentData();
+      } else {
+        setMessage({ text: data.error || 'Gagal membatalkan pengajuan.', type: 'error' });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Terjadi kesalahan sistem.', type: 'error' });
+    } finally {
+      setTopupCancelling(false);
     }
   };
 
@@ -964,17 +1001,43 @@ export default function AgentPortalPage() {
                           </span>
                         </td>
                         <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              tx.status === 'COMPLETED'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : tx.status === 'PENDING'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            {tx.status === 'COMPLETED' ? 'Berhasil' : tx.status === 'PENDING' ? 'Menunggu Approval' : tx.status}
-                          </span>
+                          {(() => {
+                            const statusConfig: Record<string, { label: string; cls: string }> = {
+                              COMPLETED:            { label: '✅ Berhasil',              cls: 'bg-emerald-100 text-emerald-800' },
+                              PENDING:              { label: '⏳ Menunggu Admin',        cls: 'bg-amber-100 text-amber-800' },
+                              PENDING_PAYMENT:      { label: '🕐 Menunggu Transfer',    cls: 'bg-sky-100 text-sky-800' },
+                              WAITING_VERIFICATION: { label: '🔍 Sedang Diverifikasi', cls: 'bg-blue-100 text-blue-800' },
+                              REJECTED:             { label: '❌ Ditolak',              cls: 'bg-rose-100 text-rose-800' },
+                              EXPIRED:              { label: '⏰ Kedaluwarsa',           cls: 'bg-stone-100 text-stone-500' },
+                              CANCELLED:            { label: '🚫 Dibatalkan',            cls: 'bg-stone-100 text-stone-500' },
+                            };
+                            const st = statusConfig[tx.status] || { label: tx.status, cls: 'bg-stone-100 text-stone-600' };
+                            const canResubmit = (tx.status === 'EXPIRED' || tx.status === 'CANCELLED') && tx.type === 'TOPUP_DEPOSIT';
+                            return (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${st.cls}`}>
+                                  {st.label}
+                                </span>
+                                {canResubmit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTopupAmount(String(tx.amount || 1000000));
+                                      setTopupStep(1);
+                                      setTopupResult(null);
+                                      setTopupProofUrl('');
+                                      setTopupNotes('');
+                                      setTopupConfirmed(false);
+                                      setTopupModalOpen(true);
+                                    }}
+                                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-varena-espresso text-varena-gold hover:bg-varena-espresso-dark transition"
+                                  >
+                                    🔄 Ajukan Ulang
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}
@@ -1630,21 +1693,58 @@ export default function AgentPortalPage() {
                         </div>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={topupConfirming || topupTimeLeft?.expired}
-                        onClick={handleConfirmTopup}
-                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>
-                          {topupConfirming
-                            ? 'Mengirim Konfirmasi...'
-                            : topupTimeLeft?.expired
-                            ? 'Waktu Transfer Kedaluwarsa'
-                            : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
-                        </span>
-                      </button>
+                      <div className="space-y-2">
+                        {topupTimeLeft?.expired ? (
+                          /* Expired — tawari topup baru */
+                          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 space-y-2">
+                            <div className="font-bold flex items-center gap-1.5 text-xs">
+                              <AlertCircle className="w-4 h-4 text-rose-500" />
+                              <span>Batas Waktu Transfer Kedaluwarsa</span>
+                            </div>
+                            <p className="text-[11px] text-rose-700">
+                              Waktu 1 jam untuk melakukan transfer telah habis. Ajukan pengajuan kas deposit baru.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTopupStep(1);
+                                setTopupResult(null);
+                                setTopupProofUrl('');
+                                setTopupNotes('');
+                                setTopupConfirmed(false);
+                              }}
+                              className="w-full py-2.5 px-4 rounded-xl bg-varena-espresso text-varena-gold font-bold text-xs transition hover:bg-varena-espresso-dark flex items-center justify-center gap-2"
+                            >
+                              🔄 Ajukan Top Up Baru (Nominal Sama)
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={topupConfirming}
+                            onClick={handleConfirmTopup}
+                            className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              {topupConfirming
+                                ? 'Mengirim Konfirmasi...'
+                                : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
+                            </span>
+                          </button>
+                        )}
+                        {/* Tombol Batalkan */}
+                        {!topupTimeLeft?.expired && (
+                          <button
+                            type="button"
+                            disabled={topupCancelling || topupConfirming}
+                            onClick={handleCancelTopup}
+                            className="w-full py-2 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition disabled:opacity-50"
+                          >
+                            {topupCancelling ? 'Membatalkan...' : '✕ Batalkan Pengajuan Ini'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
 

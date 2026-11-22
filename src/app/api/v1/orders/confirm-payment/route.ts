@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, detectSuspiciousPatterns } from '@/lib/security';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
+import { enqueueWaMessage } from '@/lib/wa-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,6 +162,27 @@ export async function POST(req: Request) {
         reason: `Member mengajukan konfirmasi pembayaran manual transfer bank untuk ${order.orderNumber}`,
       },
     });
+
+    // Kirim notifikasi WA ke admin
+    try {
+      const adminSetting = await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } });
+      if (adminSetting?.value) {
+        const proofLabel = paymentProofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto*';
+        await enqueueWaMessage({
+          to: adminSetting.value,
+          message:
+            `🔔 *KONFIRMASI PEMBAYARAN PESANAN BARU*\n\n` +
+            `📦 *No. Pesanan:* ${order.orderNumber}\n` +
+            `👤 *Pembeli:* ${order.buyerName}\n` +
+            `💰 *Nominal Transfer:* Rp${amountPaid.toLocaleString('id-ID')}\n` +
+            `🏦 *Bank Pengirim:* ${senderBankName} (${senderAccountName})\n` +
+            `${proofLabel}\n\n` +
+            `Silakan verifikasi dan konfirmasi pembayaran di dashboard admin VARENA.`,
+        });
+      }
+    } catch {
+      // Non-critical
+    }
 
     return NextResponse.json({
       success: true,

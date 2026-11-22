@@ -3,6 +3,7 @@ import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin } from '@/lib/auth';
 import { settleOrderPayment, shipOrder, completeOrder, sweepExpiredOrders } from '@/lib/order';
+import { enqueueWaMessage } from '@/lib/wa-queue';
 
 export async function GET(req: Request) {
   try {
@@ -134,6 +135,28 @@ export async function POST(req: Request) {
           reason: 'Verifikasi konfirmasi pembayaran manual oleh admin penjualan/keuangan',
         },
       });
+
+      // Kirim notifikasi WA ke pembeli bahwa pembayaran disetujui
+      try {
+        const paidOrder = await prisma.order.findUnique({
+          where: { id: orderId },
+          select: { orderNumber: true, buyerName: true, buyerPhone: true, total: true },
+        });
+        if (paidOrder?.buyerPhone) {
+          await enqueueWaMessage({
+            to: paidOrder.buyerPhone,
+            message:
+              `✅ *PEMBAYARAN PESANAN DIKONFIRMASI!*\n\n` +
+              `Halo *${paidOrder.buyerName}*,\n` +
+              `Pembayaran pesanan Anda telah diverifikasi oleh tim keuangan VARENA:\n\n` +
+              `📦 *No. Pesanan:* ${paidOrder.orderNumber}\n` +
+              `💰 *Total:* Rp${(paidOrder.total || 0).toLocaleString('id-ID')}\n\n` +
+              `Pesanan Anda sedang diproses dan akan segera dikirim. Terima kasih! 🌿`,
+          });
+        }
+      } catch {
+        // Non-critical
+      }
 
       return NextResponse.json({
         success: true,

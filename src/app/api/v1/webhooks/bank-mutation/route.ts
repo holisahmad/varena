@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { recordDepositTopupLedger } from '@/lib/ledger';
+import { enqueueWaMessage } from '@/lib/wa-queue';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,15 +41,19 @@ export async function POST(req: Request) {
     const uniqueCode = amount % 1000;
     const baseAmount = amount - uniqueCode;
 
+    // Cari transaksi dengan unique code cocok (prioritas) atau nominal exact match
+    // Status yang valid: WAITING_VERIFICATION (sudah konfirmasi) atau PENDING (legacy)
     const pendingTx = await prisma.agentDepositTransaction.findFirst({
       where: {
-        status: 'PENDING',
+        status: { in: ['WAITING_VERIFICATION', 'PENDING'] },
         OR: [
-          { amount },              // Exact match
-          { amount: baseAmount },  // Base amount without unique code
+          // Prioritas: cocokkan uniqueCode agar akurat
+          { uniqueCode: uniqueCode, amount: baseAmount },
+          // Fallback: exact match nominal penuh
+          { amount },
         ],
       },
-      include: { member: true },
+      include: { member: { include: { user: { select: { phone: true } } } } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -109,6 +114,27 @@ export async function POST(req: Request) {
         },
       });
     });
+
+    // Kirim notifikasi WA ke mitra
+    try {
+      const memberPhone = (pendingTx.member as any).user?.phone || '';
+      if (memberPhone) {
+        const isShoppingDeposit = pendingTx.type === 'SHOPPING_TOPUP';
+        const typeLabel = isShoppingDeposit ? 'Belanja' : 'Agen';
+        await enqueueWaMessage({
+          to: memberPhone,
+          message:
+            `🎉 *TOPUP SALDO ${typeLabel.toUpperCase()} DISETUJUI OTOMATIS* ✅\n\n` +
+            `Halo *${pendingTx.member.displayName}*,\n` +
+            `Pembayaran Anda telah terdeteksi dari mutasi bank dan saldo Anda telah otomatis ditambahkan:\n\n` +
+            `💰 *Nominal:* Rp${pendingTx.amount.toLocaleString('id-ID')}\n` +
+            `📋 *Ref:* \`${pendingTx.referenceId || pendingTx.id}\`\n\n` +
+            `Gunakan saldo untuk bertransaksi di VARENA. Terima kasih! 🌿`,
+        });
+      }
+    } catch {
+      // Non-critical
+    }
 
     return NextResponse.json({ received: true, matched: true, transactionId: pendingTx.id });
   } catch (err: any) {

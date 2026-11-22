@@ -68,6 +68,7 @@ export default function MemberWalletPage() {
   const [shopDepositUploadingProof, setShopDepositUploadingProof] = useState(false);
   const [depositConfirmed, setDepositConfirmed] = useState(false);
   const [shopDepositConfirming, setShopDepositConfirming] = useState(false);
+  const [shopDepositCancelling, setShopDepositCancelling] = useState(false);
   const [depositTimeLeft, setDepositTimeLeft] = useState<{
     hours: number;
     minutes: number;
@@ -333,6 +334,39 @@ export default function MemberWalletPage() {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
     } finally {
       setShopDepositConfirming(false);
+    }
+  };
+
+  const handleCancelShopDeposit = async () => {
+    if (!shopDepositResult?.transactionId || !user) return;
+    if (!window.confirm('Batalkan permintaan deposit ini?')) return;
+    setShopDepositCancelling(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/v1/member/deposit/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: shopDepositResult.transactionId,
+          memberCode: user.memberCode,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShopDepositModalOpen(false);
+        setShopDepositStep(1);
+        setShopDepositResult(null);
+        setShopDepositProofUrl('');
+        setDepositConfirmed(false);
+        setSuccessMsg('Permintaan deposit berhasil dibatalkan.');
+        loadWallet(user.memberCode);
+      } else {
+        setErrorMsg(data.error || 'Gagal membatalkan deposit.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setShopDepositCancelling(false);
     }
   };
 
@@ -813,33 +847,58 @@ export default function MemberWalletPage() {
               <div>
                 <h3 className="text-xs font-semibold text-stone-600 mb-2">Riwayat Deposit Belanja</h3>
                 <div className="divide-y divide-stone-100">
-                  {shoppingDeposit.transactions.slice(0, 5).map((tx: any) => (
-                    <div key={tx.id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
-                      <div>
-                        <div className="font-semibold text-stone-700">
-                          {tx.type === 'SHOPPING_TOPUP' ? 'Top Up Saldo Belanja'
-                            : tx.type === 'SHOPPING_PAYMENT' ? 'Pembayaran Belanja'
-                            : tx.type}
+                  {shoppingDeposit.transactions.slice(0, 10).map((tx: any) => {
+                    const statusConfig: Record<string, { label: string; cls: string }> = {
+                      COMPLETED:            { label: '✅ Disetujui',              cls: 'bg-emerald-100 text-emerald-800' },
+                      PENDING:              { label: '⏳ Menunggu Admin',         cls: 'bg-amber-100 text-amber-800 border border-amber-300' },
+                      PENDING_PAYMENT:      { label: '🕐 Menunggu Transfer (1 Jam)', cls: 'bg-sky-100 text-sky-800 border border-sky-300' },
+                      WAITING_VERIFICATION: { label: '🔍 Sedang Diverifikasi',   cls: 'bg-blue-100 text-blue-800 border border-blue-300' },
+                      REJECTED:             { label: '❌ Ditolak',               cls: 'bg-rose-100 text-rose-800' },
+                      EXPIRED:              { label: '⏰ Kedaluwarsa',            cls: 'bg-stone-100 text-stone-500' },
+                      CANCELLED:            { label: '🚫 Dibatalkan',             cls: 'bg-stone-100 text-stone-500' },
+                    };
+                    const st = statusConfig[tx.status] || { label: tx.status, cls: 'bg-stone-100 text-stone-600' };
+                    const canResubmit = tx.status === 'EXPIRED' || tx.status === 'CANCELLED';
+                    return (
+                      <div key={tx.id} className="py-2.5 flex items-start justify-between gap-2 text-xs">
+                        <div>
+                          <div className="font-semibold text-stone-700">
+                            {tx.type === 'SHOPPING_TOPUP' ? 'Top Up Saldo Belanja'
+                              : tx.type === 'SHOPPING_PAYMENT' ? 'Pembayaran Belanja'
+                              : tx.type}
+                          </div>
+                          <div className="text-[10px] text-stone-400 font-mono">{tx.referenceId}</div>
+                          <div className="text-[10px] text-stone-400">
+                            {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-stone-400 font-mono">{tx.referenceId}</div>
-                        <div className="text-[10px] text-stone-400">
-                          {new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div className={`font-mono font-bold ${tx.type === 'SHOPPING_TOPUP' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {tx.type === 'SHOPPING_TOPUP' ? '+' : '-'}Rp{(tx.amount || 0).toLocaleString('id-ID')}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${st.cls}`}>
+                            {st.label}
+                          </span>
+                          {canResubmit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShopDepositAmount(String(tx.amount || 500000));
+                                setShopDepositStep(1);
+                                setShopDepositResult(null);
+                                setShopDepositProofUrl('');
+                                setDepositConfirmed(false);
+                                setShopDepositModalOpen(true);
+                              }}
+                              className="mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-varena-espresso text-varena-gold hover:bg-varena-espresso-dark transition"
+                            >
+                              🔄 Ajukan Ulang
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-mono font-bold ${tx.type === 'SHOPPING_TOPUP' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {tx.type === 'SHOPPING_TOPUP' ? '+' : '-'}Rp{(tx.amount || 0).toLocaleString('id-ID')}
-                        </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          tx.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800'
-                          : tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {tx.status === 'COMPLETED' ? 'MASUK KE SALDO' : tx.status === 'PENDING' ? 'MENUNGGU APPROVAL ADMIN' : tx.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1325,21 +1384,57 @@ export default function MemberWalletPage() {
                         </div>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={shopDepositConfirming || depositTimeLeft?.expired}
-                        onClick={handleConfirmShopDeposit}
-                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>
-                          {shopDepositConfirming
-                            ? 'Mengirim Konfirmasi...'
-                            : depositTimeLeft?.expired
-                            ? 'Waktu Transfer Kedaluwarsa'
-                            : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
-                        </span>
-                      </button>
+                      <div className="space-y-2">
+                        {depositTimeLeft?.expired ? (
+                          /* Expired — tawari topup baru */
+                          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 space-y-2">
+                            <div className="font-bold flex items-center gap-1.5 text-xs">
+                              <AlertCircle className="w-4 h-4 text-rose-500" />
+                              <span>Batas Waktu Transfer Kedaluwarsa</span>
+                            </div>
+                            <p className="text-[11px] text-rose-700">
+                              Waktu 1 jam untuk melakukan transfer telah habis. Ajukan permintaan deposit baru.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShopDepositStep(1);
+                                setShopDepositResult(null);
+                                setShopDepositProofUrl('');
+                                setDepositConfirmed(false);
+                              }}
+                              className="w-full py-2.5 px-4 rounded-xl bg-varena-espresso text-varena-gold font-bold text-xs transition hover:bg-varena-espresso-dark flex items-center justify-center gap-2"
+                            >
+                              🔄 Ajukan Topup Baru (Nominal Sama)
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={shopDepositConfirming}
+                            onClick={handleConfirmShopDeposit}
+                            className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>
+                              {shopDepositConfirming
+                                ? 'Mengirim Konfirmasi...'
+                                : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
+                            </span>
+                          </button>
+                        )}
+                        {/* Tombol Batalkan — hanya saat belum expired dan belum konfirmasi */}
+                        {!depositTimeLeft?.expired && (
+                          <button
+                            type="button"
+                            disabled={shopDepositCancelling || shopDepositConfirming}
+                            onClick={handleCancelShopDeposit}
+                            className="w-full py-2 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition disabled:opacity-50"
+                          >
+                            {shopDepositCancelling ? 'Membatalkan...' : '✕ Batalkan Permintaan Deposit Ini'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
 

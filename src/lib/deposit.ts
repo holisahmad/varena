@@ -1,4 +1,5 @@
 import prisma from './prisma';
+import { enqueueWaMessage } from './wa-queue';
 
 export const DEPOSIT_EXPIRATION_HOURS = 1;
 export const DEPOSIT_EXPIRATION_MS = DEPOSIT_EXPIRATION_HOURS * 60 * 60 * 1000;
@@ -86,5 +87,64 @@ export async function confirmDepositPayment(payload: ConfirmDepositPayload) {
     },
   });
 
+  // Kirim notifikasi WA ke admin
+  try {
+    const adminSetting = await prisma.systemSetting.findUnique({ where: { key: 'ADMIN_WA_NUMBER' } });
+    const adminPhone = adminSetting?.value;
+    if (adminPhone) {
+      const depositType = tx.type === 'SHOPPING_TOPUP' ? 'Deposit Belanja Mitra' : 'Kas Deposit Agen';
+      const proofLabel = proofUrl ? '📎 *Bukti Transfer Terlampir*' : '⚠️ *Tanpa Bukti Foto* (cocokkan mutasi bank)';
+      await enqueueWaMessage({
+        to: adminPhone,
+        message:
+          `🔔 *KONFIRMASI TOPUP BARU* — ${depositType}\n\n` +
+          `👤 *Mitra:* ${tx.member.displayName} (${tx.member.memberCode})\n` +
+          `💰 *Nominal:* Rp${tx.amount.toLocaleString('id-ID')}\n` +
+          `🏦 *Bank Pengirim:* ${bankName || tx.bankName || '-'}\n` +
+          `📋 *Ref:* \`${tx.referenceId || tx.id}\`\n` +
+          `${proofLabel}\n\n` +
+          `Silakan verifikasi dan setujui / tolak di dashboard admin VARENA.`,
+      });
+    }
+  } catch {
+    // Non-critical — jangan gagalkan proses utama
+  }
+
   return updated;
+}
+
+/**
+ * Cancel a pending deposit by member/agent.
+ * Only allowed when status is PENDING_PAYMENT.
+ */
+export async function cancelDepositPayment(payload: { transactionId: string; memberCode?: string }) {
+  const { transactionId, memberCode } = payload;
+
+  const tx = await prisma.agentDepositTransaction.findUnique({
+    where: { id: transactionId },
+    include: { member: true },
+  });
+
+  if (!tx) {
+    throw new Error('Transaksi deposit tidak ditemukan.');
+  }
+
+  if (memberCode && tx.member.memberCode !== memberCode) {
+    throw new Error('Akses ditolak: Transaksi bukan milik akun Anda.');
+  }
+
+  if (tx.status !== 'PENDING_PAYMENT') {
+    throw new Error(
+      tx.status === 'WAITING_VERIFICATION'
+        ? 'Konfirmasi sudah dikirim dan sedang diproses admin. Hubungi admin untuk pembatalan.'
+        : `Transaksi tidak dapat dibatalkan karena status saat ini: ${tx.status}.`
+    );
+  }
+
+  const cancelled = await prisma.agentDepositTransaction.update({
+    where: { id: transactionId },
+    data: { status: 'CANCELLED', notes: '[DIBATALKAN MITRA] Dibatalkan sebelum transfer.' },
+  });
+
+  return cancelled;
 }
