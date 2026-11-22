@@ -521,7 +521,6 @@ export default function MemberDashboardPage() {
                 <p className="text-sm font-bold text-amber-900">Akun Anda Belum Aktif</p>
                 <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
                   Kemitraan resmi Anda aktif otomatis setelah pembelian <strong>Paket Perdana</strong> lunas.
-                  Jika sudah ada kebijakan khusus dari admin, Anda akan menerima notifikasi aktivasi manual.
                 </p>
               </div>
               <Link
