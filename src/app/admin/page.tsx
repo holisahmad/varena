@@ -141,6 +141,7 @@ export default function AdminPage() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
+  const [pruningLogs, setPruningLogs] = useState(false);
 
   // Pagination States
   const [orderPage, setOrderPage] = useState(1);
@@ -547,6 +548,34 @@ export default function AdminPage() {
           setLogTotal(data.pagination?.total || data.totalCount);
         }
       });
+  };
+
+  // Bersihkan log audit usang (>60 hari) untuk menghemat kuota database free tier
+  const handlePruneAuditLogs = async () => {
+    if (!window.confirm('Bersihkan log audit umum yang berusia lebih dari 60 hari dari database? Log transaksi finansial (payout/deposit) tetap aman.')) return;
+    setPruningLogs(true);
+    const authHeaders = getAdminHeaders();
+    try {
+      const res = await fetch('/api/v1/admin/audit-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({ retentionDays: 60 }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'Pembersihan log berhasil.', 'success');
+        loadFilteredLogs(logDays, logEntityFilter, 1);
+      } else {
+        showToast(data.error || 'Gagal membersihkan log audit.', 'error');
+      }
+    } catch {
+      showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      setPruningLogs(false);
+    }
   };
 
   // Approve Payout Action
@@ -3617,6 +3646,17 @@ export default function AdminPage() {
                       <option value="MEMBER">Mitra & Member</option>
                       <option value="MARKETING_PLAN">Marketing Plan</option>
                     </select>
+
+                    <button
+                      type="button"
+                      disabled={pruningLogs}
+                      onClick={handlePruneAuditLogs}
+                      className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition flex items-center gap-1.5 disabled:opacity-50"
+                      title="Bersihkan log umum > 60 hari agar hemat kuota database free tier"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${pruningLogs ? 'animate-spin' : ''}`} />
+                      <span>{pruningLogs ? 'Membersihkan...' : 'Prune Log Usang (>60h)'}</span>
+                    </button>
                   </div>
                 </div>
 

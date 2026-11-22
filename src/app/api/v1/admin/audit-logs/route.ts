@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
-import { verifyCorporateAdmin } from '@/lib/auth';
+import { pruneOldAuditLogs, autoPruneAuditLogs } from '@/lib/audit';
 
 export async function GET(req: Request) {
   try {
@@ -9,6 +9,9 @@ export async function GET(req: Request) {
     if (!authUser) {
       return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
+
+    // Auto-prune di background (throttled 24 jam) agar kuota DB free tier selalu terjaga
+    autoPruneAuditLogs().catch(() => {});
 
     const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get('days') || '60', 10);
@@ -85,5 +88,31 @@ export async function GET(req: Request) {
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/v1/admin/audit-logs
+ * Manual trigger pembersihan log usang oleh Super Admin / Corporate.
+ */
+export async function POST(req: Request) {
+  try {
+    const authUser = await resolveCorporateAdmin(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const retentionDays = Math.max(30, parseInt(body.retentionDays || '60', 10));
+
+    const result = await pruneOldAuditLogs(retentionDays);
+
+    return NextResponse.json({
+      success: true,
+      message: `Pembersihan berhasil. Sebanyak ${result.totalDeleted} log usang (> ${retentionDays} hari) telah dibersihkan dari database.`,
+      result,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Gagal membersihkan log audit.' }, { status: 500 });
   }
 }

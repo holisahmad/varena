@@ -86,16 +86,6 @@ export async function POST(req: Request) {
     if (!session) {
       recordFailedLogin(lockKey);
 
-      await prisma.auditLog.create({
-        data: {
-          action: 'LOGIN_FAILED',
-          entityType: 'USER',
-          entityId: cleanEmail,
-          reason: 'Password atau email salah.',
-          ipAddress: ip,
-        },
-      });
-
       return NextResponse.json(
         { error: 'Email atau password yang Anda masukkan salah.' },
         { status: 401 }
@@ -105,17 +95,26 @@ export async function POST(req: Request) {
     // 6. Reset failed attempts on success
     resetLoginAttempts(lockKey);
 
-    // Audit successful login
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: session.userId,
-        action: 'LOGIN_SUCCESS',
-        entityType: 'USER',
-        entityId: session.userId,
-        reason: `Login berhasil dari IP ${ip}`,
-        ipAddress: ip,
-      },
-    });
+    // Update lastLoginAt pada User (hemat baris DB dibandingkan menambah baris append-only di AuditLog)
+    prisma.user.update({
+      where: { id: session.userId },
+      data: { lastLoginAt: new Date() },
+    }).catch(() => {});
+
+    // Audit log login khusus akun pengelola / admin / korporasi (kritis keamanan)
+    const isAdminAccount = session.roles?.some((r: string) => ['OWNER', 'OPERATIONS', 'ADMIN_1', 'ADMIN_2', 'FINANCE', 'AUDITOR'].includes(r));
+    if (isAdminAccount || process.env.AUDIT_LOG_ALL_LOGINS === 'true') {
+      prisma.auditLog.create({
+        data: {
+          actorUserId: session.userId,
+          action: 'LOGIN_SUCCESS',
+          entityType: 'USER',
+          entityId: session.userId,
+          reason: `Login admin/staff berhasil dari IP ${ip}`,
+          ipAddress: ip,
+        },
+      }).catch(() => {});
+    }
 
     // Sign JWT token dan set cookie
     const token = await signSessionToken(session);
