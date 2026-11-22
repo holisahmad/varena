@@ -96,11 +96,32 @@ export async function GET(req: Request) {
     if (member.bankName && member.bankAccountNumber && member.bankAccountHolder) completedSteps++;
     const completionPercent = Math.round((completedSteps / totalSteps) * 100);
 
+    // Determine if user has established password or needs initial setup (Google-only user)
+    const googleReg = await prisma.auditLog.findFirst({
+      where: {
+        actorUserId: member.userId,
+        action: 'MEMBER_REGISTERED_VIA_GOOGLE',
+      },
+    });
+
+    const customPwdLog = await prisma.auditLog.findFirst({
+      where: {
+        OR: [
+          { actorUserId: member.userId, action: 'PASSWORD_CHANGED' },
+          { entityId: member.id, action: 'MEMBER_PASSWORD_RESET' },
+          { actorUserId: member.userId, action: 'MEMBER_REGISTERED' },
+        ],
+      },
+    });
+
+    const isInitialPasswordSetup = Boolean(googleReg && !customPwdLog);
+
     return NextResponse.json({
       success: true,
       member: {
         ...rest,
         isBankLocked: Boolean(member.bankAccountNumber && member.bankLockedAt),
+        isInitialPasswordSetup,
         phone: user?.phone || null,
         email: user?.email || null,
         completionPercent,

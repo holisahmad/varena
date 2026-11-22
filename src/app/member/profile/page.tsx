@@ -22,6 +22,10 @@ import {
   ShieldOff,
   Ban,
   ShoppingBag,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Check,
 } from 'lucide-react';
 
 const INDONESIA_BANKS = [
@@ -76,6 +80,18 @@ export default function MemberProfilePage() {
   // Status state
   const [memberStatus, setMemberStatus] = useState('ACTIVE');
 
+  // Password states
+  const [isInitialPasswordSetup, setIsInitialPasswordSetup] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('');
+  const [passwordErrorMessage, setPasswordErrorMessage] = useState('');
+
   useEffect(() => {
     const stored = localStorage.getItem('varena_user');
     if (!stored) {
@@ -120,6 +136,7 @@ export default function MemberProfilePage() {
         setAddressDetail(m.addressDetail || '');
 
         setCompletionPercent(m.completionPercent || 50);
+        setIsInitialPasswordSetup(Boolean(m.isInitialPasswordSetup));
       }
     } catch (err) {
       console.error('Failed to load profile:', err);
@@ -207,6 +224,72 @@ export default function MemberProfilePage() {
       setErrorMessage(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordSaving(true);
+    setPasswordSuccessMessage('');
+    setPasswordErrorMessage('');
+
+    if (newPassword.length < 8) {
+      setPasswordErrorMessage('Kata sandi baru minimal harus 8 karakter.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    if (newPassword.length > 128) {
+      setPasswordErrorMessage('Kata sandi baru maksimal 128 karakter.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    const hasLetter = /[a-zA-Z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    if (!hasLetter || !hasNumber) {
+      setPasswordErrorMessage('Kata sandi harus mengombinasikan huruf dan angka.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordErrorMessage('Konfirmasi kata sandi tidak cocok dengan kata sandi baru.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('varena_token') : null;
+      const res = await fetch('/api/v1/member/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          memberCode,
+          currentPassword: isInitialPasswordSetup ? undefined : currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal memperbarui kata sandi.');
+      }
+
+      setPasswordSuccessMessage(data.message || 'Kata sandi berhasil disimpan!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setIsInitialPasswordSetup(false);
+      setTimeout(() => setPasswordSuccessMessage(''), 6000);
+    } catch (err: any) {
+      setPasswordErrorMessage(err.message);
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -668,6 +751,152 @@ export default function MemberProfilePage() {
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'Menyimpan Perubahan...' : 'Simpan Semua Pengaturan'}</span>
+          </button>
+        </div>
+      </form>
+
+      {/* ── Section 4: Keamanan & Kata Sandi Akun ── */}
+      <form onSubmit={handlePasswordSubmit} className="mt-8 bg-white border border-varena-taupe/20 rounded-2xl p-6 shadow-xs space-y-5">
+        <div className="flex items-center justify-between border-b border-varena-taupe/15 pb-3">
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-varena-gold" />
+            <div>
+              <h2 className="font-serif text-base font-bold text-varena-espresso">
+                4. Keamanan & Kata Sandi Akun
+              </h2>
+              <p className="text-[11px] text-varena-taupe">
+                {isInitialPasswordSetup
+                  ? 'Akun terhubung via Google. Buat kata sandi agar dapat login mandiri menggunakan email & kata sandi.'
+                  : 'Perbarui kata sandi Anda secara berkala untuk menjaga keamanan akun kemitraan.'}
+              </p>
+            </div>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>Enkripsi Bcrypt 12-Rounds</span>
+          </span>
+        </div>
+
+        {/* Password Messages */}
+        {passwordSuccessMessage && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-900 flex items-center gap-2.5 shadow-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{passwordSuccessMessage}</span>
+          </div>
+        )}
+
+        {passwordErrorMessage && (
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{passwordErrorMessage}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          {!isInitialPasswordSetup && (
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-varena-espresso mb-1">
+                Kata Sandi Saat Ini *
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Masukkan kata sandi saat ini"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                  tabIndex={-1}
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block font-semibold text-varena-espresso mb-1">
+              {isInitialPasswordSetup ? 'Buat Kata Sandi Baru *' : 'Kata Sandi Baru *'}
+            </label>
+            <div className="relative">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Minimal 8 karakter (huruf & angka)"
+                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                tabIndex={-1}
+              >
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-varena-espresso mb-1">
+              Konfirmasi Kata Sandi Baru *
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Ulangi kata sandi baru"
+                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-varena-taupe/30 focus:outline-none focus:border-varena-gold"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Security Checklist */}
+        {newPassword && (
+          <div className="p-3 bg-stone-50 rounded-xl border border-stone-200/80 text-[11px] space-y-1.5">
+            <div className="font-semibold text-stone-700 mb-1">Kriteria Keamanan Sandi:</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className={`flex items-center gap-1.5 ${newPassword.length >= 8 ? 'text-emerald-700 font-medium' : 'text-stone-400'}`}>
+                <Check className={`w-3.5 h-3.5 ${newPassword.length >= 8 ? 'text-emerald-600' : 'text-stone-300'}`} />
+                <span>Minimal 8 karakter ({newPassword.length}/8)</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${(/[a-zA-Z]/.test(newPassword) && /\d/.test(newPassword)) ? 'text-emerald-700 font-medium' : 'text-stone-400'}`}>
+                <Check className={`w-3.5 h-3.5 ${(/[a-zA-Z]/.test(newPassword) && /\d/.test(newPassword)) ? 'text-emerald-600' : 'text-stone-300'}`} />
+                <span>Kombinasi huruf & angka</span>
+              </div>
+              <div className={`flex items-center gap-1.5 ${confirmPassword && newPassword === confirmPassword ? 'text-emerald-700 font-medium' : 'text-stone-400'}`}>
+                <Check className={`w-3.5 h-3.5 ${confirmPassword && newPassword === confirmPassword ? 'text-emerald-600' : 'text-stone-300'}`} />
+                <span>Konfirmasi cocok</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit"
+            disabled={passwordSaving || !newPassword || !confirmPassword}
+            className="py-2.5 px-6 rounded-xl bg-varena-espresso text-varena-gold font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center gap-2 shadow-xs disabled:opacity-50"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>{passwordSaving ? 'Menyimpan Sandi...' : isInitialPasswordSetup ? 'Buat Kata Sandi Akun' : 'Perbarui Kata Sandi'}</span>
           </button>
         </div>
       </form>

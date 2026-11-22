@@ -175,9 +175,9 @@ export default function AgentPortalPage() {
     const headers: Record<string, string> = token
       ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       : {
-          'x-user-id': u.userId || u.id || '',
-          'x-user-email': u.email || '',
-        };
+        'x-user-id': u.userId || u.id || '',
+        'x-user-email': u.email || '',
+      };
 
     try {
       // 1. Profile & Config
@@ -580,11 +580,10 @@ export default function AgentPortalPage() {
         {/* Toast Alert Message */}
         {message && (
           <div
-            className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between shadow-sm ${
-              message.type === 'success'
+            className={`p-3.5 rounded-xl text-xs font-medium flex items-center justify-between shadow-sm ${message.type === 'success'
                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                 : 'bg-rose-50 text-rose-800 border border-rose-300'
-            }`}
+              }`}
           >
             <span>{message.text}</span>
             <button onClick={() => setMessage(null)} className="font-bold ml-2">✕</button>
@@ -690,44 +689,40 @@ export default function AgentPortalPage() {
         <div className="flex border-b border-varena-taupe/20 space-x-1 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('RESTOCK')}
-            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'RESTOCK'
+            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'RESTOCK'
                 ? 'border-varena-espresso text-varena-espresso'
                 : 'border-transparent text-stone-500 hover:text-varena-espresso'
-            }`}
+              }`}
           >
             <Package className="w-4 h-4" />
             <span>Pasokan Grosir Kantor ({restockOrders.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('DISTRIBUTION')}
-            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'DISTRIBUTION'
+            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'DISTRIBUTION'
                 ? 'border-varena-espresso text-varena-espresso'
                 : 'border-transparent text-stone-500 hover:text-varena-espresso'
-            }`}
+              }`}
           >
             <Truck className="w-4 h-4" />
             <span>Tugas Kirim Mitra Lokal ({assignedOrders.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('DEPOSIT')}
-            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'DEPOSIT'
+            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'DEPOSIT'
                 ? 'border-varena-espresso text-varena-espresso'
                 : 'border-transparent text-stone-500 hover:text-varena-espresso'
-            }`}
+              }`}
           >
             <Wallet className="w-4 h-4" />
             <span>Buku Kas &amp; Saldo Deposit</span>
           </button>
           <button
             onClick={() => setActiveTab('REWARDS')}
-            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'REWARDS'
+            className={`py-3 px-4 font-serif text-xs font-bold border-b-2 transition whitespace-nowrap flex items-center gap-2 ${activeTab === 'REWARDS'
                 ? 'border-varena-espresso text-varena-espresso'
                 : 'border-transparent text-stone-500 hover:text-varena-espresso'
-            }`}
+              }`}
           >
             <Gift className="w-4 h-4" />
             <span>Penghargaan &amp; Bonus Kantor ({agentData?.rewards?.length || 0})</span>
@@ -794,15 +789,14 @@ export default function AgentPortalPage() {
                         </td>
                         <td className="py-3 px-3">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              o.orderStatus === 'PAID'
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${o.orderStatus === 'PAID'
                                 ? 'bg-blue-100 text-blue-800'
                                 : o.orderStatus === 'SHIPPED'
-                                ? 'bg-purple-100 text-purple-800'
-                                : o.orderStatus === 'COMPLETED'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : o.orderStatus === 'COMPLETED'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-amber-100 text-amber-800'
+                              }`}
                           >
                             {o.orderStatus === 'PENDING_PAYMENT' ? 'Menunggu Pembayaran' : o.orderStatus === 'PAID' ? 'Sedang Disiapkan Kantor' : o.orderStatus === 'SHIPPED' ? 'Sedang Dikirim Kurir' : 'Telah Tiba di Gudang'}
                           </span>
@@ -880,11 +874,10 @@ export default function AgentPortalPage() {
                         </td>
                         <td className="py-3 px-3">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              ao.orderStatus === 'SHIPPED' || ao.agentDispatchStatus === 'DISPATCHED'
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${ao.orderStatus === 'SHIPPED' || ao.agentDispatchStatus === 'DISPATCHED'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-amber-100 text-amber-800'
-                            }`}
+                              }`}
                           >
                             {ao.orderStatus === 'SHIPPED' ? 'Sudah Diserahkan/Dikirim' : 'Menunggu Kirim'}
                           </span>
@@ -988,10 +981,10 @@ export default function AgentPortalPage() {
                         <td className="py-3 px-3 font-semibold">
                           {tx.type === 'TOPUP_DEPOSIT' ? 'Top Up Saldo Deposit'
                             : tx.type === 'RESTOCK_PAYMENT' ? 'Pembayaran Pasokan Grosir'
-                            : tx.type === 'RESTOCK_HYBRID_DEPOSIT' ? 'Pembayaran Pasokan (Bagian Deposit)'
-                            : tx.type === 'ADJUSTMENT_CREDIT' ? 'Penyesuaian Kredit'
-                            : tx.type === 'ADJUSTMENT_DEBIT' ? 'Penyesuaian Debit'
-                            : tx.type}
+                              : tx.type === 'RESTOCK_HYBRID_DEPOSIT' ? 'Pembayaran Pasokan (Bagian Deposit)'
+                                : tx.type === 'ADJUSTMENT_CREDIT' ? 'Penyesuaian Kredit'
+                                  : tx.type === 'ADJUSTMENT_DEBIT' ? 'Penyesuaian Debit'
+                                    : tx.type}
                         </td>
                         <td className="py-3 px-3 text-stone-600">
                           {tx.notes}
@@ -1004,13 +997,13 @@ export default function AgentPortalPage() {
                         <td className="py-3 px-3">
                           {(() => {
                             const statusConfig: Record<string, { label: string; cls: string }> = {
-                              COMPLETED:            { label: '✅ Berhasil',              cls: 'bg-emerald-100 text-emerald-800' },
-                              PENDING:              { label: '⏳ Menunggu Admin',        cls: 'bg-amber-100 text-amber-800' },
-                              PENDING_PAYMENT:      { label: '🕐 Menunggu Transfer',    cls: 'bg-sky-100 text-sky-800' },
+                              COMPLETED: { label: '✅ Berhasil', cls: 'bg-emerald-100 text-emerald-800' },
+                              PENDING: { label: '⏳ Menunggu Admin', cls: 'bg-amber-100 text-amber-800' },
+                              PENDING_PAYMENT: { label: '🕐 Menunggu Transfer', cls: 'bg-sky-100 text-sky-800' },
                               WAITING_VERIFICATION: { label: '🔍 Sedang Diverifikasi', cls: 'bg-blue-100 text-blue-800' },
-                              REJECTED:             { label: '❌ Ditolak',              cls: 'bg-rose-100 text-rose-800' },
-                              EXPIRED:              { label: '⏰ Kedaluwarsa',           cls: 'bg-stone-100 text-stone-500' },
-                              CANCELLED:            { label: '🚫 Dibatalkan',            cls: 'bg-stone-100 text-stone-500' },
+                              REJECTED: { label: '❌ Ditolak', cls: 'bg-rose-100 text-rose-800' },
+                              EXPIRED: { label: '⏰ Kedaluwarsa', cls: 'bg-stone-100 text-stone-500' },
+                              CANCELLED: { label: '🚫 Dibatalkan', cls: 'bg-stone-100 text-stone-500' },
                             };
                             const st = statusConfig[tx.status] || { label: tx.status, cls: 'bg-stone-100 text-stone-600' };
                             const canResubmit = (tx.status === 'EXPIRED' || tx.status === 'CANCELLED') && tx.type === 'TOPUP_DEPOSIT';
@@ -1261,11 +1254,10 @@ export default function AgentPortalPage() {
                   <button
                     type="button"
                     onClick={() => setRestockPaymentMethod('DEPOSIT')}
-                    className={`p-3 rounded-xl border text-left transition ${
-                      restockPaymentMethod === 'DEPOSIT'
+                    className={`p-3 rounded-xl border text-left transition ${restockPaymentMethod === 'DEPOSIT'
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-semibold ring-1 ring-emerald-600'
                         : 'border-stone-200 text-stone-700 hover:bg-stone-50'
-                    }`}
+                      }`}
                   >
                     <div className="text-xs font-bold">Saldo Deposit Agen</div>
                     <div className="text-[10px] text-stone-500 mt-0.5">
@@ -1275,11 +1267,10 @@ export default function AgentPortalPage() {
                   <button
                     type="button"
                     onClick={() => setRestockPaymentMethod('MANUAL_TRANSFER')}
-                    className={`p-3 rounded-xl border text-left transition ${
-                      restockPaymentMethod === 'MANUAL_TRANSFER'
+                    className={`p-3 rounded-xl border text-left transition ${restockPaymentMethod === 'MANUAL_TRANSFER'
                         ? 'border-varena-espresso bg-stone-100 text-varena-espresso font-semibold ring-1 ring-varena-espresso'
                         : 'border-stone-200 text-stone-700 hover:bg-stone-50'
-                    }`}
+                      }`}
                   >
                     <div className="text-xs font-bold">Transfer Bank Manual</div>
                     <div className="text-[10px] text-stone-500 mt-0.5">Transfer rekening kantor pusat</div>
@@ -1303,8 +1294,8 @@ export default function AgentPortalPage() {
                   {restockSubmitting
                     ? 'Memproses...'
                     : isRestockBelowMoq
-                    ? `Min. Order ${minRestockMoq} Box (Saat ini: ${cartBoxQty} Box)`
-                    : `Konfirmasi Pemesanan (${cartBoxQty} Box)`}
+                      ? `Min. Order ${minRestockMoq} Box (Saat ini: ${cartBoxQty} Box)`
+                      : `Konfirmasi Pemesanan (${cartBoxQty} Box)`}
                 </button>
               </div>
             </form>

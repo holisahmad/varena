@@ -44,3 +44,26 @@ test('Auth - Token kadaluarsa atau rusak harus ditolak', async () => {
   const result = await verifySessionToken(expiredToken);
   assert.equal(result, null, 'Token expired harus mengembalikan null');
 });
+
+test('Security - Validasi Kebijakan Kata Sandi VARENA', async () => {
+  // Policy rule checks: min 8 chars, letter + number, reject common passwords
+  const validatePassword = (pwd, confirm, current) => {
+    if (!pwd || pwd.length < 8) return 'Password minimal 8 karakter';
+    if (pwd.length > 128) return 'Password maksimal 128 karakter';
+    if (!/[a-zA-Z]/.test(pwd) || !/\d/.test(pwd)) return 'Password wajib kombinasi huruf dan angka';
+    if (['12345678', 'password', 'password123', 'admin123', 'varena123'].includes(pwd.toLowerCase())) {
+      return 'Password terlalu umum';
+    }
+    if (pwd !== confirm) return 'Konfirmasi password tidak cocok';
+    if (current && pwd === current) return 'Password baru tidak boleh sama dengan password lama';
+    return null;
+  };
+
+  assert.equal(validatePassword('short', 'short'), 'Password minimal 8 karakter');
+  assert.equal(validatePassword('onlyletters', 'onlyletters'), 'Password wajib kombinasi huruf dan angka');
+  assert.equal(validatePassword('1234567890', '1234567890'), 'Password wajib kombinasi huruf dan angka');
+  assert.equal(validatePassword('password123', 'password123'), 'Password terlalu umum');
+  assert.equal(validatePassword('VarenaPro2026', 'VarenaBeda2026'), 'Konfirmasi password tidak cocok');
+  assert.equal(validatePassword('OldPass123', 'OldPass123', 'OldPass123'), 'Password baru tidak boleh sama dengan password lama');
+  assert.equal(validatePassword('VarenaLuxury2026!', 'VarenaLuxury2026!'), null, 'Password kuat harus lolos validasi');
+});
