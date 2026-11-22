@@ -105,32 +105,41 @@ export default function PwaInstallPrompt() {
 
       {/* Modal Panduan Instalasi Pintar (Android & iOS) */}
       {showGuideModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-varena-gold/30 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
-            {/* Header Modal */}
-            <div className="bg-varena-espresso px-5 py-4 text-varena-ivory flex items-center justify-between border-b border-[#4A3B30]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Panduan Pasang Aplikasi VARENA"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowGuideModal(false);
+          }}
+          className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-hidden"
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-varena-gold/40 flex flex-col max-h-[88vh] my-auto animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Header Modal (Tetap di Atas) */}
+            <div className="shrink-0 bg-varena-espresso px-4 sm:px-5 py-3.5 text-varena-ivory flex items-center justify-between border-b border-[#4A3B30]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center text-varena-gold">
+                <div className="w-8 h-8 rounded-lg bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center text-varena-gold shrink-0">
                   <Smartphone className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-serif font-bold text-sm text-white">Panduan Pasang Aplikasi VARENA</h3>
-                  <p className="text-[11px] text-varena-ivory/70">Langsung di layar utama HP tanpa unduh file APK</p>
+                  <p className="text-[11px] text-varena-ivory/70">Langsung di layar utama HP tanpa unduh APK</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowGuideModal(false)}
-                className="p-1 rounded-lg text-varena-taupe-light hover:text-white hover:bg-white/10 transition"
+                className="p-1.5 rounded-lg text-varena-taupe-light hover:text-white hover:bg-white/10 transition shrink-0"
                 aria-label="Tutup Panduan"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Tab Perangkat */}
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100 rounded-xl text-xs font-semibold">
+            {/* Area Konten Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 overscroll-contain">
+              {/* Tab Perangkat */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100 rounded-xl text-xs font-semibold sticky top-0 z-10 shadow-xs">
                 <button
                   type="button"
                   onClick={() => setActiveTab('android')}
@@ -258,8 +267,10 @@ export default function PwaInstallPrompt() {
                   <strong>Ringan &amp; Selalu Terupdate:</strong> Aplikasi ini hanya berukuran beberapa kilobyte dan otomatis terupdate setiap kali Anda membukanya.
                 </p>
               </div>
+            </div>
 
-              {/* Tombol Aksi */}
+            {/* Footer Modal (Tetap di Bawah) */}
+            <div className="shrink-0 p-3 sm:p-4 bg-stone-50 border-t border-stone-200/80">
               <button
                 type="button"
                 onClick={() => setShowGuideModal(false)}
