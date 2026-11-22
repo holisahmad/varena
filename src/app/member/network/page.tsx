@@ -153,17 +153,17 @@ export default function MemberNetworkPage() {
               </div>
             </div>
 
-            <form onSubmit={handleSearchSubmit} className="flex gap-2">
+            <form onSubmit={handleSearchSubmit} className="flex gap-2 w-full sm:w-auto">
               <input
                 type="text"
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
                 placeholder="Cari ID Mitra (cth: VRN-0001)"
-                className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 uppercase font-mono text-xs focus:outline-none focus:border-varena-gold"
+                className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 uppercase font-mono text-xs focus:outline-none focus:border-varena-gold flex-1 sm:w-48 min-w-0"
               />
               <button
                 type="submit"
-                className="px-3 py-1.5 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold"
+                className="px-3 py-1.5 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold shrink-0"
               >
                 <Search className="w-3.5 h-3.5" />
               </button>
@@ -252,11 +252,11 @@ export default function MemberNetworkPage() {
       ) : (
         /* Sponsor List View */
         <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h3 className="font-serif text-lg font-bold text-varena-espresso">
               Daftar Mitra yang Anda Sponsori Langsung
             </h3>
-            <span className="text-xs font-mono font-semibold text-varena-gold">
+            <span className="self-start sm:self-auto text-xs font-mono font-semibold text-varena-gold">
               Total: {sponsorList.length} Mitra
             </span>
           </div>

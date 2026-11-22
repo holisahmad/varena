@@ -930,12 +930,12 @@ export default function MemberWalletPage() {
           {/* Withdrawal Requests Tracking */}
           {wallet?.withdrawals && wallet.withdrawals.length > 0 && (
             <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-                  <ArrowDownRight className="w-5 h-5 text-varena-gold" />
+                  <ArrowDownRight className="w-5 h-5 text-varena-gold shrink-0" />
                   <span>Riwayat Penarikan Dana (Payout)</span>
                 </h2>
-                <span className="text-xs text-varena-taupe font-mono">
+                <span className="self-start sm:self-auto text-xs text-varena-taupe font-mono">
                   {wallet.withdrawals.length} riwayat
                 </span>
               </div>
@@ -1007,12 +1007,12 @@ export default function MemberWalletPage() {
 
           {/* Ledger Statement Table */}
           <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-                <History className="w-5 h-5 text-varena-gold" />
+                <History className="w-5 h-5 text-varena-gold shrink-0" />
                 <span>Rekening Koran Buku Besar (Mutasi)</span>
               </h2>
-              <span className="text-xs text-varena-taupe">Append-only audit trail</span>
+              <span className="self-start sm:self-auto text-xs text-varena-taupe">Append-only audit trail</span>
             </div>
 
             {loading ? (

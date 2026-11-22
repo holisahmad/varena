@@ -732,14 +732,14 @@ export default function AgentPortalPage() {
         {/* ── TAB 1: RESTOCK PASOKAN GROSIR DARI KANTOR PUSAT ── */}
         {activeTab === 'RESTOCK' && (
           <div className="bg-white rounded-2xl border border-varena-taupe/20 p-5 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-serif font-bold text-base text-varena-espresso">Riwayat Pasokan Grosir dari Kantor Pusat</h3>
                 <p className="text-xs text-stone-500">Seluruh pasokan dikirim langsung dari pabrik/kantor pusat bebas biaya pengiriman.</p>
               </div>
               <Link
                 href="/agent/checkout"
-                className="py-2 px-3.5 rounded-xl bg-varena-espresso text-varena-gold font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center gap-1.5 shadow"
+                className="py-2 px-3.5 rounded-xl bg-varena-espresso text-varena-gold font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center justify-center gap-1.5 shadow shrink-0 w-full sm:w-auto"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Pesan Pasokan Grosir Baru</span>
@@ -916,8 +916,8 @@ export default function AgentPortalPage() {
                   Saldo deposit mempercepat pembelian stok pasokan grosir tanpa perlu transfer manual setiap kali order.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-0 border-stone-100">
+                <div className="text-left sm:text-right">
                   <div className="text-[10px] text-stone-400 font-semibold uppercase">Saldo Aktif Saat Ini</div>
                   <div className="text-xl font-bold font-serif text-varena-espresso">
                     Rp{(agentData?.agentDepositBalance || 0).toLocaleString('id-ID')}
@@ -925,7 +925,7 @@ export default function AgentPortalPage() {
                 </div>
                 <button
                   onClick={() => setTopupModalOpen(true)}
-                  className="py-2 px-3.5 rounded-xl bg-varena-gold text-varena-espresso font-bold text-xs hover:bg-varena-gold-hover transition shadow"
+                  className="py-2 px-3.5 rounded-xl bg-varena-gold text-varena-espresso font-bold text-xs hover:bg-varena-gold-hover transition shadow shrink-0"
                 >
                   + Top Up Deposit
                 </button>

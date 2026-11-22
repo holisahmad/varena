@@ -892,10 +892,10 @@ export default function MemberDashboardPage() {
 
       {/* Section: Pesanan & Pengiriman Saya (Sinkronisasi Logistik) */}
       <div id="pesanan" className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4 scroll-mt-20">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-              <Package className="w-5 h-5 text-varena-gold" />
+              <Package className="w-5 h-5 text-varena-gold shrink-0" />
               <span>Pesanan & Pengiriman Saya</span>
             </h2>
             <p className="text-xs text-varena-taupe mt-0.5">
@@ -904,7 +904,7 @@ export default function MemberDashboardPage() {
           </div>
           <Link
             href="/checkout"
-            className="px-3 py-1.5 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center gap-1.5 shadow"
+            className="px-3.5 py-2 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition flex items-center justify-center gap-1.5 shadow shrink-0 w-full sm:w-auto"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
             <span>{personalOrders.length > 0 ? 'Belanja Lagi' : 'Mulai Belanja'}</span>
@@ -1126,17 +1126,17 @@ export default function MemberDashboardPage() {
 
       {/* Section: Penjualan dari Referral Saya */}
       <div id="referral-sales" className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-varena-gold" />
+              <TrendingUp className="w-5 h-5 text-varena-gold shrink-0" />
               <span>Penjualan dari Link Referral Saya</span>
             </h2>
             <p className="text-xs text-varena-taupe mt-0.5">
               Pesanan konsumen atau mitra baru yang berbelanja melalui tautan referral Anda beserta komisi yang diperoleh.
             </p>
           </div>
-          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-varena-gold/20 text-varena-espresso">
+          <span className="self-start sm:self-auto text-xs font-mono font-semibold px-2 py-0.5 rounded bg-varena-gold/20 text-varena-espresso shrink-0">
             {referralOrders.length} Transaksi Referral
           </span>
         </div>

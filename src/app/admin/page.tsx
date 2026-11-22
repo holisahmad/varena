@@ -3153,17 +3153,17 @@ export default function AdminPage() {
           {activeTab === 'PAYOUTS' && (
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-2xl border border-varena-taupe/20 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="font-serif text-lg font-bold text-varena-espresso flex items-center gap-2">
-                      <Building2 className="w-5 h-5 text-varena-gold" />
+                      <Building2 className="w-5 h-5 text-varena-gold shrink-0" />
                       <span>Verifikasi & Persetujuan Penarikan Dana (Maker-Checker Payout)</span>
                     </h2>
                     <p className="text-xs text-varena-taupe mt-0.5">
                       Setiap pencairan uang kas keluar wajib diverifikasi dan dicantumkan nomor referensi perbankan resmi untuk audit trail.
                     </p>
                   </div>
-                  <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  <span className="self-start sm:self-auto text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
                     {withdrawals.filter((w) => w.status === 'REQUESTED').length} Permohonan Tertunda
                   </span>
                 </div>
@@ -3708,42 +3708,44 @@ export default function AdminPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs">
-                    <select
-                      value={logDays}
-                      onChange={(e) => {
-                        const days = parseInt(e.target.value, 10);
-                        setLogDays(days);
-                        loadFilteredLogs(days, logEntityFilter);
-                      }}
-                      className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white font-medium focus:outline-none"
-                    >
-                      <option value={7}>7 Hari Terakhir</option>
-                      <option value={30}>30 Hari Terakhir</option>
-                      <option value={60}>60 Hari Terakhir</option>
-                    </select>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs w-full sm:w-auto">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <select
+                        value={logDays}
+                        onChange={(e) => {
+                          const days = parseInt(e.target.value, 10);
+                          setLogDays(days);
+                          loadFilteredLogs(days, logEntityFilter);
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white font-medium focus:outline-none flex-1 sm:flex-none text-xs"
+                      >
+                        <option value={7}>7 Hari Terakhir</option>
+                        <option value={30}>30 Hari Terakhir</option>
+                        <option value={60}>60 Hari Terakhir</option>
+                      </select>
 
-                    <select
-                      value={logEntityFilter}
-                      onChange={(e) => {
-                        setLogEntityFilter(e.target.value);
-                        loadFilteredLogs(logDays, e.target.value);
-                      }}
-                      className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white font-medium focus:outline-none"
-                    >
-                      <option value="ALL">Semua Entitas</option>
-                      <option value="WITHDRAWAL">Pencairan Dana (Withdrawal)</option>
-                      <option value="ORDER">Pesanan Penjualan (Order)</option>
-                      <option value="PLACEMENT">Penempatan Jaringan</option>
-                      <option value="MEMBER">Mitra & Member</option>
-                      <option value="MARKETING_PLAN">Marketing Plan</option>
-                    </select>
+                      <select
+                        value={logEntityFilter}
+                        onChange={(e) => {
+                          setLogEntityFilter(e.target.value);
+                          loadFilteredLogs(logDays, e.target.value);
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-varena-taupe/30 bg-white font-medium focus:outline-none flex-1 sm:flex-none max-w-[210px] sm:max-w-xs text-xs truncate"
+                      >
+                        <option value="ALL">Semua Entitas</option>
+                        <option value="WITHDRAWAL">Pencairan Dana (Withdrawal)</option>
+                        <option value="ORDER">Pesanan Penjualan (Order)</option>
+                        <option value="PLACEMENT">Penempatan Jaringan</option>
+                        <option value="MEMBER">Mitra & Member</option>
+                        <option value="MARKETING_PLAN">Marketing Plan</option>
+                      </select>
+                    </div>
 
                     <button
                       type="button"
                       disabled={pruningLogs}
                       onClick={handlePruneAuditLogs}
-                      className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition flex items-center gap-1.5 disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50 w-full sm:w-auto shrink-0"
                       title="Bersihkan log umum > 60 hari agar hemat kuota database free tier"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${pruningLogs ? 'animate-spin' : ''}`} />
@@ -5124,7 +5126,7 @@ export default function AdminPage() {
                       </div>
 
                       {/* Filter tabs */}
-                      <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl self-start md:self-auto text-xs font-semibold">
+                      <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl self-start md:self-auto text-xs font-semibold overflow-x-auto max-w-full no-scrollbar">
                         <button
                           type="button"
                           onClick={() => setTopupFilter('WAITING')}
