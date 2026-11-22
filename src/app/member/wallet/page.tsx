@@ -23,6 +23,8 @@ import {
   Clock,
   Copy,
   Check,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 
 export default function MemberWalletPage() {
@@ -43,6 +45,8 @@ export default function MemberWalletPage() {
   // Withdrawal form
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showWithdrawConfirmModal, setShowWithdrawConfirmModal] = useState(false);
+  const [showCancelDepositConfirmModal, setShowCancelDepositConfirmModal] = useState(false);
   const [uniqueCodeBalance, setUniqueCodeBalance] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -208,8 +212,26 @@ export default function MemberWalletPage() {
     }
   };
 
-  const handleRequestPayout = async (e: React.FormEvent) => {
+  const handleOpenWithdrawConfirm = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
+    if (!isBankBound) {
+      setErrorMsg('Harap simpan dan kunci rekening bank Anda terlebih dahulu.');
+      return;
+    }
+    const val = parseInt(amount, 10);
+    if (!val || val < 50000) {
+      setErrorMsg('Nominal penarikan minimal Rp50.000.');
+      return;
+    }
+    if (val > totalWithdrawable) {
+      setErrorMsg(`Nominal melebihi saldo yang dapat ditarik (maks Rp${totalWithdrawable.toLocaleString('id-ID')}).`);
+      return;
+    }
+    setShowWithdrawConfirmModal(true);
+  };
+
+  const handleExecutePayout = async () => {
     setErrorMsg('');
     setSuccessMsg('');
     setSubmitting(true);
@@ -231,9 +253,10 @@ export default function MemberWalletPage() {
 
       setSuccessMsg('Pengajuan penarikan dana berhasil diajukan! Menunggu persetujuan finance (maker-checker).');
       setAmount('');
+      setShowWithdrawConfirmModal(false);
       loadWallet(user.memberCode || 'VRN-0001');
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || 'Gagal mengajukan penarikan dana.');
     } finally {
       setSubmitting(false);
     }
@@ -339,7 +362,6 @@ export default function MemberWalletPage() {
 
   const handleCancelShopDeposit = async () => {
     if (!shopDepositResult?.transactionId || !user) return;
-    if (!window.confirm('Batalkan permintaan deposit ini?')) return;
     setShopDepositCancelling(true);
     setErrorMsg('');
     try {
@@ -353,6 +375,7 @@ export default function MemberWalletPage() {
       });
       const data = await res.json();
       if (data.success) {
+        setShowCancelDepositConfirmModal(false);
         setShopDepositModalOpen(false);
         setShopDepositStep(1);
         setShopDepositResult(null);
@@ -611,7 +634,7 @@ export default function MemberWalletPage() {
             )}
 
             {isBankBound ? (
-              <form onSubmit={handleRequestPayout} className="space-y-3.5 text-xs" suppressHydrationWarning>
+              <form onSubmit={handleOpenWithdrawConfirm} className="space-y-3.5 text-xs" suppressHydrationWarning>
                 {/* Destination Bank Display (Read-Only) */}
                 <div className="p-3 rounded-lg bg-stone-50 border border-stone-200 flex items-center justify-between text-xs">
                   <div>
@@ -759,10 +782,10 @@ export default function MemberWalletPage() {
                 <button
                   type="submit"
                   disabled={submitting || totalWithdrawable < 50000 || !amount || enteredAmount < 50000 || enteredAmount > totalWithdrawable}
-                  className="w-full py-3 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition disabled:opacity-50 flex items-center justify-center gap-2 shadow"
+                  className="w-full py-3 rounded-lg bg-varena-espresso text-varena-gold-light font-semibold text-xs hover:bg-varena-espresso-dark transition disabled:opacity-50 flex items-center justify-center gap-2 shadow cursor-pointer"
                 >
                   <Wallet className="w-4 h-4" />
-                  <span>{submitting ? 'Memproses Penarikan...' : `Kirim Permohonan Penarikan ${enteredAmount >= 50000 ? `(Rp${enteredAmount.toLocaleString('id-ID')})` : ''}`}</span>
+                  <span>{`Lanjut ke Konfirmasi Penarikan ${enteredAmount >= 50000 ? `(Rp${enteredAmount.toLocaleString('id-ID')})` : ''}`}</span>
                 </button>
               </form>
             ) : (
@@ -1428,7 +1451,7 @@ export default function MemberWalletPage() {
                           <button
                             type="button"
                             disabled={shopDepositCancelling || shopDepositConfirming}
-                            onClick={handleCancelShopDeposit}
+                            onClick={() => setShowCancelDepositConfirmModal(true)}
                             className="w-full py-2 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition disabled:opacity-50"
                           >
                             {shopDepositCancelling ? 'Membatalkan...' : '✕ Batalkan Permintaan Deposit Ini'}
@@ -1456,6 +1479,201 @@ export default function MemberWalletPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── MODAL: KONFIRMASI PENARIKAN SALDO MITRA ── */}
+      {showWithdrawConfirmModal && wallet?.bankInfo && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-stone-900 to-stone-800 text-white border-b border-stone-700">
+              <div className="w-9 h-9 rounded-xl bg-varena-gold/20 border border-varena-gold/40 flex items-center justify-center flex-shrink-0 text-varena-gold">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-serif font-bold text-sm text-white">Konfirmasi Penarikan Saldo</p>
+                <p className="text-[11px] text-stone-300">Review rincian transaksi sebelum diteruskan ke antrean Finance</p>
+              </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowWithdrawConfirmModal(false)}
+                className="text-stone-400 hover:text-white p-1 rounded-lg transition disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {/* Rekening Tujuan Box */}
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-stone-500 font-semibold uppercase tracking-wider">
+                  <span>Rekening Tujuan Terikat</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
+                    <ShieldCheck className="w-3 h-3" />
+                    Terverifikasi
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-stone-900 text-sm">
+                      {wallet.bankInfo.bankName} - {wallet.bankInfo.bankAccountNumber.slice(0, 4)}••••{wallet.bankInfo.bankAccountNumber.slice(-3)}
+                    </div>
+                    <div className="text-[11px] text-stone-600 mt-0.5">
+                      a.n. <strong className="text-stone-900">{wallet.bankInfo.bankAccountHolder}</strong>
+                    </div>
+                  </div>
+                  <Lock className="w-5 h-5 text-emerald-600" />
+                </div>
+              </div>
+
+              {/* Rincian Finansial */}
+              <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2.5">
+                <div className="text-[11px] font-bold text-emerald-950 uppercase tracking-wide">
+                  Rincian Penarikan &amp; Biaya
+                </div>
+
+                <div className="space-y-1.5 font-mono text-[11px] text-emerald-900">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-sans text-stone-700">Nominal Penarikan:</span>
+                    <span className="font-bold text-stone-900">Rp{enteredAmount.toLocaleString('id-ID')}</span>
+                  </div>
+
+                  {payoutFees.scheme === 'GATEWAY' ? (
+                    <>
+                      <div className="flex justify-between items-center text-rose-700">
+                        <span className="font-sans">Biaya Layanan Admin ({payoutFees.adminFeePercent}%):</span>
+                        <span>-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-rose-700">
+                        <span className="font-sans">Biaya Transfer Jaringan Bank:</span>
+                        <span>-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center text-rose-700">
+                      <span className="font-sans">Biaya Admin Transfer Antar Bank:</span>
+                      <span>-Rp{payoutFees.totalFee.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-emerald-200 flex justify-between items-center font-bold text-xs sm:text-sm">
+                    <span className="font-sans text-emerald-950">Total Masuk ke Rekening (Net):</span>
+                    <span className="text-emerald-800 text-base font-extrabold">
+                      Rp{payoutFees.netAmount.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notice Keamanan & Prosedur */}
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Setelah dikonfirmasi, saldo sebesar <strong>Rp{enteredAmount.toLocaleString('id-ID')}</strong> akan dialihkan ke status <em>Pending Hold</em> dan diverifikasi oleh Finance pusat (SOP Maker-Checker). Proses transfer tuntas dalam 1x24 jam hari kerja.
+                </p>
+              </div>
+
+              {/* Error display */}
+              {errorMsg && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setShowWithdrawConfirmModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 font-semibold text-xs transition disabled:opacity-50"
+                >
+                  Periksa Kembali
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleExecutePayout}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Memproses Pengajuan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Ya, Ajukan Penarikan</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: BATALKAN DEPOSIT BELANJA ── */}
+      {showCancelDepositConfirmModal && shopDepositResult && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 px-5 py-4 bg-rose-50 border-b border-rose-100">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0 text-rose-600">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-serif font-bold text-sm text-rose-950">Batalkan Permintaan Deposit</p>
+                <p className="text-[11px] text-rose-700 font-mono truncate">ID: {shopDepositResult.transactionId}</p>
+              </div>
+              <button
+                type="button"
+                disabled={shopDepositCancelling}
+                onClick={() => setShowCancelDepositConfirmModal(false)}
+                className="text-rose-400 hover:text-rose-700 p-1 rounded-lg transition disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+                <strong className="block mb-1 text-amber-950">Perhatian Sebelum Membatalkan:</strong>
+                Permintaan deposit dengan kode unik ini akan dibatalkan. Jika Anda <strong>sudah melakukan transfer</strong> ke rekening pusat, mohon jangan dibatalkan dan segera upload bukti transfer Anda.
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={shopDepositCancelling}
+                  onClick={() => setShowCancelDepositConfirmModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 font-semibold text-xs transition disabled:opacity-50"
+                >
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  disabled={shopDepositCancelling}
+                  onClick={handleCancelShopDeposit}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {shopDepositCancelling ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Membatalkan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-3.5 h-3.5" />
+                      <span>Ya, Batalkan Deposit</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
