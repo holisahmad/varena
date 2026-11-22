@@ -576,6 +576,8 @@ model AgentDepositTransaction {
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@index([memberId, createdAt])
+  @@index([status, createdAt])
+  @@index([status])
   @@map("agent_deposit_transactions")
 }
 

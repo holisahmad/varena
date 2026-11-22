@@ -187,12 +187,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     fetchBadge();
 
-    // 1. Efficient 45-second background polling (hanya saat tab aktif dan visible, menghemat kuota free tier)
+    // 1. Efficient 90-second background polling (hanya saat tab aktif dan visible, sangat hemat kuota database free tier)
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && !document.hidden) {
         fetchBadge();
       }
-    }, 45000);
+    }, 90000);
 
     // 2. Instant fetch on tab focus / visibility
     const handleVisibility = () => {

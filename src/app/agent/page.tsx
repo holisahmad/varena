@@ -32,6 +32,7 @@ import {
   Check,
 } from 'lucide-react';
 import Pagination from '@/components/ui/Pagination';
+import { compressImageToWebP } from '@/lib/image-compression';
 
 export default function AgentPortalPage() {
   const router = useRouter();
@@ -348,15 +349,18 @@ export default function AgentPortalPage() {
     if (!file || !topupResult?.transactionId) return;
     setTopupUploadingProof(true);
     try {
+      // Auto kompresi client-side ke WebP (hemat ~98% ukuran file & kuota)
+      const compressed = await compressImageToWebP(file, { maxWidth: 1000, quality: 0.82 });
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', compressed.file);
       formData.append('transactionId', topupResult.transactionId);
       formData.append('memberCode', user.memberCode);
       const res = await fetch('/api/v1/agent/deposit/proof', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success) {
         setTopupProofUrl(data.proofUrl);
-        setMessage({ text: 'Bukti transfer berhasil diunggah!', type: 'success' });
+        setMessage({ text: `Bukti transfer berhasil dikompresi WebP & diunggah (${compressed.compressionRatio})!`, type: 'success' });
       } else {
         setMessage({ text: data.error || 'Gagal upload bukti.', type: 'error' });
       }

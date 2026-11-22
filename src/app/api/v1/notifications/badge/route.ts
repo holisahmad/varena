@@ -3,6 +3,26 @@ import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+interface BadgeCacheRecord {
+  data: any;
+  cachedAt: number;
+}
+
+// In-memory microcache (TTL: 25 detik) untuk meredam beban query database free-tier saat banyak tab terbuka
+const badgeMicroCache = new Map<string, BadgeCacheRecord>();
+const BADGE_CACHE_TTL_MS = 25000;
+
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of badgeMicroCache.entries()) {
+      if (now - v.cachedAt > 60000) {
+        badgeMicroCache.delete(k);
+      }
+    }
+  }, 300000);
+}
+
 export interface NotificationItem {
   id: string;
   type:
@@ -39,6 +59,18 @@ export async function GET(req: Request) {
         { role: 'guest', total: 0, items: [] },
         { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
       );
+    }
+
+    // ── Microcache check ──────────────────────────────────────────────────
+    const cacheKey = `badge-${userId || ''}-${userEmail || ''}`;
+    const cached = badgeMicroCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < BADGE_CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Varena-Cache': 'HIT',
+        },
+      });
     }
 
     // Resolve user & roles
@@ -251,28 +283,31 @@ export async function GET(req: Request) {
 
       items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      return NextResponse.json(
-        {
-          role: 'admin',
-          orders: {
-            pendingPaymentCount,
-            needShippingCount,
-            manualConfirmCount,
-            totalCount: pendingPaymentCount + needShippingCount + manualConfirmCount,
-            latestAt: latestOrderAt,
-          },
-          payout: {
-            pendingCount: pendingPayoutCount,
-            latestAt: pendingPayout._max.requestedAt ?? null,
-          },
-          agentApplyCount,
-          pendingDepositCount,
-          newMemberCount,
-          total: pendingPaymentCount + needShippingCount + manualConfirmCount + pendingPayoutCount + agentApplyCount + pendingDepositCount + newMemberCount,
-          items: items.slice(0, 10),
+      const adminPayload = {
+        role: 'admin',
+        orders: {
+          pendingPaymentCount,
+          needShippingCount,
+          manualConfirmCount,
+          totalCount: pendingPaymentCount + needShippingCount + manualConfirmCount,
+          latestAt: latestOrderAt,
         },
-        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-      );
+        payout: {
+          pendingCount: pendingPayoutCount,
+          latestAt: pendingPayout._max.requestedAt ?? null,
+        },
+        agentApplyCount,
+        pendingDepositCount,
+        newMemberCount,
+        total: pendingPaymentCount + needShippingCount + manualConfirmCount + pendingPayoutCount + agentApplyCount + pendingDepositCount + newMemberCount,
+        items: items.slice(0, 10),
+      };
+
+      badgeMicroCache.set(cacheKey, { data: adminPayload, cachedAt: Date.now() });
+
+      return NextResponse.json(adminPayload, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'X-Varena-Cache': 'MISS' }
+      });
     }
 
     // ── MEMBER NOTIFICATIONS ──────────────────────────────────────────────
@@ -535,16 +570,19 @@ export async function GET(req: Request) {
       ? new Date(Math.max(...walletTimes.map((d) => d.getTime())))
       : null;
 
-    return NextResponse.json(
-      {
-        role: 'member',
-        orders: { count: actionOrders.length, latestAt: latestOrderAt },
-        wallet: { latestAt: latestWalletAt },
-        total: items.length,
-        items: items.slice(0, 10),
-      },
-      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-    );
+    const memberPayload = {
+      role: 'member',
+      orders: { count: actionOrders.length, latestAt: latestOrderAt },
+      wallet: { latestAt: latestWalletAt },
+      total: items.length,
+      items: items.slice(0, 10),
+    };
+
+    badgeMicroCache.set(cacheKey, { data: memberPayload, cachedAt: Date.now() });
+
+    return NextResponse.json(memberPayload, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'X-Varena-Cache': 'MISS' }
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
