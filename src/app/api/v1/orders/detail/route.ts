@@ -29,16 +29,16 @@ export async function GET(req: Request) {
       );
     }
 
-    // Auto-cancel if 24 hours elapsed and not submitted confirmation
+    // Auto-cancel if 1 hour elapsed and not submitted confirmation
     let currentStatus = order.orderStatus;
-    const isPast24Hours = Date.now() - new Date(order.createdAt).getTime() > 24 * 60 * 60 * 1000;
+    const isPast1Hour = Date.now() - new Date(order.createdAt).getTime() > 60 * 60 * 1000;
     if (
       order.orderStatus === 'PENDING_PAYMENT' &&
-      isPast24Hours &&
+      isPast1Hour &&
       order.paymentConfirmationStatus !== 'SUBMITTED'
     ) {
       try {
-        await cancelExpiredOrder(order.id);
+        await cancelExpiredOrder(order.id, 'Batas waktu pembayaran 1 jam telah habis.');
         currentStatus = 'CANCELLED';
       } catch (e) {
         console.error('Failed to auto-cancel expired order:', e);

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getMemberFromJWT } from '@/lib/auth';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
+import { sweepExpiredDeposits } from '@/lib/deposit';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,8 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
       }
     }
+
+    await sweepExpiredDeposits();
 
     const member = await prisma.member.findUnique({ where: { memberCode } });
     if (!member) {
@@ -72,6 +75,8 @@ export async function POST(req: Request) {
       );
     }
 
+    await sweepExpiredDeposits();
+
     const member = await prisma.member.findUnique({ where: { memberCode } });
     if (!member) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
@@ -91,7 +96,7 @@ export async function POST(req: Request) {
         referenceId: refId,
         notes: notes || 'Pengajuan deposit saldo belanja mitra',
         proofUrl: proofUrl || null,
-        status: 'PENDING',
+        status: 'PENDING_PAYMENT',
         uniqueCode,
         bankName: bankName || null,
         accountNumber: accountNumber || null,

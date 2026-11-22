@@ -51,6 +51,7 @@ import {
   Truck,
   CreditCard,
   Clock,
+  Info,
   Search,
   Send,
   UserCheck,
@@ -222,6 +223,7 @@ export default function AdminPage() {
   const [rejectTopupReason, setRejectTopupReason] = useState('');
   const [rejectTopupSubmitting, setRejectTopupSubmitting] = useState(false);
   const [agentSubTab, setAgentSubTab] = useState<'APPLICATIONS' | 'LIST' | 'APPOINT' | 'ROUTING' | 'TOPUP' | 'CONFIG' | 'RANKING'>('LIST');
+  const [topupFilter, setTopupFilter] = useState<'WAITING' | 'PENDING_PAYMENT' | 'ALL'>('WAITING');
   const [rankingSortBy, setRankingSortBy] = useState<'SOLD_BOX' | 'SALES_NOMINAL'>('SOLD_BOX');
   const [agentLoading, setAgentLoading] = useState(false);
 
@@ -4638,115 +4640,214 @@ export default function AdminPage() {
               )}
 
               {/* SUBTAB 4: APPROVAL TOPUP DEPOSIT */}
-              {agentSubTab === 'TOPUP' && (
-                <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden p-5 space-y-4">
-                  <div>
-                    <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-varena-gold" />
-                      <span>Verifikasi Pengajuan Topup Saldo Deposit</span>
-                    </h3>
-                    <p className="text-xs text-varena-taupe mt-1">
-                      Verifikasi transfer bank dari agen &amp; mitra. Cocokkan nominal + kode unik dengan mutasi rekening BRI sebelum menyetujui.
-                    </p>
+              {agentSubTab === 'TOPUP' && (() => {
+                const waitingVerificationTopups = pendingAgentTopups.filter(
+                  (t: any) => t.status === 'WAITING_VERIFICATION' || t.status === 'PENDING'
+                );
+                const pendingPaymentTopups = pendingAgentTopups.filter(
+                  (t: any) => t.status === 'PENDING_PAYMENT'
+                );
+                const displayedTopups =
+                  topupFilter === 'WAITING'
+                    ? waitingVerificationTopups
+                    : topupFilter === 'PENDING_PAYMENT'
+                    ? pendingPaymentTopups
+                    : pendingAgentTopups;
+
+                return (
+                  <div className="bg-white rounded-2xl border border-varena-taupe/20 shadow-sm overflow-hidden p-5 space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-serif text-base font-bold text-varena-espresso flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-varena-gold" />
+                          <span>Verifikasi Pengajuan Topup Saldo Deposit</span>
+                        </h3>
+                        <p className="text-xs text-varena-taupe mt-1">
+                          Verifikasi transfer bank dari agen &amp; mitra. Cocokkan nominal + kode unik dengan mutasi rekening BRI sebelum menyetujui.
+                        </p>
+                      </div>
+
+                      {/* Filter tabs */}
+                      <div className="flex items-center gap-1.5 bg-stone-100 p-1 rounded-xl self-start md:self-auto text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setTopupFilter('WAITING')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            topupFilter === 'WAITING'
+                              ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          <span>Perlu Review</span>
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                            waitingVerificationTopups.length > 0 ? 'bg-emerald-600 text-white' : 'bg-stone-200 text-stone-600'
+                          }`}>
+                            {waitingVerificationTopups.length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTopupFilter('PENDING_PAYMENT')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            topupFilter === 'PENDING_PAYMENT'
+                              ? 'bg-white text-amber-800 shadow-xs font-bold'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          <span>Menunggu Pembayaran</span>
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-stone-200 text-stone-600">
+                            {pendingPaymentTopups.length}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTopupFilter('ALL')}
+                          className={`px-3 py-1.5 rounded-lg transition ${
+                            topupFilter === 'ALL'
+                              ? 'bg-white text-stone-900 shadow-xs font-bold'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          Semua ({pendingAgentTopups.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    {displayedTopups.length > 0 ? (
+                      <div className="divide-y divide-varena-taupe/10">
+                        {displayedTopups.map((topup: any) => {
+                          const transferTotal = (topup.amount || 0) + (topup.uniqueCode || 0);
+                          const isShoppingTopup = topup.type === 'SHOPPING_TOPUP';
+                          const isPendingPayment = topup.status === 'PENDING_PAYMENT';
+                          const hasProof = Boolean(topup.proofUrl);
+
+                          return (
+                            <div key={topup.id} className="py-5 space-y-3">
+                              {/* Top row: name + badge */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-sm text-varena-espresso">
+                                  {topup.member?.displayName} ({topup.member?.memberCode})
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isShoppingTopup ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                                  {isShoppingTopup ? 'DEPOSIT BELANJA MITRA' : 'DEPOSIT AGEN'}
+                                </span>
+
+                                {/* Status lifecycle badge */}
+                                {isPendingPayment ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-stone-100 text-stone-700 border border-stone-200 font-bold flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-stone-500" />
+                                    <span>MENUNGGU TRANSFER (TIMER 1 JAM)</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800 font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 text-orange-600" />
+                                    <span>MENUNGGU APPROVAL ADMIN</span>
+                                  </span>
+                                )}
+
+                                {/* Proof presence badge */}
+                                {hasProof ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                                    ✓ BUKTI TERLAMPIR
+                                  </span>
+                                ) : !isPendingPayment ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-900 font-bold border border-amber-200">
+                                    ⚠ KONFIRMASI TANPA BUKTI (CEK MUTASI BRI)
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* Detail boxes */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                <div className="bg-stone-50 rounded-xl p-3">
+                                  <div className="text-varena-taupe mb-0.5">Nominal Deposit</div>
+                                  <div className="font-mono font-bold text-emerald-800 text-sm">
+                                    Rp{(topup.amount || 0).toLocaleString('id-ID')}
+                                  </div>
+                                </div>
+                                <div className="bg-stone-50 rounded-xl p-3">
+                                  <div className="text-varena-taupe mb-0.5">Kode Unik</div>
+                                  <div className="font-mono font-bold text-varena-espresso text-sm">
+                                    +Rp{(topup.uniqueCode || 0).toLocaleString('id-ID')}
+                                  </div>
+                                </div>
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 col-span-2">
+                                  <div className="text-amber-700 mb-0.5 font-semibold">Total Harus Diterima di BRI</div>
+                                  <div className="font-mono font-bold text-amber-900 text-base">
+                                    Rp{transferTotal.toLocaleString('id-ID')}
+                                  </div>
+                                  <div className="text-[10px] text-amber-600">Cocokkan dengan mutasi rekening BRI 3065 0102 4471 539</div>
+                                </div>
+                              </div>
+
+                              {/* Bank info */}
+                              <div className="text-[11px] text-varena-taupe">
+                                Diajukan: {new Date(topup.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                {' · '}Bank Pengirim: <strong>{topup.bankName || '-'}</strong> (Rek: {topup.accountNumber || '-'})
+                              </div>
+                              {topup.notes && (
+                                <div className="text-[11px] text-slate-600 font-mono bg-slate-50 px-2 py-1 rounded">
+                                  Ref: {topup.notes}
+                                </div>
+                              )}
+
+                              {/* Proof image */}
+                              {topup.proofUrl && (
+                                <div className="mt-1">
+                                  <div className="text-[11px] font-semibold text-stone-600 mb-1">Bukti Transfer:</div>
+                                  <a href={topup.proofUrl} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                      src={topup.proofUrl}
+                                      alt="Bukti Transfer"
+                                      className="max-h-36 rounded-lg border border-stone-200 hover:opacity-80 transition cursor-pointer shadow-xs"
+                                    />
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-2 pt-1">
+                                {isPendingPayment ? (
+                                  <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 text-stone-600 text-xs flex items-center gap-2">
+                                    <Info className="w-4 h-4 text-stone-400 flex-shrink-0" />
+                                    <span>Mitra belum melakukan konfirmasi transfer. Tombol persetujuan akan aktif setelah mitra mengonfirmasi bayar atau waktu 1 jam habis.</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApproveDepositTopup(topup)}
+                                      disabled={agentLoading}
+                                      className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition shadow cursor-pointer"
+                                    >
+                                      ✓ Setujui &amp; Tambah Saldo
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setRejectTopupId(topup.id); setRejectTopupReason(''); }}
+                                      className="px-4 py-2 rounded-xl bg-rose-100 text-rose-700 font-bold text-xs hover:bg-rose-200 transition cursor-pointer"
+                                    >
+                                      ✕ Tolak
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
+                        {topupFilter === 'WAITING'
+                          ? 'Tidak ada permintaan topup deposit yang perlu direview saat ini.'
+                          : topupFilter === 'PENDING_PAYMENT'
+                          ? 'Tidak ada permintaan topup yang sedang menunggu pembayaran.'
+                          : 'Tidak ada pengajuan topup deposit.'}
+                      </div>
+                    )}
                   </div>
-
-                  {pendingAgentTopups.length > 0 ? (
-                    <div className="divide-y divide-varena-taupe/10">
-                      {pendingAgentTopups.map((topup: any) => {
-                        const transferTotal = (topup.amount || 0) + (topup.uniqueCode || 0);
-                        const isShoppingTopup = topup.type === 'SHOPPING_TOPUP';
-                        return (
-                          <div key={topup.id} className="py-5 space-y-3">
-                            {/* Top row: name + badge */}
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-bold text-sm text-varena-espresso">
-                                {topup.member?.displayName} ({topup.member?.memberCode})
-                              </span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isShoppingTopup ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                                {isShoppingTopup ? 'DEPOSIT BELANJA MITRA' : 'DEPOSIT AGEN'}
-                              </span>
-                              <span className="px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800 font-bold">
-                                PENDING REVIEW
-                              </span>
-                            </div>
-
-                            {/* Detail boxes */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                              <div className="bg-stone-50 rounded-xl p-3">
-                                <div className="text-varena-taupe mb-0.5">Nominal Deposit</div>
-                                <div className="font-mono font-bold text-emerald-800 text-sm">
-                                  Rp{(topup.amount || 0).toLocaleString('id-ID')}
-                                </div>
-                              </div>
-                              <div className="bg-stone-50 rounded-xl p-3">
-                                <div className="text-varena-taupe mb-0.5">Kode Unik</div>
-                                <div className="font-mono font-bold text-varena-espresso text-sm">
-                                  +Rp{(topup.uniqueCode || 0).toLocaleString('id-ID')}
-                                </div>
-                              </div>
-                              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 col-span-2">
-                                <div className="text-amber-700 mb-0.5 font-semibold">Total Harus Diterima di BRI</div>
-                                <div className="font-mono font-bold text-amber-900 text-base">
-                                  Rp{transferTotal.toLocaleString('id-ID')}
-                                </div>
-                                <div className="text-[10px] text-amber-600">Cocokkan dengan mutasi rekening BRI 3065 0102 4471 539</div>
-                              </div>
-                            </div>
-
-                            {/* Bank info */}
-                            <div className="text-[11px] text-varena-taupe">
-                              Diajukan: {new Date(topup.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              {' · '}Bank Pengirim: <strong>{topup.bankName || '-'}</strong> (Rek: {topup.accountNumber || '-'})
-                            </div>
-                            {topup.notes && (
-                              <div className="text-[11px] text-slate-600 font-mono bg-slate-50 px-2 py-1 rounded">
-                                Ref: {topup.notes}
-                              </div>
-                            )}
-
-                            {/* Proof image */}
-                            {topup.proofUrl && (
-                              <div className="mt-1">
-                                <div className="text-[11px] font-semibold text-stone-600 mb-1">Bukti Transfer:</div>
-                                <a href={topup.proofUrl} target="_blank" rel="noopener noreferrer">
-                                  <img
-                                    src={topup.proofUrl}
-                                    alt="Bukti Transfer"
-                                    className="max-h-32 rounded-lg border border-stone-200 hover:opacity-80 transition cursor-pointer"
-                                  />
-                                </a>
-                              </div>
-                            )}
-
-                            {/* Action buttons */}
-                            <div className="flex items-center gap-2 pt-1">
-                              <button
-                                type="button"
-                                onClick={() => handleApproveDepositTopup(topup)}
-                                disabled={agentLoading}
-                                className="px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition shadow"
-                              >
-                                ✓ Setujui &amp; Tambah Saldo
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setRejectTopupId(topup.id); setRejectTopupReason(''); }}
-                                className="px-4 py-2 rounded-xl bg-rose-100 text-rose-700 font-bold text-xs hover:bg-rose-200 transition"
-                              >
-                                ✕ Tolak
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-xs text-varena-taupe bg-varena-ivory-light rounded-xl border border-dashed border-varena-taupe/30">
-                      Tidak ada permintaan topup deposit yang pending saat ini.
-                    </div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
               {/* SUBTAB 5: PENUNJUKAN LANGSUNG (DIRECT APPOINTMENT) */}
               {agentSubTab === 'APPOINT' && (

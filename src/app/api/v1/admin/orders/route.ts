@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
 import { verifyCorporateAdmin } from '@/lib/auth';
-import { settleOrderPayment, shipOrder, completeOrder } from '@/lib/order';
+import { settleOrderPayment, shipOrder, completeOrder, sweepExpiredOrders } from '@/lib/order';
 
 export async function GET(req: Request) {
   try {
@@ -10,6 +10,9 @@ export async function GET(req: Request) {
     if (!authUser) {
       return NextResponse.json({ error: 'Akses ditolak.' }, { status: 401 });
     }
+
+    // Auto-expire unpaid orders older than 1 hour and return stock to inventory
+    await sweepExpiredOrders();
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'ALL';

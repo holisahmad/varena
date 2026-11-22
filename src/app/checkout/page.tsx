@@ -218,7 +218,7 @@ function CheckoutContent() {
   const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'DEPOSIT'>('TRANSFER');
   const [shoppingDepositBalance, setShoppingDepositBalance] = useState(0);
 
-  // Countdown timer 24 jam untuk pembayaran pesanan
+  // Countdown timer 1 jam untuk pembayaran pesanan
   useEffect(() => {
     if (!orderResult || orderResult.orderStatus !== 'PENDING_PAYMENT') {
       setTimeLeft(null);
@@ -226,7 +226,7 @@ function CheckoutContent() {
     }
 
     const createdTime = new Date(orderResult.createdAt || Date.now()).getTime();
-    const expiryTime = createdTime + 24 * 60 * 60 * 1000;
+    const expiryTime = createdTime + 1 * 60 * 60 * 1000;
 
     const updateTimer = () => {
       const now = Date.now();
@@ -1536,7 +1536,7 @@ function CheckoutContent() {
                     <div>
                       <p className="font-bold">Pesanan Kedaluwarsa / Dibatalkan</p>
                       <p className="text-[11px] text-red-700 mt-0.5 leading-relaxed">
-                        Batas waktu pembayaran 24 jam telah habis dan belum ada konfirmasi pembayaran. Stok produk telah dikembalikan otomatis. Silakan buat pesanan baru jika ingin melanjutkan.
+                        Batas waktu pembayaran 1 jam telah habis dan belum ada konfirmasi pembayaran. Stok produk telah dikembalikan otomatis. Silakan buat pesanan baru jika ingin melanjutkan.
                       </p>
                     </div>
                   </div>
@@ -1555,7 +1555,7 @@ function CheckoutContent() {
                     <div className="flex items-center gap-2 text-amber-900">
                       <Clock className="w-4 h-4 text-amber-600 animate-pulse flex-shrink-0" />
                       <div className="text-left">
-                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Pembayaran (24 Jam)</div>
+                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Pembayaran (1 Jam)</div>
                         <div className="text-[10px] text-amber-700">Pesanan otomatis batal jika melewati batas ini.</div>
                       </div>
                     </div>
@@ -1564,7 +1564,7 @@ function CheckoutContent() {
                         {String(timeLeft.hours).padStart(2, '0')}:{String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}
                       </div>
                     ) : (
-                      <span className="text-[11px] font-mono text-stone-500">24:00:00</span>
+                      <span className="text-[11px] font-mono text-stone-500">01:00:00</span>
                     )}
                   </div>
                 )}

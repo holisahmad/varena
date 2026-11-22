@@ -67,6 +67,7 @@ export default function MemberWalletPage() {
   const [shopDepositProofUrl, setShopDepositProofUrl] = useState('');
   const [shopDepositUploadingProof, setShopDepositUploadingProof] = useState(false);
   const [depositConfirmed, setDepositConfirmed] = useState(false);
+  const [shopDepositConfirming, setShopDepositConfirming] = useState(false);
   const [depositTimeLeft, setDepositTimeLeft] = useState<{
     hours: number;
     minutes: number;
@@ -91,7 +92,7 @@ export default function MemberWalletPage() {
     setTimeout(() => setCopiedAmount(false), 2000);
   };
 
-  // 24-hour countdown timer for deposit transfer
+  // 1-hour countdown timer for deposit transfer
   useEffect(() => {
     if (!shopDepositResult || shopDepositStep !== 2) {
       setDepositTimeLeft(null);
@@ -99,7 +100,7 @@ export default function MemberWalletPage() {
     }
 
     const createdTime = new Date(shopDepositResult.createdAt || Date.now()).getTime();
-    const expiryTime = createdTime + 24 * 60 * 60 * 1000;
+    const expiryTime = createdTime + 1 * 60 * 60 * 1000;
 
     const updateTimer = () => {
       const now = Date.now();
@@ -302,6 +303,36 @@ export default function MemberWalletPage() {
       setErrorMsg(err.message || 'Gagal upload bukti transfer.');
     } finally {
       setShopDepositUploadingProof(false);
+    }
+  };
+
+  const handleConfirmShopDeposit = async () => {
+    if (!shopDepositResult?.transactionId || !user) return;
+    setShopDepositConfirming(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/v1/member/deposit/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: shopDepositResult.transactionId,
+          memberCode: user.memberCode,
+          proofUrl: shopDepositProofUrl || null,
+          notes: shopDepositNotes || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDepositConfirmed(true);
+        setSuccessMsg(data.message || 'Konfirmasi pembayaran berhasil dikirim!');
+        loadWallet(user.memberCode);
+      } else {
+        setErrorMsg(data.error || 'Gagal mengirim konfirmasi deposit.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setShopDepositConfirming(false);
     }
   };
 
@@ -1134,12 +1165,12 @@ export default function MemberWalletPage() {
                 </form>
               ) : (
                 <div className="space-y-4 text-xs">
-                  {/* 24-Hour Countdown Timer */}
+                  {/* 1-Hour Countdown Timer */}
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 text-amber-900">
                       <Clock className="w-4 h-4 text-amber-600 animate-pulse flex-shrink-0" />
                       <div className="text-left">
-                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Transfer (24 Jam)</div>
+                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Transfer (1 Jam)</div>
                         <div className="text-[10px] text-amber-700">Harap transfer & konfirmasi sebelum waktu habis.</div>
                       </div>
                     </div>
@@ -1147,7 +1178,7 @@ export default function MemberWalletPage() {
                       {depositTimeLeft ? (
                         `${String(depositTimeLeft.hours).padStart(2, '0')}:${String(depositTimeLeft.minutes).padStart(2, '0')}:${String(depositTimeLeft.seconds).padStart(2, '0')}`
                       ) : (
-                        '24:00:00'
+                        '01:00:00'
                       )}
                     </div>
                   </div>
@@ -1275,25 +1306,39 @@ export default function MemberWalletPage() {
                   {/* Tombol Konfirmasi Sudah Bayar oleh Mitra */}
                   <div className="pt-2">
                     {depositConfirmed ? (
-                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1.5">
                         <div className="font-bold flex items-center gap-1.5 text-xs">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Konfirmasi Pembayaran Telah Dikirim!</span>
+                          <span>Konfirmasi Pembayaran Berhasil Dikirim!</span>
                         </div>
-                        <p className="text-[11px] text-emerald-700 leading-relaxed">
-                          Admin telah menerima pemberitahuan topup Anda dan akan mengecek mutasi bank untuk mencocokkan nominal + kode unik <strong>+Rp{shopDepositResult?.uniqueCode}</strong>. Begitu disetujui, saldo deposit Anda akan otomatis masuk ke dompet dan siap digunakan!
-                        </p>
+                        {shopDepositProofUrl ? (
+                          <p className="text-[11px] text-emerald-700 leading-relaxed">
+                            ✓ <strong>Bukti Transfer Terlampir:</strong> Bukti foto transfer Anda telah tercatat. Tim Keuangan akan segera memverifikasi dan menyetujui penambahan saldo deposit Anda.
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-amber-800 leading-relaxed bg-amber-50 p-2 rounded border border-amber-200">
+                            ⚠ <strong>Konfirmasi Tanpa Bukti Foto:</strong> Tim Keuangan akan mencocokkan mutasi bank rekening berdasarkan nominal <strong>Rp{(shopDepositResult?.transferTotal || 0).toLocaleString('id-ID')}</strong> (termasuk kode unik <strong>+Rp{shopDepositResult?.uniqueCode}</strong>). Saldo akan otomatis bertambah setelah mutasi diverifikasi.
+                          </p>
+                        )}
+                        <div className="text-[10px] text-stone-500 pt-1">
+                          Status: <span className="font-bold text-blue-700">MENUNGGU VERIFIKASI ADMIN</span>
+                        </div>
                       </div>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => {
-                          setDepositConfirmed(true);
-                        }}
-                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99]"
+                        disabled={shopDepositConfirming || depositTimeLeft?.expired}
+                        onClick={handleConfirmShopDeposit}
+                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>✓ Saya Sudah Transfer (Konfirmasi Pembayaran)</span>
+                        <span>
+                          {shopDepositConfirming
+                            ? 'Mengirim Konfirmasi...'
+                            : depositTimeLeft?.expired
+                            ? 'Waktu Transfer Kedaluwarsa'
+                            : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
+                        </span>
                       </button>
                     )}
                   </div>

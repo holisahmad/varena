@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getAuthenticatedUser } from '@/lib/auth';
+import { sweepExpiredDeposits } from '@/lib/deposit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ function generateUniqueCode(): number {
 
 export async function GET(req: Request) {
   try {
+    await sweepExpiredDeposits();
     const { searchParams } = new URL(req.url);
     const memberCodeParam = searchParams.get('memberCode');
 
@@ -78,6 +80,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Member tidak ditemukan.' }, { status: 404 });
     }
 
+    await sweepExpiredDeposits();
+
     const uniqueCode = generateUniqueCode();
     // Total yang harus ditransfer = nominal + kode unik
     const transferTotal = nominal + uniqueCode;
@@ -97,7 +101,7 @@ export async function POST(req: Request) {
         referenceId: refId,
         notes: notes || `Pengajuan deposit ${depositType === 'SHOPPING' ? 'belanja mitra' : 'kas agen'}`,
         proofUrl: proofUrl || null,
-        status: 'PENDING',
+        status: 'PENDING_PAYMENT',
         uniqueCode,
         bankName: bankName || null,
         accountNumber: accountNumber || null,

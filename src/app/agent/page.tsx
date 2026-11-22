@@ -84,6 +84,9 @@ export default function AgentPortalPage() {
   const [topupResult, setTopupResult] = useState<any>(null);
   const [topupProofUrl, setTopupProofUrl] = useState('');
   const [topupUploadingProof, setTopupUploadingProof] = useState(false);
+  const [topupConfirmed, setTopupConfirmed] = useState(false);
+  const [topupConfirming, setTopupConfirming] = useState(false);
+  const [topupTimeLeft, setTopupTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; expired: boolean } | null>(null);
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
 
@@ -356,6 +359,60 @@ export default function AgentPortalPage() {
       setMessage({ text: err.message || 'Gagal upload bukti transfer.', type: 'error' });
     } finally {
       setTopupUploadingProof(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!topupResult || topupStep !== 2) {
+      setTopupTimeLeft(null);
+      return;
+    }
+    const createdTime = new Date(topupResult.createdAt || Date.now()).getTime();
+    const expiryTime = createdTime + 1 * 60 * 60 * 1000;
+    const updateTimer = () => {
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((expiryTime - now) / 1000));
+      if (diff <= 0) {
+        setTopupTimeLeft({ hours: 0, minutes: 0, seconds: 0, expired: true });
+      } else {
+        const hours = Math.floor(diff / 3600);
+        const minutes = Math.floor((diff % 3600) / 60);
+        const seconds = diff % 60;
+        setTopupTimeLeft({ hours, minutes, seconds, expired: false });
+      }
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [topupResult, topupStep]);
+
+  const handleConfirmTopup = async () => {
+    if (!topupResult?.transactionId || !user) return;
+    setTopupConfirming(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/v1/agent/deposit/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: topupResult.transactionId,
+          memberCode: user.memberCode,
+          proofUrl: topupProofUrl || null,
+          notes: topupNotes || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTopupConfirmed(true);
+        setMessage({ text: data.message || 'Konfirmasi transfer kas agen berhasil dikirim!', type: 'success' });
+        loadAgentData();
+      } else {
+        setMessage({ text: data.error || 'Gagal mengirim konfirmasi transfer.', type: 'error' });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Terjadi kesalahan sistem.', type: 'error' });
+    } finally {
+      setTopupConfirming(false);
     }
   };
 
@@ -1421,6 +1478,24 @@ export default function AgentPortalPage() {
               ) : (
                 /* ── STEP 2: TRANSFER INSTRUCTIONS + PROOF ── */
                 <div className="space-y-4 text-xs">
+                  {/* 1-Hour Countdown Timer */}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-amber-900">
+                      <Clock className="w-4 h-4 text-amber-600 animate-pulse flex-shrink-0" />
+                      <div className="text-left">
+                        <div className="font-bold text-[11px] uppercase tracking-wide">Batas Waktu Transfer (1 Jam)</div>
+                        <div className="text-[10px] text-amber-700">Harap transfer & konfirmasi sebelum waktu habis.</div>
+                      </div>
+                    </div>
+                    <div className="font-mono font-bold text-amber-900 text-sm bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs">
+                      {topupTimeLeft ? (
+                        `${String(topupTimeLeft.hours).padStart(2, '0')}:${String(topupTimeLeft.minutes).padStart(2, '0')}:${String(topupTimeLeft.seconds).padStart(2, '0')}`
+                      ) : (
+                        '01:00:00'
+                      )}
+                    </div>
+                  </div>
+
                   {/* Transfer instruction card */}
                   <div className="rounded-2xl bg-varena-espresso text-white p-5 space-y-3 shadow-md">
                     <div className="text-varena-gold font-semibold text-[11px] uppercase tracking-widest">Instruksi Transfer</div>
@@ -1533,8 +1608,48 @@ export default function AgentPortalPage() {
                     <p className="text-stone-400 mt-1 text-[10px]">Upload bukti transfer agar admin dapat memverifikasi lebih cepat.</p>
                   </div>
 
+                  {/* Tombol Konfirmasi Sudah Bayar oleh Agen */}
+                  <div className="pt-2">
+                    {topupConfirmed ? (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1.5">
+                        <div className="font-bold flex items-center gap-1.5 text-xs">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Konfirmasi Pembayaran Kas Agen Berhasil Dikirim!</span>
+                        </div>
+                        {topupProofUrl ? (
+                          <p className="text-[11px] text-emerald-700 leading-relaxed">
+                            ✓ <strong>Bukti Transfer Terlampir:</strong> Bukti transfer kas agen Anda telah tercatat. Tim Keuangan akan segera memverifikasi dan menyetujui penambahan deposit kas agen Anda.
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-amber-800 leading-relaxed bg-amber-50 p-2 rounded border border-amber-200">
+                            ⚠ <strong>Konfirmasi Tanpa Bukti Foto:</strong> Tim Keuangan akan mencocokkan mutasi bank rekening BRI berdasarkan nominal transfer + kode unik (+Rp{topupResult?.uniqueCode}). Saldo kas agen akan otomatis bertambah setelah dana terverifikasi.
+                          </p>
+                        )}
+                        <div className="text-[10px] text-stone-500 pt-1">
+                          Status: <span className="font-bold text-blue-700">MENUNGGU VERIFIKASI ADMIN</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={topupConfirming || topupTimeLeft?.expired}
+                        onClick={handleConfirmTopup}
+                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-md active:scale-[0.99] disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>
+                          {topupConfirming
+                            ? 'Mengirim Konfirmasi...'
+                            : topupTimeLeft?.expired
+                            ? 'Waktu Transfer Kedaluwarsa'
+                            : '✓ Saya Sudah Transfer (Konfirmasi Pembayaran)'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
                   <div className="pt-1 flex justify-between items-center gap-2">
-                    <span className="text-stone-500 text-[11px]">Menunggu verifikasi admin setelah transfer.</span>
+                    <span className="text-stone-500 text-[11px]">ID Ref: {topupResult?.referenceId}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1545,10 +1660,11 @@ export default function AgentPortalPage() {
                         setTopupNotes('');
                         setTopupBankName('');
                         setTopupAccountNumber('');
+                        setTopupConfirmed(false);
                       }}
                       className="py-2 px-5 rounded-lg bg-varena-espresso text-varena-gold font-bold hover:bg-varena-espresso-dark transition"
                     >
-                      Selesai
+                      Tutup
                     </button>
                   </div>
                 </div>

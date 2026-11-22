@@ -698,7 +698,7 @@ export async function completeOrder({
 }
 
 /**
- * Cancel an unpaid order that has passed the 24-hour expiration window or is cancelled by timeout
+ * Cancel an unpaid order that has passed the 1-hour expiration window or is cancelled by timeout
  * Restores product variant inventory stock and cancels pending payment records
  */
 export async function cancelExpiredOrder(orderIdOrNumber: string, reason?: string) {
@@ -755,10 +755,38 @@ export async function cancelExpiredOrder(orderIdOrNumber: string, reason?: strin
         afterJson: JSON.stringify({ orderStatus: 'CANCELLED' }),
         reason:
           reason ||
-          'Pesanan dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran 24 jam tanpa konfirmasi.',
+          'Pesanan dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran 1 jam tanpa konfirmasi.',
       },
     });
 
     return { status: 'CANCELLED', order: updated };
   });
+}
+
+/**
+ * Automatically sweep and cancel all expired orders (PENDING_PAYMENT, paymentConfirmationStatus != SUBMITTED, older than 1 hour)
+ */
+export async function sweepExpiredOrders(): Promise<number> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const expiredOrders = await prisma.order.findMany({
+    where: {
+      orderStatus: 'PENDING_PAYMENT',
+      paymentConfirmationStatus: { in: ['NONE', 'REJECTED'] },
+      createdAt: { lt: oneHourAgo },
+    },
+    select: { id: true, orderNumber: true },
+    take: 50,
+  });
+
+  let cancelledCount = 0;
+  for (const o of expiredOrders) {
+    try {
+      await cancelExpiredOrder(o.id, 'Pesanan dibatalkan otomatis karena melewati batas waktu pembayaran 1 jam.');
+      cancelledCount++;
+    } catch (e) {
+      console.error(`Failed to cancel expired order ${o.orderNumber}:`, e);
+    }
+  }
+
+  return cancelledCount;
 }

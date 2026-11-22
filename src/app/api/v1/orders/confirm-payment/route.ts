@@ -107,6 +107,21 @@ export async function POST(req: Request) {
       );
     }
 
+    if (order.orderStatus === 'CANCELLED') {
+      return NextResponse.json(
+        { error: `Pesanan ${orderNumber} telah dibatalkan atau kedaluwarsa karena batas waktu pembayaran 1 jam telah habis.` },
+        { status: 400 }
+      );
+    }
+
+    const isPast1Hour = Date.now() - new Date(order.createdAt).getTime() > 60 * 60 * 1000;
+    if (order.orderStatus === 'PENDING_PAYMENT' && isPast1Hour && order.paymentConfirmationStatus !== 'SUBMITTED') {
+      return NextResponse.json(
+        { error: `Batas waktu pembayaran 1 jam untuk pesanan ${orderNumber} telah kedaluwarsa. Pesanan tidak dapat dikonfirmasi lagi.` },
+        { status: 400 }
+      );
+    }
+
     const amountPaid = parseInt(transferAmountPaid, 10);
     if (isNaN(amountPaid) || amountPaid <= 0) {
       return NextResponse.json(

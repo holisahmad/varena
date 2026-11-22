@@ -4,6 +4,7 @@ import { getCorporateUser } from '@/lib/auth';
 import { withTransactionRetry } from '@/lib/security';
 import { recordDepositTopupLedger } from '@/lib/ledger';
 import { resolveCorporateAdmin } from '@/lib/api-auth';
+import { sweepExpiredDeposits } from '@/lib/deposit';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,8 @@ export async function GET(req: Request) {
     if (!authUser) {
       return NextResponse.json({ error: 'Akses ditolak: Hanya pengelola korporasi yang berhak mengakses data keagenan.' }, { status: 401 });
     }
+
+    await sweepExpiredDeposits();
 
     const { searchParams } = new URL(req.url);
     const lookupCode = searchParams.get('lookupMemberCode') || searchParams.get('lookup');
@@ -131,9 +134,9 @@ export async function GET(req: Request) {
         }
         return cfg;
       }),
-      // 5. Pengajuan Topup Deposit (Agen & Mitra) Menunggu Approval
+      // 5. Pengajuan Topup Deposit (Agen & Mitra) Menunggu Approval / Verifikasi
       prisma.agentDepositTransaction.findMany({
-        where: { status: 'PENDING', type: { in: ['TOPUP_DEPOSIT', 'SHOPPING_TOPUP'] } },
+        where: { status: { in: ['WAITING_VERIFICATION', 'PENDING', 'PENDING_PAYMENT'] }, type: { in: ['TOPUP_DEPOSIT', 'SHOPPING_TOPUP'] } },
         include: {
           member: { select: { memberCode: true, displayName: true, isAgent: true, agentDepositBalance: true, shoppingDepositBalance: true } },
         },
@@ -505,7 +508,7 @@ export async function POST(req: Request) {
         where: { id: transactionId },
         include: { member: true },
       });
-      if (!tx || tx.status !== 'PENDING') {
+      if (!tx || (tx.status !== 'PENDING' && tx.status !== 'WAITING_VERIFICATION')) {
         return NextResponse.json(
           { error: 'Transaksi tidak valid atau sudah diproses sebelumnya.' },
           { status: 400 }
@@ -592,7 +595,7 @@ export async function POST(req: Request) {
         where: { id: transactionId },
         include: { member: true },
       });
-      if (!tx || tx.status !== 'PENDING') {
+      if (!tx || (tx.status !== 'PENDING' && tx.status !== 'WAITING_VERIFICATION')) {
         return NextResponse.json(
           { error: 'Transaksi tidak valid atau sudah diproses.' },
           { status: 400 }
