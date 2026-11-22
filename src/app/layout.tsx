@@ -7,6 +7,7 @@ import ImpersonationBanner from '@/components/layout/ImpersonationBanner';
 import MaintenanceBanner from '@/components/layout/MaintenanceBanner';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
   title: 'VARENA — Grow Together. Build Value.',
@@ -62,6 +63,7 @@ export default function RootLayout({
           <main className="flex-1 flex flex-col">{children}</main>
           <MobileBottomNav />
           <SpeedInsights />
+          <Analytics />
         </NotificationProvider>
       </body>
     </html>
