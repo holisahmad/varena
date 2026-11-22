@@ -54,8 +54,10 @@ export default function MemberWalletPage() {
   // Pagination states
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const [statementPage, setStatementPage] = useState(1);
+  const [shoppingDepositPage, setShoppingDepositPage] = useState(1);
   const WITHDRAWALS_PER_PAGE = 5;
   const STATEMENTS_PER_PAGE = 10;
+  const SHOPPING_DEPOSIT_PER_PAGE = 5;
 
   // Shopping Deposit state
   const [shoppingDeposit, setShoppingDeposit] = useState<any>(null);
@@ -417,6 +419,12 @@ export default function MemberWalletPage() {
     statementPage * STATEMENTS_PER_PAGE
   );
   const statementTotalPages = Math.ceil((wallet?.statement?.length || 0) / STATEMENTS_PER_PAGE) || 1;
+
+  const paginatedShoppingDeposits = (shoppingDeposit?.transactions || []).slice(
+    (shoppingDepositPage - 1) * SHOPPING_DEPOSIT_PER_PAGE,
+    shoppingDepositPage * SHOPPING_DEPOSIT_PER_PAGE
+  );
+  const shoppingDepositTotalPages = Math.ceil((shoppingDeposit?.transactions?.length || 0) / SHOPPING_DEPOSIT_PER_PAGE) || 1;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
@@ -868,9 +876,14 @@ export default function MemberWalletPage() {
 
             {shoppingDeposit?.transactions && shoppingDeposit.transactions.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-stone-600 mb-2">Riwayat Deposit Belanja</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-stone-600">Riwayat Deposit Belanja</h3>
+                  <span className="text-[10px] text-stone-400 font-mono">
+                    {shoppingDeposit.transactions.length} mutasi
+                  </span>
+                </div>
                 <div className="divide-y divide-stone-100">
-                  {shoppingDeposit.transactions.slice(0, 10).map((tx: any) => {
+                  {paginatedShoppingDeposits.map((tx: any) => {
                     const statusConfig: Record<string, { label: string; cls: string }> = {
                       COMPLETED:            { label: '✅ Disetujui',              cls: 'bg-emerald-100 text-emerald-800' },
                       PENDING:              { label: '⏳ Menunggu Admin',         cls: 'bg-amber-100 text-amber-800 border border-amber-300' },
@@ -923,6 +936,17 @@ export default function MemberWalletPage() {
                     );
                   })}
                 </div>
+
+                {shoppingDepositTotalPages > 1 && (
+                  <div className="pt-2">
+                    <Pagination
+                      currentPage={shoppingDepositPage}
+                      totalPages={shoppingDepositTotalPages}
+                      totalItems={shoppingDeposit.transactions.length}
+                      onPageChange={(p) => setShoppingDepositPage(p)}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1012,7 +1036,10 @@ export default function MemberWalletPage() {
                 <History className="w-5 h-5 text-varena-gold shrink-0" />
                 <span>Rekening Koran Buku Besar (Mutasi)</span>
               </h2>
-              <span className="self-start sm:self-auto text-xs text-varena-taupe">Append-only audit trail</span>
+              <span className="self-start sm:self-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-100 text-[11px] font-mono text-stone-600 border border-stone-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>30 Mutasi Terakhir</span> • <span>Double-Entry Realtime</span>
+              </span>
             </div>
 
             {loading ? (

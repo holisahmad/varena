@@ -31,6 +31,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import Pagination from '@/components/ui/Pagination';
 
 export default function AgentPortalPage() {
   const router = useRouter();
@@ -50,6 +51,8 @@ export default function AgentPortalPage() {
   const [restockOrders, setRestockOrders] = useState<any[]>([]);
   const [assignedOrders, setAssignedOrders] = useState<any[]>([]);
   const [depositTransactions, setDepositTransactions] = useState<any[]>([]);
+  const [depositTxPage, setDepositTxPage] = useState(1);
+  const DEPOSIT_TX_PER_PAGE = 10;
 
   // Restock form modal — multi-item cart
   const [restockModalOpen, setRestockModalOpen] = useState(false);
@@ -527,6 +530,12 @@ export default function AgentPortalPage() {
     );
   }
 
+  const paginatedDepositTx = depositTransactions.slice(
+    (depositTxPage - 1) * DEPOSIT_TX_PER_PAGE,
+    depositTxPage * DEPOSIT_TX_PER_PAGE
+  );
+  const depositTxTotalPages = Math.ceil((depositTransactions.length || 0) / DEPOSIT_TX_PER_PAGE) || 1;
+
   return (
     <div className="min-h-screen bg-stone-50/60 pb-20">
       {/* Top Banner Header */}
@@ -957,7 +966,8 @@ export default function AgentPortalPage() {
                 Belum ada riwayat mutasi deposit kas agen.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-stone-50 text-stone-600 border-b">
                     <tr>
@@ -970,7 +980,7 @@ export default function AgentPortalPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y text-stone-700">
-                    {depositTransactions.map((tx) => (
+                    {paginatedDepositTx.map((tx) => (
                       <tr key={tx.id} className="hover:bg-stone-50/50">
                         <td className="py-3 px-3 text-stone-500">
                           {new Date(tx.createdAt).toLocaleDateString('id-ID')}
@@ -1038,6 +1048,18 @@ export default function AgentPortalPage() {
                   </tbody>
                 </table>
               </div>
+
+              {depositTxTotalPages > 1 && (
+                <div className="pt-2">
+                  <Pagination
+                    currentPage={depositTxPage}
+                    totalPages={depositTxTotalPages}
+                    totalItems={depositTransactions.length}
+                    onPageChange={(p) => setDepositTxPage(p)}
+                  />
+                </div>
+              )}
+            </>
             )}
           </div>
         )}
