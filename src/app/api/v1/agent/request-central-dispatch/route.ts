@@ -63,7 +63,13 @@ export async function POST(req: Request) {
     }
 
     const netSubtotal = grossPrice - discountAmount;
-    const shippingCost = 15000; // Ongkir kurir standar luar daerah
+    
+    // Ambil setting ongkir dropship pusat dinamis jika dikonfigurasi admin
+    const dispatchSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'CENTRAL_DISPATCH_FEE' },
+    }).catch(() => null);
+    const shippingCost = dispatchSetting ? Number(dispatchSetting.value) || 15000 : 15000;
+
     const uniqueCode = Math.floor(100 + Math.random() * 899);
     const grandTotal = netSubtotal + shippingCost + (paymentMethod === 'DEPOSIT' ? 0 : uniqueCode);
 

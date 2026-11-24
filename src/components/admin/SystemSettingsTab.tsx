@@ -42,6 +42,9 @@ export default function SystemSettingsTab({
     DEFAULT_AGENT_MOQ: '10',
     DEFAULT_AGENT_DISCOUNT: '15.0',
     FREE_SHIPPING_SUBSIDY_AGENT: 'true',
+    DEFAULT_SHIPPING_FEE: '20000',
+    CENTRAL_DISPATCH_FEE: '15000',
+    AGENT_SHIPPING_EXPENSE: '35000',
   });
 
   const [agentConfig, setAgentConfig] = useState({
@@ -469,6 +472,69 @@ export default function SystemSettingsTab({
                 />
                 <span>Ongkir Pasokan Kantor ke Agen Ditanggung Penuh oleh Kantor</span>
               </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Card: Pengiriman & Logistik (Ongkir) */}
+        <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-sm space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+            <Truck className="w-4 h-4 text-varena-espresso" />
+            <h4 className="font-serif font-bold text-sm text-varena-espresso">
+              Pengiriman &amp; Logistik (Ongkos Kirim)
+            </h4>
+          </div>
+          <p className="text-xs text-slate-500">
+            Atur parameter biaya ongkir flat untuk pesanan reguler, dropship pusat, dan estimasi subsidi pasokan.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Ongkir Reguler / Pelanggan (Rp)
+              </label>
+              <input
+                type="number"
+                step="1000"
+                value={settings.DEFAULT_SHIPPING_FEE || '20000'}
+                onChange={(e) => setSettings({ ...settings, DEFAULT_SHIPPING_FEE: e.target.value })}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+              />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                Ditagihkan ke pembeli reguler / mitra baru saat checkout.
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Ongkir Dropship Pusat Agen (Rp)
+              </label>
+              <input
+                type="number"
+                step="1000"
+                value={settings.CENTRAL_DISPATCH_FEE || '15000'}
+                onChange={(e) => setSettings({ ...settings, CENTRAL_DISPATCH_FEE: e.target.value })}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+              />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                Dipotong dari deposit agen saat order dropship dari pusat.
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Beban Subsidi Pasokan Agen (Rp)
+              </label>
+              <input
+                type="number"
+                step="1000"
+                value={settings.AGENT_SHIPPING_EXPENSE || '35000'}
+                onChange={(e) => setSettings({ ...settings, AGENT_SHIPPING_EXPENSE: e.target.value })}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+              />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                Estimasi beban biaya operasional kantor jika subsidi aktif.
+              </span>
             </div>
           </div>
         </div>

@@ -156,17 +156,36 @@ export async function createOrder(payload: CheckoutPayload) {
 
   // Shipping cost policy:
   // - If stockist order: shipping is FREE for stockist (shippingCost = 0), borne by corporate office as operational expense (shippingExpense = Rp35.000 or custom)
-  // - If regular member/customer order: member is charged shipping cost (default Rp20.000), office does not absorb as special stockist expense (shippingExpense = 0)
+  // - If regular member/customer order: member is charged shipping cost (default Rp20.000 or system setting), office does not absorb as special stockist expense (shippingExpense = 0)
+  let defaultShippingFee = 20000;
+  let defaultShippingExpense = 35000;
+
+  if (customShippingCost === undefined || (isStockist && customShippingExpense === undefined)) {
+    try {
+      const settings = await prisma.systemSetting.findMany({
+        where: {
+          key: { in: ['DEFAULT_SHIPPING_FEE', 'AGENT_SHIPPING_EXPENSE'] },
+        },
+      });
+      for (const s of settings) {
+        if (s.key === 'DEFAULT_SHIPPING_FEE') defaultShippingFee = Number(s.value) || 20000;
+        if (s.key === 'AGENT_SHIPPING_EXPENSE') defaultShippingExpense = Number(s.value) || 35000;
+      }
+    } catch {
+      // Fallback ke default jika error
+    }
+  }
+
   const shippingCost = isStockist
     ? 0
     : customShippingCost !== undefined
     ? customShippingCost
-    : 20000;
+    : defaultShippingFee;
 
   const shippingExpense = isStockist
     ? customShippingExpense !== undefined
       ? customShippingExpense
-      : 35000
+      : defaultShippingExpense
     : 0;
 
   // Kode unik 3 digit acak (100 - 999) untuk rekonsiliasi transfer bank otomatis

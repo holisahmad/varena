@@ -224,6 +224,7 @@ function CheckoutContent() {
   // Metode pembayaran & saldo deposit
   const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'DEPOSIT'>('TRANSFER');
   const [shoppingDepositBalance, setShoppingDepositBalance] = useState(0);
+  const [shippingRate, setShippingRate] = useState(20000);
 
   // Countdown timer 1 jam untuk pembayaran pesanan
   useEffect(() => {
@@ -390,6 +391,9 @@ function CheckoutContent() {
     fetch('/api/v1/catalog/products')
       .then((res) => res.json())
       .then((data) => {
+        if (typeof data.shippingFee === 'number') {
+          setShippingRate(data.shippingFee);
+        }
         if (data.products && data.products.length > 0) {
           const allVariants: any[] = [];
           data.products.forEach((p: any) => {
@@ -576,7 +580,7 @@ function CheckoutContent() {
 
   const totalItemsCount = selectedItems.reduce((acc, it) => acc + it.quantity, 0);
   const subtotal = selectedItems.reduce((acc, it) => acc + it.lineTotal, 0);
-  const shippingCost = isStockist ? 0 : subtotal > 0 ? 20000 : 0;
+  const shippingCost = isStockist ? 0 : subtotal > 0 ? shippingRate : 0;
   const total = subtotal + shippingCost; // uniqueCode added server-side
 
   const hasFirstPackSelected = variants.some(

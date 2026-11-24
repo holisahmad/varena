@@ -3,21 +3,29 @@ import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const products = await prisma.product.findMany({
-      where: { status: 'ACTIVE' },
-      include: {
-        variants: {
-          where: { status: 'ACTIVE' },
-          orderBy: { price: 'desc' },
+    const [products, shippingSetting] = await Promise.all([
+      prisma.product.findMany({
+        where: { status: 'ACTIVE' },
+        include: {
+          variants: {
+            where: { status: 'ACTIVE' },
+            orderBy: { price: 'desc' },
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.systemSetting.findUnique({
+        where: { key: 'DEFAULT_SHIPPING_FEE' },
+      }).catch(() => null),
+    ]);
+
+    const shippingFee = shippingSetting ? Number(shippingSetting.value) || 20000 : 20000;
 
     return NextResponse.json(
       {
         success: true,
         products,
+        shippingFee,
       },
       {
         headers: {
