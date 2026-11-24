@@ -475,46 +475,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // 4. ACTION: SIMULATE_PAYMENT (Simulasi Pembayaran Manual/Hybrid Restock Agen)
-    // ──────────────────────────────────────────────────────────────────────────
-    if (action === 'SIMULATE_PAYMENT') {
-      if (!orderId) {
-        return NextResponse.json({ error: 'ID pesanan wajib disertakan.' }, { status: 400 });
-      }
-
-      const targetOrder = await prisma.order.findUnique({
-        where: { id: orderId },
-      });
-
-      if (!targetOrder || targetOrder.buyerUserId !== member.userId) {
-        return NextResponse.json({ error: 'Pesanan pasokan tidak ditemukan.' }, { status: 404 });
-      }
-
-      const updated = await withTransactionRetry(async (tx: any) => {
-        const ord = await tx.order.update({
-          where: { id: orderId },
-          data: {
-            orderStatus: 'PAID',
-            paidAt: new Date(),
-          },
-        });
-
-        await tx.payment.updateMany({
-          where: { orderId: orderId, status: 'PENDING' },
-          data: { status: 'SUCCESS', paidAt: new Date() },
-        });
-
-        return ord;
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: 'Pembayaran transfer berhasil diverifikasi dan pesanan telah lunas.',
-        order: updated,
-      });
-    }
-
     return NextResponse.json({ error: 'Aksi agen tidak dikenali.' }, { status: 400 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Gagal memproses pesanan agen.' }, { status: 500 });

@@ -76,7 +76,6 @@ export default function MemberDashboardPage() {
   const [copiedAmountModal, setCopiedAmountModal] = useState(false);
   const [copiedResiModal, setCopiedResiModal] = useState(false);
   const [copiedOrderNumberModal, setCopiedOrderNumberModal] = useState(false);
-  const [modalSettling, setModalSettling] = useState(false);
 
   // Enrich selectedOrder with full backend details (discount, payments, breakdown)
   useEffect(() => {
@@ -237,36 +236,6 @@ export default function MemberDashboardPage() {
         return 5;
       default:
         return 1;
-    }
-  };
-
-  const handleModalSimulatePayment = async () => {
-    if (!selectedOrder) return;
-    setModalSettling(true);
-    try {
-      const res = await fetch('/api/v1/orders/payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: selectedOrder.id,
-          providerRef: `SIM-MBR-${Date.now().toString().slice(-6)}`,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSelectedOrder((prev: any) =>
-          prev ? { ...prev, orderStatus: 'PAID', paidAt: new Date().toISOString() } : null
-        );
-        if (user) {
-          loadDashboard(user.memberCode || 'VRN-0001', user.userId || user.id);
-        }
-      } else {
-        showToast(data.error || 'Gagal memproses pembayaran.', 'error');
-      }
-    } catch (e: any) {
-      showToast(e.message || 'Terjadi kesalahan sistem.', 'error');
-    } finally {
-      setModalSettling(false);
     }
   };
 
@@ -1863,20 +1832,8 @@ export default function MemberDashboardPage() {
                 </Link>
               )}
 
-              <div className="flex gap-2">
-                {selectedOrder.orderStatus === 'PENDING_PAYMENT' && (
-                  <button
-                    type="button"
-                    onClick={handleModalSimulatePayment}
-                    disabled={modalSettling}
-                    className="py-2 px-3.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
-                    title="Simulasikan pembayaran lunas di mode development"
-                  >
-                    {modalSettling ? 'Memproses...' : 'Simulasi Lunas'}
-                  </button>
-                )}
-
-                {selectedOrder.orderStatus === 'SHIPPED' && (
+              {selectedOrder.orderStatus === 'SHIPPED' && (
+                <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => handleConfirmReceived(selectedOrder.id)}
@@ -1886,8 +1843,8 @@ export default function MemberDashboardPage() {
                     <Check className="w-3.5 h-3.5" />
                     <span>{actionLoadingId === selectedOrder.id ? 'Memproses...' : 'Konfirmasi Barang Diterima'}</span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

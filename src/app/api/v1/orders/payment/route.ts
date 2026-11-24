@@ -3,6 +3,14 @@ import { settleOrderPayment } from '@/lib/order';
 
 export async function POST(req: Request) {
   try {
+    // Nonaktifkan simulasi pembayaran di lingkungan produksi
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Endpoint simulasi pembayaran dinonaktifkan pada mode produksi.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { orderId, providerRef } = body;
 

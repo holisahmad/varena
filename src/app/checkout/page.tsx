@@ -736,32 +736,6 @@ function CheckoutContent() {
     }
   };
 
-  const handleSimulatePayment = async () => {
-    if (!orderResult?.id) return;
-    setSettling(true);
-
-    try {
-      const res = await fetch('/api/v1/orders/payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: orderResult.id,
-          providerRef: `SIM-BANK-REF-${Date.now()}`,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal menyelesaikan pembayaran.');
-      }
-      setSettleResult(data.result);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSettling(false);
-    }
-  };
-
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
       <div className="text-center max-w-2xl mx-auto mb-8">
@@ -1744,16 +1718,6 @@ function CheckoutContent() {
                   Salah nominal transfer? Klik di sini untuk konfirmasi manual alternatif →
                 </Link>
               </div>
-
-              {/* Simulate payment button (sandbox only) */}
-              <button
-                type="button"
-                onClick={handleSimulatePayment}
-                disabled={settling || orderResult.orderStatus === 'CANCELLED'}
-                className="w-full py-2.5 rounded-lg bg-varena-espresso/60 text-varena-gold-light/80 font-semibold text-xs hover:bg-varena-espresso transition flex items-center justify-center gap-2 border border-dashed border-varena-gold/30 disabled:opacity-40"
-              >
-                {settling ? 'Memproses...' : '[DEV] Simulasikan Pembayaran Diterima'}
-              </button>
 
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs border-t border-varena-gold/20">
                 <Link

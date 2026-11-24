@@ -56,7 +56,6 @@ function AgentCheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
-  const [simulatingPayment, setSimulatingPayment] = useState(false);
 
   // Copy state
   const [copiedBank, setCopiedBank] = useState(false);
@@ -355,35 +354,6 @@ function AgentCheckoutContent() {
       setToastMessage({ text: err.message, type: 'error' });
     } finally {
       setConfirmingReceipt(false);
-    }
-  };
-
-  // Simulate payment (for testing Manual / Hybrid orders)
-  const handleSimulatePayment = async () => {
-    if (!orderResult?.id) return;
-    setSimulatingPayment(true);
-    try {
-      const res = await fetch('/api/v1/agent/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'SIMULATE_PAYMENT',
-          memberCode: user?.memberCode,
-          orderId: orderResult.id,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Gagal memverifikasi pembayaran simulasi.');
-      }
-
-      setOrderResult(data.order);
-      setToastMessage({ text: data.message, type: 'success' });
-    } catch (err: any) {
-      setToastMessage({ text: err.message, type: 'error' });
-    } finally {
-      setSimulatingPayment(false);
     }
   };
 
@@ -1214,14 +1184,6 @@ function AgentCheckoutContent() {
                 >
                   Upload Bukti Transfer Manual
                 </Link>
-                <button
-                  type="button"
-                  onClick={handleSimulatePayment}
-                  disabled={simulatingPayment}
-                  className="px-4 py-2 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition text-center w-full sm:w-auto"
-                >
-                  {simulatingPayment ? 'Memverifikasi...' : 'Simulasi Pembayaran Lunas (Test Mode)'}
-                </button>
               </div>
             </div>
           )}
