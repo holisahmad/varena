@@ -14,15 +14,18 @@ export const PAYOUT_CONFIG = {
   // Skema aktif: 'MANUAL' (default saat ini) atau 'GATEWAY'
   activeScheme: (process.env.PAYOUT_SCHEME === 'GATEWAY' || process.env.ENABLE_XENDIT_PAYOUT === 'true') ? 'GATEWAY' : 'MANUAL',
 
-  // Skema Manual Aktif (Biaya admin flat Rp6.500)
+  // Skema Manual Aktif (Biaya admin % dinamis + Biaya transfer bank flat)
   manual: {
-    feeFlat: 6500, // Rp 6.500 flat per transaksi penarikan
+    adminFeePercent: 10, // Default 10% (dapat diubah dinamis via Dashboard Pengaturan Sistem)
+    bankFeeFlat: 6500, // Rp 6.500 flat per transaksi transfer bank
+    feeFlat: 6500, // Legacy fallback compatibility
   },
 
   // Skema Xendit / Pihak Ketiga (Siap diaktifkan nanti setelah kerjasama selesai)
   gateway: {
     adminFeePercent: 10, // 10%
     transferFeeFlat: 5000, // Rp 5.000
+    bankFeeFlat: 5000,
   },
 
   minimumAmount: 50000, // Minimal Rp50.000
@@ -43,49 +46,72 @@ export interface PayoutFeeCalculation {
   adminFeePercent: number;
   adminFee: number;
   transferFee: number;
+  bankFee: number;
   totalFee: number;
   netAmount: number;
   description: string;
 }
 
+export interface PayoutFeeCustomConfig {
+  adminFeePercent?: number;
+  bankFeeFlat?: number;
+  activeScheme?: 'MANUAL' | 'GATEWAY';
+}
+
 /**
- * Hitung rincian potongan penarikan dana
- * Menggunakan skema manual Rp6.500 (default) atau skema gateway (10% + 5000 jika diaktifkan)
+ * Hitung rincian potongan penarikan dana secara terinci:
+ * 1. Dana Tarik (requestedAmount)
+ * 2. Biaya Bank (bankFee / transferFee)
+ * 3. Biaya Admin (adminFee: adminFeePercent %)
+ * 4. Total Masuk Rekening (netAmount)
  */
-export function calculatePayoutFees(amount: number): PayoutFeeCalculation {
+export function calculatePayoutFees(
+  amount: number,
+  customConfig?: PayoutFeeCustomConfig
+): PayoutFeeCalculation {
   const cleanAmount = Math.max(0, Math.floor(amount || 0));
-  const isGateway = PAYOUT_CONFIG.activeScheme === 'GATEWAY';
+  const scheme = customConfig?.activeScheme || PAYOUT_CONFIG.activeScheme;
+  const isGateway = scheme === 'GATEWAY';
 
-  if (isGateway) {
-    const adminFee = Math.round((cleanAmount * PAYOUT_CONFIG.gateway.adminFeePercent) / 100);
-    const transferFee = cleanAmount > 0 ? PAYOUT_CONFIG.gateway.transferFeeFlat : 0;
-    const totalFee = adminFee + transferFee;
-    const netAmount = Math.max(0, cleanAmount - totalFee);
+  const adminFeePercent = customConfig?.adminFeePercent !== undefined
+    ? customConfig.adminFeePercent
+    : isGateway
+    ? PAYOUT_CONFIG.gateway.adminFeePercent
+    : PAYOUT_CONFIG.manual.adminFeePercent;
 
-    return {
-      requestedAmount: cleanAmount,
-      scheme: 'GATEWAY',
-      adminFeePercent: PAYOUT_CONFIG.gateway.adminFeePercent,
-      adminFee,
-      transferFee,
-      totalFee,
-      netAmount,
-      description: `Biaya Admin 10% (Rp${adminFee.toLocaleString('id-ID')}) + Biaya Transfer Rp5.000`,
-    };
+  const bankFee = cleanAmount > 0
+    ? customConfig?.bankFeeFlat !== undefined
+      ? customConfig.bankFeeFlat
+      : isGateway
+      ? PAYOUT_CONFIG.gateway.transferFeeFlat
+      : PAYOUT_CONFIG.manual.bankFeeFlat
+    : 0;
+
+  const adminFee = Math.round((cleanAmount * adminFeePercent) / 100);
+  const totalFee = adminFee + bankFee;
+  const netAmount = Math.max(0, cleanAmount - totalFee);
+
+  const descriptionParts: string[] = [];
+  if (adminFeePercent > 0) {
+    descriptionParts.push(`Biaya Admin ${adminFeePercent}% (Rp${adminFee.toLocaleString('id-ID')})`);
+  }
+  if (bankFee > 0) {
+    descriptionParts.push(`Biaya Bank Rp${bankFee.toLocaleString('id-ID')}`);
   }
 
-  // Skema Manual Aktif (Rp6.500)
-  const totalFee = cleanAmount > 0 ? PAYOUT_CONFIG.manual.feeFlat : 0;
-  const netAmount = Math.max(0, cleanAmount - totalFee);
+  const description = descriptionParts.length > 0
+    ? descriptionParts.join(' + ')
+    : 'Bebas Biaya Penarikan';
 
   return {
     requestedAmount: cleanAmount,
-    scheme: 'MANUAL',
-    adminFeePercent: 0,
-    adminFee: totalFee,
-    transferFee: 0,
+    scheme: isGateway ? 'GATEWAY' : 'MANUAL',
+    adminFeePercent,
+    adminFee,
+    transferFee: bankFee,
+    bankFee,
     totalFee,
     netAmount,
-    description: `Biaya Admin Rp${totalFee.toLocaleString('id-ID')}`,
+    description,
   };
 }

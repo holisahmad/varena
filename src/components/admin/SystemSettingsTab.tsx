@@ -39,6 +39,8 @@ export default function SystemSettingsTab({
     PRIMARY_BANK_ACCOUNT: '3065 0102 4471 539',
     PRIMARY_BANK_HOLDER: 'Sunariyo',
     MIN_PAYOUT_AMOUNT: '50000',
+    PAYOUT_ADMIN_FEE_PERCENT: '10',
+    PAYOUT_BANK_FEE_FLAT: '6500',
     DEFAULT_AGENT_MOQ: '10',
     DEFAULT_AGENT_DISCOUNT: '15.0',
     FREE_SHIPPING_SUBSIDY_AGENT: 'true',
@@ -548,10 +550,10 @@ export default function SystemSettingsTab({
             </h4>
           </div>
           <p className="text-xs text-slate-500">
-            Aturan batas minimum penarikan saldo komisi dompet mitra ke rekening bank.
+            Aturan batas minimum penarikan saldo dan rincian komponen biaya pencairan (biaya admin % dan biaya transfer bank).
           </p>
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                 Minimum Penarikan Saldo (Rp)
@@ -564,7 +566,44 @@ export default function SystemSettingsTab({
                 className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
               />
               <span className="text-[10px] text-slate-500 mt-0.5 block">
-                Mitra hanya dapat mengajukan payout jika saldo minimal telah mencapai nilai ini.
+                Batas minimum nominal saldo yang dapat ditarik mitra.
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Biaya Layanan Admin (%)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={settings.PAYOUT_ADMIN_FEE_PERCENT || '10'}
+                  onChange={(e) => setSettings({ ...settings, PAYOUT_ADMIN_FEE_PERCENT: e.target.value })}
+                  className="w-full pl-3 pr-8 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+                />
+                <Percent className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2" />
+              </div>
+              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                Persentase biaya admin platform (misal 10%).
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                Biaya Bank / Transfer Flat (Rp)
+              </label>
+              <input
+                type="number"
+                step="500"
+                value={settings.PAYOUT_BANK_FEE_FLAT || '6500'}
+                onChange={(e) => setSettings({ ...settings, PAYOUT_BANK_FEE_FLAT: e.target.value })}
+                className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:outline-none focus:border-varena-gold font-mono"
+              />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">
+                Biaya transfer jaringan perbankan flat (misal Rp6.500).
               </span>
             </div>
           </div>

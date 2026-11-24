@@ -3172,12 +3172,12 @@ export default function AdminPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-blue-700 flex-shrink-0" />
-                    <span><strong>Kebijakan Payout:</strong> Mode Manual Aktif (Biaya Admin Rp6.500) · <em>Skema Xendit 10% + Rp5.000 siap diaktifkan via konfigurasi setelah kerja sama selesai.</em></span>
+                    <span><strong>Kebijakan Payout:</strong> Pencatatan Terinci Aktif (Biaya Layanan Admin % + Biaya Bank Transfer) · <em>Parameter biaya dapat diubah dinamis di tab Pengaturan Sistem.</em></span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-[11px] bg-white px-2.5 py-1 rounded-lg border border-blue-300 self-start sm:self-auto shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-stone-700 font-semibold">Mode: Transfer Manual (Rp6.500)</span>
-                    <span className="text-blue-700 font-bold">(Modul Xendit Standby)</span>
+                    <span className="text-stone-700 font-semibold">Mode: Transfer Bank + Admin %</span>
+                    <span className="text-blue-700 font-bold">(Xendit Standby)</span>
                   </div>
                 </div>
 
@@ -3241,8 +3241,8 @@ export default function AdminPage() {
                             <th className="py-2.5 px-3 w-8">#</th>
                             <th className="py-2.5 px-3">Tanggal</th>
                             <th className="py-2.5 px-3">Mitra Pemohon</th>
-                            <th className="py-2.5 px-3">Nominal Diminta</th>
-                            <th className="py-2.5 px-3">Potongan Biaya</th>
+                            <th className="py-2.5 px-3">Dana Tarik</th>
+                            <th className="py-2.5 px-3">Biaya (Admin + Bank)</th>
                             <th className="py-2.5 px-3">Bersih Ditransfer</th>
                             <th className="py-2.5 px-3">Rekening Bank Tujuan</th>
                             <th className="py-2.5 px-3">Status Finance</th>
@@ -3277,7 +3277,9 @@ export default function AdminPage() {
                                 <div className="text-[10px] text-varena-taupe font-mono">{w.member?.memberCode}</div>
                               </td>
                               <td className="py-2.5 px-3 font-mono font-semibold">Rp{w.amount.toLocaleString('id-ID')}</td>
-                              <td className="py-2.5 px-3 text-varena-taupe font-mono">Rp{w.fee.toLocaleString('id-ID')}</td>
+                              <td className="py-2.5 px-3 font-mono">
+                                <span className="text-rose-700 font-semibold">-Rp{w.fee.toLocaleString('id-ID')}</span>
+                              </td>
                               <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
                                 Rp{w.netAmount.toLocaleString('id-ID')}
                               </td>

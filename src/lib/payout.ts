@@ -83,8 +83,32 @@ export async function requestPayout(params: RequestPayoutParams) {
     }
   }
 
-  // Hitung potongan biaya penarikan (Manual Rp6.500 atau Gateway 10% + 5000)
-  const fees = calculatePayoutFees(amount);
+  // 1. Ambil setting biaya penarikan dinamis dari systemSetting (jika ada)
+  let adminFeePercent = PAYOUT_CONFIG.manual.adminFeePercent;
+  let bankFeeFlat = PAYOUT_CONFIG.manual.bankFeeFlat;
+
+  try {
+    const settings = await prisma.systemSetting.findMany({
+      where: {
+        key: { in: ['PAYOUT_ADMIN_FEE_PERCENT', 'PAYOUT_BANK_FEE_FLAT'] },
+      },
+    });
+    for (const s of settings) {
+      if (s.key === 'PAYOUT_ADMIN_FEE_PERCENT') {
+        const val = parseFloat(s.value);
+        if (!isNaN(val) && val >= 0) adminFeePercent = val;
+      }
+      if (s.key === 'PAYOUT_BANK_FEE_FLAT') {
+        const val = parseInt(s.value, 10);
+        if (!isNaN(val) && val >= 0) bankFeeFlat = val;
+      }
+    }
+  } catch {
+    // fallback
+  }
+
+  // Hitung potongan biaya penarikan (Dana Tarik, Biaya Bank, Biaya Admin)
+  const fees = calculatePayoutFees(amount, { adminFeePercent, bankFeeFlat });
   const fee = fees.totalFee;
   const netAmount = fees.netAmount;
 
@@ -173,31 +197,51 @@ export async function approvePayout({
     });
 
     // 2. Post to Double-Entry Ledger using current transaction client
+    const feeBreakdown = calculatePayoutFees(withdrawal.amount);
+    const adminFeeAmt = feeBreakdown.totalFee === withdrawal.fee
+      ? feeBreakdown.adminFee
+      : Math.max(0, withdrawal.fee - (feeBreakdown.bankFee || 6500));
+    const bankFeeAmt = Math.max(0, withdrawal.fee - adminFeeAmt);
+
+    const ledgerEntries: any[] = [
+      {
+        accountCode: `ACC-MBR-${memberCode}`,
+        direction: 'DEBIT',
+        amount: withdrawal.amount,
+        memo: `Withdrawal payout approved - ref ${providerReference}`,
+      },
+      {
+        accountCode: 'ACC-COMP-PAYOUT',
+        direction: 'CREDIT',
+        amount: withdrawal.netAmount,
+        memo: `Net bank transfer disbursement for WD ${withdrawal.id.slice(0, 8)}`,
+      },
+    ];
+
+    if (adminFeeAmt > 0) {
+      ledgerEntries.push({
+        accountCode: 'ACC-COMP-OPS',
+        direction: 'CREDIT' as const,
+        amount: adminFeeAmt,
+        memo: `Disbursement platform admin fee (${feeBreakdown.adminFeePercent}%) for WD ${withdrawal.id.slice(0, 8)}`,
+      });
+    }
+
+    if (bankFeeAmt > 0) {
+      ledgerEntries.push({
+        accountCode: 'ACC-COMP-OPS',
+        direction: 'CREDIT' as const,
+        amount: bankFeeAmt,
+        memo: `Disbursement interbank transfer fee for WD ${withdrawal.id.slice(0, 8)}`,
+      });
+    }
+
     await postLedgerTransaction({
       referenceType: 'WITHDRAWAL_PAID',
       referenceId: withdrawal.id,
       idempotencyKey: `LEDGER-WD-${withdrawal.id}`,
       memo: `Disbursement to ${withdrawal.bankName} (${withdrawal.accountNumberMasked}) ref: ${providerReference}`,
-      entries: [
-        {
-          accountCode: `ACC-MBR-${memberCode}`,
-          direction: 'DEBIT',
-          amount: withdrawal.amount,
-          memo: `Withdrawal payout approved - ref ${providerReference}`,
-        },
-        {
-          accountCode: 'ACC-COMP-PAYOUT',
-          direction: 'CREDIT',
-          amount: withdrawal.netAmount,
-          memo: `Net bank transfer disbursement for WD ${withdrawal.id.slice(0, 8)}`,
-        },
-        ...(withdrawal.fee > 0 ? [{
-          accountCode: 'ACC-COMP-OPS',
-          direction: 'CREDIT' as const,
-          amount: withdrawal.fee,
-          memo: `Disbursement platform administrative fee (10% admin + transfer fee Rp5.000)`,
-        }] : []),
-      ],
+      entries: ledgerEntries,
     }, tx);
 
     // 3. Audit trail

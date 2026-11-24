@@ -5,6 +5,7 @@ import { getCorporateUser } from '@/lib/auth';
 import { postLedgerTransaction } from '@/lib/ledger';
 import { withTransactionRetry } from '@/lib/security';
 import { dispatchWaMessage, templatePayoutDisbursed } from '@/lib/whatsapp';
+import { calculatePayoutFees } from '@/config/payout';
 
 /**
  * POST /api/v1/admin/payouts/batch-approve
@@ -70,37 +71,53 @@ export async function POST(req: Request) {
           },
         });
 
-        // 2. Post balanced ledger transaction
+        // 2. Post balanced ledger transaction with clear financial breakdown
+        const feeBreakdown = calculatePayoutFees(w.amount);
+        const adminFeeAmt = feeBreakdown.totalFee === w.fee
+          ? feeBreakdown.adminFee
+          : Math.max(0, w.fee - (feeBreakdown.bankFee || 6500));
+        const bankFeeAmt = Math.max(0, w.fee - adminFeeAmt);
+
+        const ledgerEntries: any[] = [
+          {
+            accountCode: `ACC-MBR-${w.member.memberCode}`,
+            direction: 'DEBIT',
+            amount: w.amount,
+            memo: `Batch withdrawal payout approved - ref ${ref}`,
+          },
+          {
+            accountCode: 'ACC-COMP-PAYOUT',
+            direction: 'CREDIT',
+            amount: w.netAmount,
+            memo: `Net bank transfer disbursement for WD ${w.id.slice(0, 8)}`,
+          },
+        ];
+
+        if (adminFeeAmt > 0) {
+          ledgerEntries.push({
+            accountCode: 'ACC-COMP-OPS',
+            direction: 'CREDIT' as const,
+            amount: adminFeeAmt,
+            memo: `Batch platform admin fee (${feeBreakdown.adminFeePercent}%) for WD ${w.id.slice(0, 8)}`,
+          });
+        }
+
+        if (bankFeeAmt > 0) {
+          ledgerEntries.push({
+            accountCode: 'ACC-COMP-OPS',
+            direction: 'CREDIT' as const,
+            amount: bankFeeAmt,
+            memo: `Batch interbank transfer fee for WD ${w.id.slice(0, 8)}`,
+          });
+        }
+
         await postLedgerTransaction(
           {
             referenceType: 'WITHDRAWAL_PAID',
             referenceId: w.id,
             idempotencyKey: `LEDGER-WD-${w.id}`,
             memo: `Batch disbursement to ${w.bankName} (${w.accountNumberMasked}) ref: ${ref}`,
-            entries: [
-              {
-                accountCode: `ACC-MBR-${w.member.memberCode}`,
-                direction: 'DEBIT',
-                amount: w.amount,
-                memo: `Batch withdrawal payout approved - ref ${ref}`,
-              },
-              {
-                accountCode: 'ACC-COMP-PAYOUT',
-                direction: 'CREDIT',
-                amount: w.netAmount,
-                memo: `Net bank transfer disbursement for WD ${w.id.slice(0, 8)}`,
-              },
-              ...(w.fee > 0
-                ? [
-                    {
-                      accountCode: 'ACC-COMP-OPS',
-                      direction: 'CREDIT' as const,
-                      amount: w.fee,
-                      memo: 'Disbursement platform fee (10% admin + transfer fee Rp5.000)',
-                    },
-                  ]
-                : []),
-            ],
+            entries: ledgerEntries,
           },
           tx
         );

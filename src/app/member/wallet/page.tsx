@@ -86,6 +86,7 @@ export default function MemberWalletPage() {
   // Copy state & helper
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
+  const [payoutConfig, setPayoutConfig] = useState<{ adminFeePercent?: number; bankFeeFlat?: number; minimumAmount?: number }>({});
 
   const copyAccountNumber = (accountNum: string) => {
     navigator.clipboard?.writeText(accountNum.replace(/\s+/g, ''));
@@ -177,6 +178,19 @@ export default function MemberWalletPage() {
         fetch(`/api/v1/member/deposit?memberCode=${code}`)
           .then((r) => r.json())
           .then((d) => { if (d.balance !== undefined) setShoppingDeposit(d); })
+          .catch(() => {});
+        // Also fetch payout fee configuration (admin fee % & bank fee)
+        fetch('/api/v1/payout/request')
+          .then((r) => r.json())
+          .then((cfg) => {
+            if (cfg.config) {
+              setPayoutConfig({
+                adminFeePercent: cfg.config.adminFeePercent,
+                bankFeeFlat: cfg.config.bankFeeFlat,
+                minimumAmount: cfg.config.minimumAmount,
+              });
+            }
+          })
           .catch(() => {});
       })
       .finally(() => setLoading(false));
@@ -405,7 +419,7 @@ export default function MemberWalletPage() {
   const remainingUniqueCode = uniqueCodeBalance - eligibleUniqueCode;
   const totalWithdrawable = bonusBalance + eligibleUniqueCode;
   const enteredAmount = parseInt(amount, 10) || 0;
-  const payoutFees = calculatePayoutFees(enteredAmount);
+  const payoutFees = calculatePayoutFees(enteredAmount, payoutConfig);
   const netEstimated = payoutFees.netAmount;
 
   const paginatedWithdrawals = (wallet?.withdrawals || []).slice(
@@ -754,24 +768,19 @@ export default function MemberWalletPage() {
                     </div>
                     <div className="space-y-1 pt-1.5 border-t border-emerald-200/80 text-[11px] text-emerald-900 font-mono">
                       <div className="flex justify-between">
-                        <span>Nominal Penarikan:</span>
+                        <span>Nominal Penarikan (Dana Tarik):</span>
                         <span>Rp{enteredAmount.toLocaleString('id-ID')}</span>
                       </div>
-                      {payoutFees.scheme === 'GATEWAY' ? (
-                        <>
-                          <div className="flex justify-between text-stone-600">
-                            <span>Biaya Admin ({payoutFees.adminFeePercent}%):</span>
-                            <span className="text-rose-700">-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="flex justify-between text-stone-600">
-                            <span>Biaya Transfer Bank:</span>
-                            <span className="text-rose-700">-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
-                          </div>
-                        </>
-                      ) : (
+                      {payoutFees.adminFee > 0 && (
                         <div className="flex justify-between text-stone-600">
-                          <span>Biaya Admin Transfer:</span>
-                          <span className="text-rose-700">-Rp{payoutFees.totalFee.toLocaleString('id-ID')}</span>
+                          <span>Biaya Layanan Admin ({payoutFees.adminFeePercent}%):</span>
+                          <span className="text-rose-700">-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
+                        </div>
+                      )}
+                      {payoutFees.bankFee > 0 && (
+                        <div className="flex justify-between text-stone-600">
+                          <span>Biaya Transfer Bank:</span>
+                          <span className="text-rose-700">-Rp{payoutFees.bankFee.toLocaleString('id-ID')}</span>
                         </div>
                       )}
                     </div>
@@ -781,9 +790,7 @@ export default function MemberWalletPage() {
                 <div className="text-[10px] text-stone-500 pt-1 border-t border-stone-100 flex items-center justify-between">
                   <span>Kebijakan Potongan:</span>
                   <span className="font-mono font-semibold text-stone-700">
-                    {payoutFees.scheme === 'GATEWAY'
-                      ? 'Admin 10% + Biaya Transfer Rp5.000'
-                      : 'Biaya transfer antar bank: Rp6.500 (otomatis dipotong)'}
+                    {payoutFees.description}
                   </span>
                 </div>
 
@@ -1564,25 +1571,20 @@ export default function MemberWalletPage() {
 
                 <div className="space-y-1.5 font-mono text-[11px] text-emerald-900">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="font-sans text-stone-700">Nominal Penarikan:</span>
+                    <span className="font-sans text-stone-700">Nominal Penarikan (Dana Tarik):</span>
                     <span className="font-bold text-stone-900">Rp{enteredAmount.toLocaleString('id-ID')}</span>
                   </div>
 
-                  {payoutFees.scheme === 'GATEWAY' ? (
-                    <>
-                      <div className="flex justify-between items-center text-rose-700">
-                        <span className="font-sans">Biaya Layanan Admin ({payoutFees.adminFeePercent}%):</span>
-                        <span>-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-rose-700">
-                        <span className="font-sans">Biaya Transfer Jaringan Bank:</span>
-                        <span>-Rp{payoutFees.transferFee.toLocaleString('id-ID')}</span>
-                      </div>
-                    </>
-                  ) : (
+                  {payoutFees.adminFee > 0 && (
                     <div className="flex justify-between items-center text-rose-700">
-                      <span className="font-sans">Biaya Admin Transfer Antar Bank:</span>
-                      <span>-Rp{payoutFees.totalFee.toLocaleString('id-ID')}</span>
+                      <span className="font-sans">Biaya Layanan Admin ({payoutFees.adminFeePercent}%):</span>
+                      <span>-Rp{payoutFees.adminFee.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  {payoutFees.bankFee > 0 && (
+                    <div className="flex justify-between items-center text-rose-700">
+                      <span className="font-sans">Biaya Transfer Bank:</span>
+                      <span>-Rp{payoutFees.bankFee.toLocaleString('id-ID')}</span>
                     </div>
                   )}
 

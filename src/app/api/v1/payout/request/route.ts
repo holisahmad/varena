@@ -9,15 +9,46 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const amount = parseInt(searchParams.get('amount') || '0', 10);
-    const fees = calculatePayoutFees(amount);
+
+    let adminFeePercent = PAYOUT_CONFIG.manual.adminFeePercent;
+    let bankFeeFlat = PAYOUT_CONFIG.manual.bankFeeFlat;
+    let minAmount = PAYOUT_CONFIG.minimumAmount;
+
+    try {
+      const settings = await prisma.systemSetting.findMany({
+        where: {
+          key: { in: ['PAYOUT_ADMIN_FEE_PERCENT', 'PAYOUT_BANK_FEE_FLAT', 'MIN_PAYOUT_AMOUNT'] },
+        },
+      });
+      for (const s of settings) {
+        if (s.key === 'PAYOUT_ADMIN_FEE_PERCENT') {
+          const val = parseFloat(s.value);
+          if (!isNaN(val) && val >= 0) adminFeePercent = val;
+        }
+        if (s.key === 'PAYOUT_BANK_FEE_FLAT') {
+          const val = parseInt(s.value, 10);
+          if (!isNaN(val) && val >= 0) bankFeeFlat = val;
+        }
+        if (s.key === 'MIN_PAYOUT_AMOUNT') {
+          const val = parseInt(s.value, 10);
+          if (!isNaN(val) && val > 0) minAmount = val;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    const fees = calculatePayoutFees(amount, { adminFeePercent, bankFeeFlat });
     return NextResponse.json({
       success: true,
       config: {
         activeScheme: PAYOUT_CONFIG.activeScheme,
-        manualFeeFlat: PAYOUT_CONFIG.manual.feeFlat,
+        adminFeePercent,
+        bankFeeFlat,
+        manualFeeFlat: bankFeeFlat,
         gatewayAdminFeePercent: PAYOUT_CONFIG.gateway.adminFeePercent,
         gatewayTransferFeeFlat: PAYOUT_CONFIG.gateway.transferFeeFlat,
-        minimumAmount: PAYOUT_CONFIG.minimumAmount,
+        minimumAmount: minAmount,
         xenditEnabled: PAYOUT_CONFIG.xendit.enabled,
       },
       calculation: fees,
