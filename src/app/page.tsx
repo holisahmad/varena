@@ -307,7 +307,7 @@ export default async function HomePage() {
                     href="/products"
                     className="px-5 py-2.5 rounded-lg border border-varena-taupe/40 text-varena-espresso font-semibold text-xs hover:bg-varena-ivory transition inline-flex items-center gap-1.5"
                   >
-                    <span>Lihat Semua Produk ({products.length})</span>
+                    <span>Lihat Semua Produk{products.length > 0 ? ` (${products.length})` : ''}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
