@@ -3,6 +3,7 @@ import { calculateOrderCommissions } from './commission';
 import { postLedgerTransaction } from './ledger';
 import { withTransactionRetry } from './security';
 import { dispatchWaMessage, templateOrderInvoice, templateOrderShipped } from './whatsapp';
+import { resolveVariantPrice } from './pricing';
 
 export interface CheckoutItem {
   variantId: string;
@@ -131,15 +132,18 @@ export async function createOrder(payload: CheckoutPayload) {
   const variantMap = new Map(variants.map((v) => [v.id, v]));
   let subtotal = 0;
   let hasFirstPack = false;
+  const isMitra = Boolean(buyerMember && buyerMember.memberStatus === 'ACTIVE');
 
   const orderItemsData = items.map((item) => {
     const v = variantMap.get(item.variantId)!;
     if (v.stockQuantity < item.quantity) {
       throw new Error(`Insufficient stock for ${v.name}. Available: ${v.stockQuantity}`);
     }
-    const lineTotal = v.price * item.quantity;
+    const priceInfo = resolveVariantPrice(v, isMitra);
+    const unitPrice = priceInfo.unitPrice;
+    const lineTotal = unitPrice * item.quantity;
     subtotal += lineTotal;
-    if (v.allowFirstPack || v.packSize >= 10 || (v.price >= 500000 && v.variantType === 'PACK')) {
+    if (v.allowFirstPack || v.packSize >= 10 || (unitPrice >= 500000 && v.variantType === 'PACK')) {
       hasFirstPack = true;
     }
 
@@ -147,7 +151,7 @@ export async function createOrder(payload: CheckoutPayload) {
       productVariantId: v.id,
       skuSnapshot: v.sku,
       nameSnapshot: v.name,
-      unitPrice: v.price,
+      unitPrice,
       hppSnapshot: v.hpp,
       quantity: item.quantity,
       lineTotal,

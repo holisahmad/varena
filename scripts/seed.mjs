@@ -385,6 +385,10 @@ async function main() {
       packSize: 10,
       unit: 'box',
       price: 500000,
+      retailPrice: 550000,
+      salePrice: 500000,
+      isPromoActive: true,
+      memberPrice: 500000,
       hpp: 250000,
       stockQuantity: 1000,
       status: 'ACTIVE',
@@ -397,7 +401,7 @@ async function main() {
     },
   });
 
-  // Variant 2: Sachet satuan @ Rp45.000, HPP Rp25.000
+  // Variant 2: Sachet satuan @ Rp50.000 (Normal Rp55.000, Diskon Rp5.000)
   const sachetVariant = await prisma.productVariant.create({
     data: {
       productId: product.id,
@@ -406,7 +410,11 @@ async function main() {
       variantType: 'SINGLE',
       packSize: 1,
       unit: 'sachet',
-      price: 45000,
+      price: 50000,
+      retailPrice: 55000,
+      salePrice: 50000,
+      isPromoActive: true,
+      memberPrice: 50000,
       hpp: 25000,
       stockQuantity: 5000,
       status: 'ACTIVE',

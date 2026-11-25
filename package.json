@@ -14,7 +14,7 @@
     "db:seed": "node scripts/seed.mjs",
     "db:seed:clean": "node scripts/seed-clean.mjs",
     "db:clean": "node scripts/seed-clean.mjs",
-    "test": "npx tsx --test tests/file-security.test.mjs tests/auth.test.mjs tests/commission.test.mjs"
+    "test": "npx tsx --test tests/file-security.test.mjs tests/auth.test.mjs tests/commission.test.mjs tests/pricing.test.mjs"
   },
   "dependencies": {
     "@capacitor/cli": "^6.2.0",

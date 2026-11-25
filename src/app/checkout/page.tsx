@@ -32,6 +32,8 @@ import { PRIMARY_COMPANY_BANK } from '@/config/bank';
 import { formatOrderStatus } from '@/lib/formatters';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import { compressImageToWebP } from '@/lib/image-compression';
+import { resolveVariantPrice, formatRupiah } from '@/lib/pricing';
+import PriceTag from '@/components/catalog/PriceTag';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -571,12 +573,18 @@ function CheckoutContent() {
 
   const selectedItems = variants
     .filter((v) => (quantities[v.id] || 0) > 0)
-    .map((v) => ({
-      variant: v,
-      quantity: quantities[v.id],
-      lineTotal: v.price * quantities[v.id],
-      isFirstPack: isFirstPackVariant(v),
-    }));
+    .map((v) => {
+      const priceInfo = resolveVariantPrice(v, isExistingMember);
+      const unitPrice = priceInfo.unitPrice;
+      return {
+        variant: v,
+        unitPrice,
+        priceInfo,
+        quantity: quantities[v.id],
+        lineTotal: unitPrice * quantities[v.id],
+        isFirstPack: isFirstPackVariant(v),
+      };
+    });
 
   const totalItemsCount = selectedItems.reduce((acc, it) => acc + it.quantity, 0);
   const subtotal = selectedItems.reduce((acc, it) => acc + it.lineTotal, 0);
@@ -935,8 +943,8 @@ function CheckoutContent() {
                               <span className="ml-2 text-stone-500">· Stok: {v.stockQuantity}</span>
                             )}
                           </div>
-                          <div className="font-serif font-bold text-sm text-varena-gold mt-1">
-                            Rp{v.price.toLocaleString('id-ID')}
+                          <div className="mt-1">
+                            <PriceTag variant={v} isMitra={isExistingMember} size="sm" />
                           </div>
                         </div>
 
@@ -946,7 +954,7 @@ function CheckoutContent() {
                             <div className="text-right sm:mr-1">
                               <div className="text-[10px] text-varena-taupe">Subtotal:</div>
                               <div className="font-mono text-xs font-bold text-varena-espresso whitespace-nowrap">
-                                Rp{(v.price * qty).toLocaleString('id-ID')}
+                                {formatRupiah(resolveVariantPrice(v, isExistingMember).unitPrice * qty)}
                               </div>
                             </div>
                           )}

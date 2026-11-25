@@ -5,12 +5,22 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingBag, CheckCircle, Shield, Award } from 'lucide-react';
 import { formatProductCategory } from '@/lib/formatters';
+import PriceTag from '@/components/catalog/PriceTag';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMitra, setIsMitra] = useState(false);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem('varena_user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u.memberCode || u.member) setIsMitra(true);
+      }
+    } catch {}
+
     fetch('/api/v1/catalog/products')
       .then((res) => res.json())
       .then((data) => {
@@ -87,9 +97,8 @@ export default function ProductsPage() {
                               {v.sku}
                             </span>
                           </div>
-                          <div className="mt-2 text-lg font-serif font-bold text-varena-espresso">
-                            Rp{v.price.toLocaleString('id-ID')}
-                            <span className="text-xs font-normal text-varena-taupe ml-1">/ {v.unit}</span>
+                          <div className="mt-2">
+                            <PriceTag variant={v} isMitra={isMitra} size="md" />
                           </div>
                           <div className="text-[11px] text-varena-taupe mt-1">
                             Isi: {v.packSize} sachet · Stok: {v.stockQuantity} {v.unit}

@@ -228,7 +228,11 @@ model ProductVariant {
   variantType          String      @default("PACK") // PACK (Box/Paket) or SINGLE (Satuan/Sachet/Eceran)
   packSize             Int         @default(10) // 10 sachet per box atau 1 untuk satuan
   unit                 String      @default("box") // box, sachet, botol, pouch, pcs
-  price                Int         // Harga Jual Konsumen/Mitra (IDR)
+  price                Int         // Harga Jual Acuan/Fallback (IDR)
+  retailPrice          Int         @default(0) // Harga Dasar / Normal Non-Mitra (IDR)
+  salePrice            Int?        // Harga Promo Non-Mitra (Harga Coret Aktif) (IDR)
+  isPromoActive        Boolean     @default(false) // Status keaktifan diskon promo
+  memberPrice          Int         @default(0) // Harga Tetap Khusus Mitra (IDR)
   hpp                  Int         // Harga Pokok Penjualan (HPP)
   stockQuantity        Int         @default(1000)
   status               String      @default("ACTIVE") // ACTIVE, INACTIVE

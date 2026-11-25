@@ -198,6 +198,10 @@ model ProductVariant {
   packSize      Int         @default(10) // 10 sachets or 1 sachet
   unit          String      @default("box") // box, sachet
   price         Int         // in IDR Integer (e.g. 500000 or 45000)
+  retailPrice   Int         @default(0) // Harga Dasar / Normal Non-Mitra (IDR)
+  salePrice     Int?        // Harga Promo Non-Mitra (Harga Coret Aktif) (IDR)
+  isPromoActive Boolean     @default(false) // Status keaktifan diskon promo
+  memberPrice   Int         @default(0) // Harga Tetap Khusus Mitra (IDR)
   hpp           Int         // in IDR Integer (e.g. 300000 or 30000)
   stockQuantity Int         @default(1000)
   status        String      @default("ACTIVE")

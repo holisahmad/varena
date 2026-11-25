@@ -1,9 +1,23 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, ShieldCheck, Sparkles, ShoppingBag, Users, Award, BookOpen, Building2 } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Sparkles, ShoppingBag, Users, Award, BookOpen, Building2, CheckCircle } from 'lucide-react';
+import prisma from '@/lib/prisma';
+import { resolveVariantPrice, formatRupiah } from '@/lib/pricing';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const products = await prisma.product.findMany({
+    where: { status: 'ACTIVE' },
+    include: {
+      variants: {
+        where: { status: 'ACTIVE' },
+        orderBy: { price: 'desc' },
+      },
+    },
+    orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+  }).catch(() => []);
+
+  const flagship = products[0] || null;
   return (
     <div className="flex flex-col flex-1">
       {/* Hero Section */}
@@ -161,74 +175,128 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Flagship Product Showcase */}
-      <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-varena-ivory-light border border-varena-taupe/20 rounded-2xl p-6 sm:p-12 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div>
-              <span className="text-xs font-semibold tracking-wider text-varena-gold uppercase">Produk Unggulan</span>
-              <h2 className="font-serif text-3xl sm:text-4xl font-bold text-varena-espresso mt-2">
-                Kopi Matahari
-              </h2>
-              <p className="text-xs text-varena-gold font-semibold tracking-wide mt-1 italic">
-                "Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh"
-              </p>
-              <p className="text-sm text-varena-taupe-dark mt-4 leading-relaxed">
-                Kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan. Cocok dinikmati sebagai bagian dari rutinitas harian yang produktif.
-              </p>
+      {/* Flagship Product Showcase - Dynamic Multi-Product */}
+      {flagship && (
+        <section className="py-16 bg-white">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="bg-varena-ivory-light border border-varena-taupe/20 rounded-2xl p-6 sm:p-12 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-varena-gold/15 text-varena-gold-hover text-xs font-semibold uppercase tracking-wider mb-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Produk Unggulan</span>
+                </div>
+                <h2 className="font-serif text-3xl sm:text-4xl font-bold text-varena-espresso mt-2">
+                  {flagship.name}
+                </h2>
+                {flagship.tagline && (
+                  <p className="text-xs text-varena-gold font-semibold tracking-wide mt-1 italic">
+                    "{flagship.tagline}"
+                  </p>
+                )}
+                <p className="text-sm text-varena-taupe-dark mt-4 leading-relaxed">
+                  {flagship.description}
+                </p>
 
-              <div className="mt-6 space-y-2 text-xs text-varena-espresso font-medium">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Izin Edar Resmi P-IRT 2083404061840-31 & Sertifikasi Halal</span>
+                {/* Dinamis: Varian & Harga (Harga Normal, Diskon Coret, dan Penawaran Mitra) */}
+                <div className="mt-6 space-y-3">
+                  <div className="text-xs font-semibold text-varena-espresso uppercase tracking-wider">
+                    Pilihan Paket & Eceran:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {flagship.variants.map((v) => {
+                      const retailInfo = resolveVariantPrice(v, false);
+                      return (
+                        <div
+                          key={v.id}
+                          className="p-3.5 rounded-xl border border-varena-gold/30 bg-white shadow-sm flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-xs text-varena-espresso">{v.name}</span>
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 bg-varena-espresso text-varena-gold-light rounded">
+                                {v.sku}
+                              </span>
+                            </div>
+
+                            {/* Tampilan Harga dengan Coret Promo */}
+                            <div className="mt-2">
+                              {retailInfo.badgeLabel && (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 mb-1">
+                                  {retailInfo.badgeLabel}
+                                </span>
+                              )}
+                              <div className="flex items-baseline gap-2 flex-wrap">
+                                <span className="font-serif text-base sm:text-lg font-bold text-varena-espresso">
+                                  {formatRupiah(retailInfo.unitPrice)}
+                                </span>
+                                {retailInfo.isDiscounted && retailInfo.originalPrice && (
+                                  <span className="text-xs text-varena-taupe line-through">
+                                    {formatRupiah(retailInfo.originalPrice)}
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-varena-taupe">/ {v.unit}</span>
+                              </div>
+                            </div>
+
+                            <div className="text-[10px] text-varena-taupe mt-1">
+                              Isi: {v.packSize} {v.unit === 'box' ? 'sachet' : 'pcs'}
+                            </div>
+                          </div>
+
+                          <Link
+                            href={`/checkout?variantId=${v.id}`}
+                            className="mt-3 w-full py-1.5 px-3 rounded-lg bg-varena-gold text-varena-espresso text-xs font-semibold hover:bg-varena-gold-hover transition text-center flex items-center justify-center gap-1 shadow-sm"
+                          >
+                            <ShoppingBag className="w-3.5 h-3.5" />
+                            <span>Beli {v.variantType === 'PACK' ? '1 Pack' : 'Satuan'}</span>
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Tersedia Paket Box (10 Sachet @ Rp500.000)</span>
+
+                {/* Highlight Legalitas */}
+                <div className="mt-5 flex items-center gap-2 text-xs text-varena-taupe">
+                  <CheckCircle className="w-3.5 h-3.5 text-varena-gold flex-shrink-0" />
+                  <span>{flagship.bpomNumber?.startsWith('P-IRT') ? flagship.bpomNumber : `BPOM: ${flagship.bpomNumber}`} · Sertifikasi Halal Resmi</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-varena-gold"></span>
-                  <span>Tersedia Sachet Satuan (Rp45.000 / sachet)</span>
+
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/products"
+                    className="px-5 py-2.5 rounded-lg border border-varena-taupe/40 text-varena-espresso font-semibold text-xs hover:bg-varena-ivory transition inline-flex items-center gap-1.5"
+                  >
+                    <span>Lihat Semua Produk ({products.length})</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Link
-                  href="/checkout"
-                  className="px-6 py-3 rounded-lg bg-varena-espresso text-varena-ivory font-semibold text-sm hover:bg-varena-espresso-dark transition"
-                >
-                  Beli Sekarang
-                </Link>
-                <Link
-                  href="/products"
-                  className="px-6 py-3 rounded-lg border border-varena-taupe/40 text-varena-espresso font-semibold text-sm hover:bg-varena-ivory transition"
-                >
-                  Detail Varian
-                </Link>
-              </div>
-            </div>
-
-            <div className="flex justify-center">
-              <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden shadow-xl border border-varena-gold/30">
-                <Image
-                  src="/brand/kopi-matahari.jpeg"
-                  alt="Kopi Matahari — Robusta Fermentasi Premium"
-                  fill
-                  sizes="(max-width: 640px) 256px, 320px"
-                  className="object-cover"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/90 to-transparent px-4 py-4 text-center">
-                  <span className="font-serif text-lg font-bold text-varena-gold-light block">Kopi Matahari</span>
-                  <span className="text-xs text-varena-ivory/80 tracking-widest uppercase">Kopi Robusta Premium</span>
-                  <div className="mt-2 inline-block px-3 py-1 rounded bg-varena-gold/20 text-varena-gold-light text-xs font-semibold">
-                    Box 10 Sachet · Rp500.000
+              <div className="flex justify-center">
+                <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden shadow-xl border border-varena-gold/30">
+                  <Image
+                    src={flagship.imageUrl || '/brand/kopi-matahari.jpeg'}
+                    alt={flagship.name}
+                    fill
+                    sizes="(max-width: 640px) 256px, 320px"
+                    className="object-cover"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-varena-espresso-dark/95 via-varena-espresso-dark/70 to-transparent px-4 py-4 text-center">
+                    <span className="font-serif text-lg font-bold text-varena-gold-light block">{flagship.name}</span>
+                    <span className="text-[10px] text-varena-ivory/80 tracking-widest uppercase">
+                      {flagship.bpomNumber?.startsWith('P-IRT') ? flagship.bpomNumber : `BPOM ${flagship.bpomNumber}`}
+                    </span>
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded bg-varena-gold/20 text-varena-gold-light text-xs font-semibold backdrop-blur-sm border border-varena-gold/30">
+                      <span>Harga Mulai {formatRupiah(flagship.variants[flagship.variants.length - 1]?.salePrice || flagship.variants[flagship.variants.length - 1]?.price || 50000)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-varena-espresso-dark text-varena-ivory py-12 border-t border-[#4A3B30] mt-auto">
