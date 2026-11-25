@@ -38,7 +38,9 @@ Sistem VARENA dibangun di atas prinsip integritas hukum dan kepatuhan ketat terh
 ## Fitur Utama Sistem
 
 ### 1. Portal Konsumen & E-Commerce Publik
-- **Katalog Produk Dinamis**: Menampilkan produk unggulan (seperti Kopi Matahari Robusta Premium & varian minuman herbal kesehatan) lengkap dengan komposisi, uji mutu, dan nomor izin edar.
+- **Katalog Produk Dinamis & Multi-Tier Pricing**: Menampilkan produk unggulan (seperti Kopi Matahari Robusta Premium & varian minuman herbal kesehatan) lengkap dengan komposisi, uji mutu, nomor izin edar, serta harga dinamis per varian dari database:
+  - **Konsumen Non-Mitra**: Harga ritel normal (`retailPrice`) dengan dukungan **harga coret promo** (`salePrice` saat `isPromoActive = true`, misal ~~Rp55.000~~ → **Rp50.000**/pcs atau ~~Rp550.000~~ → **Rp500.000**/box).
+  - **Mitra Resmi**: Harga modal tetap khusus mitra (`memberPrice`, misal **Rp50.000**/pcs atau **Rp500.000**/box) tanpa bergantung periode promo.
 - **Pemesanan Instan & Checkout Adaptif**:
   - Validasi alamat kurir fleksibel (Nama, No. WhatsApp, Jalan, Kota, Provinsi). Kecamatan dan Kode Pos opsional sehingga tidak memblokir pembeli.
   - Alamat pengiriman tersimpan di profil terintegrasi otomatis dengan sistem fallback identitas.
@@ -140,11 +142,12 @@ varena/
 │   ├── components/
 │   │   ├── admin/                 # Tab Produk, Tab Pengaturan, Panel Keagenan
 │   │   ├── auth/                  # GoogleSignInButton (Singleton GIS)
+│   │   ├── catalog/               # PriceTag (Komponen harga dinamis & harga coret promo)
 │   │   ├── layout/                # Navbar, MobileBottomNav, NotificationDropdown
 │   │   └── ui/                    # Dialog Konfirmasi, Toast, Pagination
 │   ├── config/                    # Konfigurasi perbankan & rekening penampung resmi
 │   ├── contexts/                  # NotificationContext (Real-time polling & stable ACK ref)
-│   ├── lib/                       # Utilitas Inti (prisma.ts, order.ts, ledger.ts, commission.ts, jwt.ts, image-compression.ts)
+│   ├── lib/                       # Utilitas Inti (prisma.ts, pricing.ts, order.ts, ledger.ts, commission.ts, jwt.ts, image-compression.ts)
 │   └── types/                     # Definisi TypeScript global
 ├── .env.production.example        # Template konfigurasi variabel lingkungan
 ├── next.config.mjs                # Konfigurasi Next.js (Allowed dev origins, format gambar WebP/AVIF)
@@ -180,6 +183,7 @@ cp .env.production.example .env
 Buka file `.env` dan sesuaikan koneksi database PostgreSQL Anda:
 ```env
 DATABASE_URL="postgresql://postgres:password_anda@localhost:5433/varena_db?schema=public"
+DIRECT_DATABASE_URL="postgresql://postgres:password_anda@localhost:5433/varena_db?schema=public"
 JWT_SECRET="ganti_dengan_kunci_rahasia_acak_minimal_32_karakter"
 NEXT_PUBLIC_GOOGLE_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
 ```
@@ -233,6 +237,11 @@ Setiap transaksi keuangan diverifikasi secara berpasangan:
 3. Pesanan berstatus biru `Menunggu Verifikasi Admin`.
 4. Admin memverifikasi di tab **Verifikasi Transfer (X)**; pesanan otomatis berubah `PAID` dan bonus langsung dialokasikan ke dompet sponsor.
 
+### 4. Mesin Harga Dinamis Multi-Tier (`src/lib/pricing.ts`)
+Seluruh harga dikelola secara dinamis di database per varian (`ProductVariant`) tanpa hardcode:
+- **`resolveVariantPrice(variant, isMitra)`** menentukan harga satuan (`unitPrice`), harga asli coret (`originalPrice`), nominal & persentase diskon, serta label badge secara konsisten untuk UI (`PriceTag`) maupun kalkulasi order di server (`src/lib/order.ts`).
+- **Otoritas Harga Server-Side**: Total tagihan checkout selalu dihitung ulang di server berdasarkan status kemitraan pembeli untuk mencegah manipulasi harga dari sisi klien.
+
 ---
 
 ## API & Endpoint Utama
@@ -259,6 +268,9 @@ npm run dev
 
 # Memeriksa kepatuhan tipe TypeScript (Zero Error Standard)
 npx tsc --noEmit
+
+# Menjalankan seluruh unit test (termasuk Pricing Engine)
+npm test
 
 # Membuat bundle produksi
 npm run build

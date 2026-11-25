@@ -57,6 +57,22 @@ Pendaftaran kemitraan VARENA mengadopsi skema **Belanja Perdana Paket Aktivasi**
 | **Alokasi Bonus Pembinaan 10 Level**| **Rp100.000** | @Rp10.000 per level upline penempatan (Level 1 s/d Level 10) |
 | **Margin Operasional & Laba Kantor**| **Rp100.000** | Biaya operasional, riset & pengembangan, pajak, dan laba korporasi |
 
+### C. Skema Harga Dinamis Multi-Tier (Non-Mitra vs Mitra)
+Seluruh harga produk di VARENA dikelola per varian (`ProductVariant`) di database (tidak *hardcoded*) agar mendukung ekspansi banyak produk di masa depan melalui kolom:
+- `retailPrice`: Harga ritel dasar untuk konsumen umum (Non-Mitra).
+- `salePrice` & `isPromoActive`: Harga promo dan status promo aktif untuk menampilkan **harga coret** ke konsumen umum.
+- `memberPrice`: Harga tetap khusus Mitra resmi sepanjang waktu.
+- `price`: Harga kompatibilitas/fallback untuk perhitungan order & komisi.
+
+| Kategori Pembeli | Varian Kopi Matahari | Harga Dasar (`retailPrice`) | Promo / Harga Coret (`salePrice`) | Harga Bayar Akhir |
+| :--- | :--- | :--- | :--- | :--- |
+| **Non-Mitra (Normal)** | Satuan (`KM-SCH01`) | Rp55.000 | — | **Rp55.000** |
+| **Non-Mitra (Normal)** | Box 10 Sachet (`KM-BOX10`) | Rp550.000 | — | **Rp550.000** |
+| **Non-Mitra (Promo Aktif)** | Satuan (`KM-SCH01`) | ~~Rp55.000~~ | Diskon Rp5.000 (`isPromoActive=true`) | **Rp50.000** |
+| **Non-Mitra (Promo Aktif)** | Box 10 Sachet (`KM-BOX10`) | ~~Rp550.000~~ | Diskon Rp50.000 (`isPromoActive=true`) | **Rp500.000** |
+| **Mitra Resmi** | Satuan (`KM-SCH01`) | — | Harga Tetap Mitra (`memberPrice`) | **Rp50.000** |
+| **Mitra Resmi** | Box 10 Sachet (`KM-BOX10`) | — | Harga Tetap Mitra (`memberPrice`) | **Rp500.000** |
+
 ---
 
 ## 3. Arsitektur Komisi & Distribusi Bonus Jaringan
