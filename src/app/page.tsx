@@ -5,6 +5,44 @@ import { ArrowRight, ShieldCheck, Sparkles, ShoppingBag, Users, Award, BookOpen,
 import prisma from '@/lib/prisma';
 import { resolveVariantPrice, formatRupiah } from '@/lib/pricing';
 
+const DEFAULT_FLAGSHIP_PRODUCT = {
+  id: 'kopi-matahari-default',
+  name: 'Kopi Matahari',
+  tagline: 'Energi Pagi, Sehat Seharian · Nikmatnya Kopi, Baiknya untuk Tubuh',
+  description:
+    'Kopi Robusta fermentasi premium pilihan, diproses dengan metode fermentasi terkontrol untuk menghasilkan cita rasa yang kaya, aroma yang kuat, dan kenikmatan setiap pagi yang tak terlupakan. Cocok dinikmati sebagai bagian dari rutinitas harian yang produktif.',
+  bpomNumber: 'P-IRT 2083404061840-31',
+  imageUrl: '/brand/kopi-matahari.jpeg',
+  variants: [
+    {
+      id: 'km-box10',
+      sku: 'KM-BOX10',
+      name: 'Kopi Matahari Box (10 Sachet)',
+      variantType: 'PACK',
+      packSize: 10,
+      unit: 'box',
+      price: 500000,
+      retailPrice: 550000,
+      salePrice: 500000,
+      isPromoActive: true,
+      memberPrice: 500000,
+    },
+    {
+      id: 'km-sch01',
+      sku: 'KM-SCH01',
+      name: 'Kopi Matahari Sachet Satuan',
+      variantType: 'SINGLE',
+      packSize: 1,
+      unit: 'sachet',
+      price: 50000,
+      retailPrice: 55000,
+      salePrice: 50000,
+      isPromoActive: true,
+      memberPrice: 50000,
+    },
+  ],
+};
+
 export default async function HomePage() {
   const products = await prisma.product.findMany({
     where: { status: 'ACTIVE' },
@@ -17,7 +55,9 @@ export default async function HomePage() {
     orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
   }).catch(() => []);
 
-  const flagship = products[0] || null;
+  const flagship = (products && products.length > 0 && products[0].variants?.length > 0)
+    ? products[0]
+    : DEFAULT_FLAGSHIP_PRODUCT;
   return (
     <div className="flex flex-col flex-1">
       {/* Hero Section */}
