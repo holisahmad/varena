@@ -109,11 +109,13 @@ Proyek ini memiliki cluster PostgreSQL lokal tersendiri di folder `.postgres_dat
 
 ```powershell
 # Cek apakah Postgres lokal sedang berjalan di port 5433
-netstat -ano | findstr 5433
+netstat -ano | findstr ":5433"
 
-# Jika belum berjalan, start di background:
-Start-Process -FilePath "D:\apps\PostgreSQL\17\bin\postgres.exe" -ArgumentList "-D", "C:\project\varena\.postgres_data" -WindowStyle Hidden
+# Jika belum berjalan (dan port 5433 kosong), start sebagai daemon dengan pg_ctl:
+& "D:\apps\PostgreSQL\17\bin\pg_ctl.exe" start -D "C:\project\varena\.postgres_data" -l "C:\project\varena\.postgres_data\pg_start.log" -o "-p 5433" -w
 ```
+
+> ⚠️ **Catatan Penting:** Jangan pernah menghapus `postmaster.pid` saat PostgreSQL sedang berjalan karena akan memicu *immediate shutdown*. Hapus `postmaster.pid` **hanya** jika `netstat -ano | findstr ":5433"` kosong tetapi server gagal start karena sisa PID lama.
 
 Isi `.env` lokal untuk development:
 ```env
@@ -153,7 +155,7 @@ npx prisma db push --skip-generate
 
 ## 6. Masuk ke Prisma & Melihat Data (Show / Select)
 
-### Cara 1: Prisma Studio (GUI Visual di Browser — Paling Mudah)
+### Cara 1: Prisma Studio via Terminal (Lokal & Produksi)
 Prisma Studio membuka antarmuka web di `http://localhost:5555` untuk melihat, mencari, mengedit, dan menghapus data di seluruh tabel secara visual.
 
 - **Untuk Database Lokal:**
@@ -161,14 +163,20 @@ Prisma Studio membuka antarmuka web di `http://localhost:5555` untuk melihat, me
   npx prisma studio
   ```
 - **Untuk Database Produksi** *(sementara di sesi PowerShell baru)*:
+  Jika Prisma Studio lokal sedang aktif di port `5555`, gunakan `--port 5556` agar keduanya bisa dibuka bersamaan:
   ```powershell
   $env:DATABASE_URL="postgres://<USER>:<API_KEY>@db.prisma.io:5432/postgres?sslmode=require"
   $env:DIRECT_DATABASE_URL="postgres://<USER>:<API_KEY>@db.prisma.io:5432/postgres?sslmode=require"
-  npx prisma studio
+  npx prisma studio --port 5556
   ```
-  *(Tutup terminal setelah selesai agar variabel sesi produksi hilang).*
+  - `http://localhost:5556` → **Database Produksi (Online)**
+  - `http://localhost:5555` → **Database Lokal**
+  - *(Tekan `Ctrl + C` dan tutup terminal setelah selesai agar variabel sesi produksi hilang).*
 
-### Cara 2: Query `SELECT` via Script Node.js (Prisma Client)
+### Cara 2: Prisma Studio Online di Browser (Tanpa Terminal)
+Anda juga dapat membuka dashboard **Prisma Data Platform** (`https://console.prisma.io`), pilih project database produksi VARENA, lalu buka tab **Studio** langsung di browser — tanpa perlu koneksi atau terminal lokal.
+
+### Cara 3: Query `SELECT` via Script Node.js (Prisma Client)
 Buat file sementara atau jalankan via `node` untuk membaca data:
 
 ```javascript
